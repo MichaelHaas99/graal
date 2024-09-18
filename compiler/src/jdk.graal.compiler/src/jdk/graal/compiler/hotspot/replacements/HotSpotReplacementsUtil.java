@@ -335,6 +335,11 @@ public class HotSpotReplacementsUtil {
         return config.jvmAccHasFinalizer;
     }
 
+    @Fold
+    public static int jvmAccIsIdentityClass(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.jvmAccIsIdentityClass;
+    }
+
     public static final LocationIdentity KLASS_LAYOUT_HELPER_LOCATION = new HotSpotOptimizingLocationIdentity("Klass::_layout_helper") {
         @Override
         public ValueNode canonicalizeRead(ValueNode read, ValueNode object, ValueNode location, CoreProviders tool) {
@@ -488,6 +493,21 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int monitorMask(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.monitorMask;
+    }
+
+    @Fold
+    public static int inlineTypeMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.inlineTypeMaskInPlace;
+    }
+
+    @Fold
+    public static int inlineTypePattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.inlineTypePattern;
+    }
+
+    @Fold
+    public static int inlineTypeBitInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.inlineTypeBitInPlace;
     }
 
     @Fold

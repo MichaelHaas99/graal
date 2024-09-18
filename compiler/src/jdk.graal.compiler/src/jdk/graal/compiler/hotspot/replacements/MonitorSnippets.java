@@ -42,6 +42,8 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OB
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJECT_MONITOR_OWNER_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJECT_MONITOR_RECURSION_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJECT_MONITOR_SUCC_LOCATION;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypeMaskInPlace;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.isCAssertEnabled;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.javaThreadLockStackEndOffset;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.javaThreadLockStackTopOffset;
@@ -74,6 +76,8 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probabilit
 import static jdk.graal.compiler.nodes.extended.MembarNode.memoryBarrier;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static jdk.graal.compiler.replacements.nodes.CStringConstant.cstring;
+import static jdk.vm.ci.meta.DeoptimizationAction.None;
+import static jdk.vm.ci.meta.DeoptimizationReason.TransferToInterpreter;
 import static org.graalvm.word.LocationIdentity.any;
 import static org.graalvm.word.WordFactory.unsigned;
 import static org.graalvm.word.WordFactory.zero;
@@ -81,6 +85,7 @@ import static org.graalvm.word.WordFactory.zero;
 import java.util.List;
 import java.util.Objects;
 
+import jdk.graal.compiler.nodes.DeoptimizeNode;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordBase;
@@ -203,6 +208,11 @@ public class MonitorSnippets implements Snippets {
         trace(trace, "             mark: 0x%016lx\n", mark);
 
         incCounter();
+
+        // check mark word for inline type
+        if(mark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))){
+            DeoptimizeNode.deopt(None, TransferToInterpreter);
+        }
 
         if (HotSpotReplacementsUtil.diagnoseSyncOnValueBasedClasses(INJECTED_VMCONFIG)) {
             if (hub.readWord(HotSpotReplacementsUtil.klassAccessFlagsOffset(INJECTED_VMCONFIG), HotSpotReplacementsUtil.KLASS_ACCESS_FLAGS_LOCATION).and(

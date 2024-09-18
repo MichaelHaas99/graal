@@ -256,6 +256,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int jvmAccIsHiddenClass = getConstant("JVM_ACC_IS_HIDDEN_CLASS", Integer.class); // JDK-8219607
     public final int jvmAccIsValueBasedClass = verifyConstant("JVM_ACC_IS_VALUE_BASED_CLASS", Integer.class, 0x08000000);
 
+    public final int jvmAccIsIdentityClass = getConstant("JVM_ACC_IDENTITY", Integer.class);
+
     public final int jvmciCompileStateCanPostOnExceptionsOffset = getFieldOffset("JVMCICompileState::_jvmti_can_post_on_exceptions", Integer.class, "jbyte");
     public final int jvmciCompileStateCanPopFrameOffset = getFieldOffset("JVMCICompileState::_jvmti_can_pop_frame", Integer.class, "jbyte");
     public final int jvmciCompileStateCanAccessLocalVariablesOffset = getFieldOffset("JVMCICompileState::_jvmti_can_access_local_variables", Integer.class, "jbyte");
@@ -351,6 +353,10 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int ageMaskInPlace = getConstant("markWord::age_mask_in_place", Integer.class);
     public final int unlockedMask = getConstant("markWord::unlocked_value", Integer.class);
     public final int monitorMask = getConstant("markWord::monitor_value", Integer.class);
+
+    public final int inlineTypeMaskInPlace = getConstant("markWord::inline_type_mask_in_place", Integer.class);
+    public final int inlineTypePattern = getConstant("markWord::inline_type_pattern", Integer.class);
+    public final int inlineTypeBitInPlace = getConstant("markWord::inline_type_bit_in_place", Integer.class);
 
     // This field has no type in vmStructs.cpp
     public final int objectMonitorOwner = getFieldOffset("ObjectMonitor::_owner", Integer.class, null);
@@ -548,6 +554,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final long monitorexitAddress = getAddress("JVMCIRuntime::monitorexit");
     public final long notifyAddress = getAddress("JVMCIRuntime::object_notify");
     public final long notifyAllAddress = getAddress("JVMCIRuntime::object_notifyAll");
+    public final long substitutabilityCheckAddress = getAddress("JVMCIRuntime::substitutability_check");
 
     // This flag indicates that support for loom is enabled.
     public final boolean continuationsEnabled = getFieldValue("CompilerToVM::Data::continuations_enabled", Boolean.class, "bool");

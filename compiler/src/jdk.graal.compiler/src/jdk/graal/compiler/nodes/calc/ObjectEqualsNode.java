@@ -44,6 +44,7 @@ import jdk.graal.compiler.nodes.extended.GetClassNode;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
+import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
@@ -58,14 +59,21 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(shortName = "==")
-public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable {
+public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable, Lowerable {
 
     public static final NodeClass<ObjectEqualsNode> TYPE = NodeClass.create(ObjectEqualsNode.class);
     private static final ObjectEqualsOp OP = new ObjectEqualsOp();
 
+    private final boolean substituabilityCheck;
+
+    public boolean substituabilityCheck(){
+        return substituabilityCheck;
+    }
+
     public ObjectEqualsNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
         assert x.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp && y.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp : Assertions.errorMessageContext("x", x, "y", y);
+        substituabilityCheck = x.stamp(NodeView.DEFAULT).canBeInlineType() && y.stamp(NodeView.DEFAULT).canBeInlineType();
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {
