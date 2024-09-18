@@ -171,7 +171,7 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
             if (isAlwaysFailingVirtualDispatchTest(condition, forX, forY)) {
                 return LogicConstantNode.contradiction();
             }
-            if (isAlwaysFailingEqualityTest(condition, forX, forY)) {
+            if (isAlwaysFailingEqualityTest(condition, forX, forY) && (!forX.stamp(NodeView.DEFAULT).canBeInlineType() || !forY.stamp(NodeView.DEFAULT).canBeInlineType())) {
                 return LogicConstantNode.contradiction();
             }
             return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);
@@ -186,7 +186,7 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
     public static LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return LogicConstantNode.tautology();
-        } else if (forX.stamp(view).alwaysDistinct(forY.stamp(view))) {
+        } else if (forX.stamp(view).alwaysDistinct(forY.stamp(view))) { // done if one is null
             return LogicConstantNode.contradiction();
         } else if (forX.stamp(view) instanceof AbstractPointerStamp && ((AbstractPointerStamp) forX.stamp(view)).alwaysNull()) {
             return nullSynonym(forY, forX);
