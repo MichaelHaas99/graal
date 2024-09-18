@@ -147,6 +147,13 @@ public abstract class Stamp implements SpeculationContextObject {
     }
 
     /**
+     * Tests whether this stamp can represent an inline type
+     */
+    public boolean canBeInlineType() {
+        return false;
+    }
+
+    /**
      * Tests whether this stamp represents an integer value.
      */
     public boolean isIntegerStamp() {

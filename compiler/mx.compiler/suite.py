@@ -297,6 +297,7 @@ suite = {
       "javaCompliance" : "21+",
       "jacoco" : "exclude",
       "graalCompilerSourceEdition": "ignore",
+      "javaPreviewNeeded": "21..23",
     },
 
     "jdk.graal.compiler.management" : {
