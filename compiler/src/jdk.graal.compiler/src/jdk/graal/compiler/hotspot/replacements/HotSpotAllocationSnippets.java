@@ -40,8 +40,10 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.PR
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.TLAB_END_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.TLAB_TOP_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.arrayKlassOffset;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypeBitInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.instanceKlassStateBeingInitialized;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.isInstanceKlassFullyInitialized;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.jvmAccIsIdentityClass;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperHeaderSizeMask;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperHeaderSizeShift;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperLog2ElementSizeMask;
@@ -420,6 +422,12 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
     public final void initializeObjectHeader(Word memory, Word hub, boolean isArray) {
         KlassPointer klassPtr = KlassPointer.fromWord(hub);
         Word markWord = WordFactory.signed(HotSpotReplacementsUtil.defaultPrototypeMarkWord(INJECTED_VMCONFIG));
+
+        Word accFlags = klassPtr.readWord(HotSpotReplacementsUtil.klassAccessFlagsOffset(INJECTED_VMCONFIG), HotSpotReplacementsUtil.KLASS_ACCESS_FLAGS_LOCATION);
+        boolean isInlineType = accFlags.and(jvmAccIsIdentityClass(INJECTED_VMCONFIG)).isNull();
+        if(isInlineType)
+            markWord = markWord.or(inlineTypeBitInPlace(INJECTED_VMCONFIG));
+
         HotSpotReplacementsUtil.initializeObjectHeader(memory, markWord, klassPtr);
     }
 

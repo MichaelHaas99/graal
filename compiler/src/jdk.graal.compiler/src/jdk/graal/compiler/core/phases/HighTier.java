@@ -104,13 +104,14 @@ public class HighTier extends BaseTier<HighTierContext> {
         // PartialEscapePhase and BoxNodeOptimizationPhase).
         appendPhase(new BoxNodeIdentityPhase());
 
-        if (GraalOptions.PartialEscapeAnalysis.getValue(options)) {
-            appendPhase(new FinalPartialEscapePhase(true, canonicalizer, null, options));
-        }
+        // TODO: avoid optimization for value objects
+//        if (GraalOptions.PartialEscapeAnalysis.getValue(options)) {
+//            appendPhase(new FinalPartialEscapePhase(true, canonicalizer, null, options));
+//        }
 
-        if (GraalOptions.OptReadElimination.getValue(options)) {
-            appendPhase(new ReadEliminationPhase(canonicalizer));
-        }
+//        if (GraalOptions.OptReadElimination.getValue(options)) {
+//            appendPhase(new ReadEliminationPhase(canonicalizer));
+//        }
 
         appendPhase(new BoxNodeOptimizationPhase(canonicalizer));
         appendPhase(new HighTierLoweringPhase(canonicalizer, true));
