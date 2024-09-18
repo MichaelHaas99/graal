@@ -44,6 +44,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jdk.graal.compiler.serviceprovider.LibGraalService;
+import jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets;
+import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.CompressEncoding;
@@ -276,6 +279,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected InstanceOfSnippets.Templates instanceofSnippets;
     protected HotSpotAllocationSnippets.Templates allocationSnippets;
     protected MonitorSnippets.Templates monitorSnippets;
+    protected ObjectEqualsSnippets.Templates objectEqualsSnippets;
     protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
     protected HotSpotG1WriteBarrierSnippets.Templates g1WriteBarrierSnippets;
     protected LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
@@ -328,6 +332,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         instanceofSnippets = new InstanceOfSnippets.Templates(options, runtime, providers);
         allocationSnippets = allocationSnippetTemplates;
         monitorSnippets = new MonitorSnippets.Templates(options, runtime, providers, config);
+        objectEqualsSnippets = new ObjectEqualsSnippets.Templates(options, providers);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, runtime, providers, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, runtime, providers);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers);
@@ -513,6 +518,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         } else if (n instanceof MonitorExitNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 monitorSnippets.lower((MonitorExitNode) n, registers, tool);
+            }
+        }else if(n instanceof ObjectEqualsNode objectEqualsNode){
+            if(objectEqualsNode.substituabilityCheck() && graph.getGuardsStage().areFrameStatesAtDeopts()){
+                objectEqualsSnippets.lower(objectEqualsNode, tool);
             }
         } else if (n instanceof ArrayCopyNode) {
             arraycopySnippets.lower((ArrayCopyNode) n, tool);

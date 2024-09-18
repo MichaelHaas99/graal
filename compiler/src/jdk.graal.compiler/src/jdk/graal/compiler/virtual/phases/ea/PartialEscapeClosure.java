@@ -30,6 +30,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
+import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
