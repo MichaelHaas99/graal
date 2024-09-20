@@ -30,76 +30,50 @@ import org.junit.Test;
 
 import jdk.graal.compiler.jtt.JTTTest;
 
-import static jdk.graal.compiler.core.common.GraalOptions.MaximumInliningSize;
-
 /*
  */
-public class BC_ifacmpeq extends JTTTest {
+public class BC_monitorenter03 extends JTTTest {
 
-    private static value class ValueTestClass {
-        final int x;
-        final double y;
-        final Object z;
-
-        ValueTestClass(int x, double y, Object z) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
-
-        ValueTestClass() {
-            this(2, 3.0, new Object());
-        }
+    private static final value class DummyTestValueClass{
     }
+    static Object object = new DummyTestValueClass();
 
-    public static boolean test(int arg) {
-        ValueTestClass valueObject1 = new ValueTestClass();
-        ValueTestClass valueObject2 = new ValueTestClass();
-        ValueTestClass valueObject3 = new ValueTestClass(3, 3.0, new Object());
-
-        ValueTestClass obj;
+    public static int test(int arg) {
         if (arg == 2) {
-            obj = valueObject1;
-        } else if (arg == 3) {
-            obj = valueObject2;
+            synchronized (object) {
+                return arg;
+            }
         } else {
-            obj = valueObject3;
+            Object localObject = new DummyTestValueClass();
+            synchronized (localObject) {
+                return arg;
+            }
         }
 
-        return obj == valueObject1;
     }
+
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 8);
+        runTest("test", 0);
     }
 
     @Test
     public void run1() throws Throwable {
         OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 8);
+        runTest(options, "test", 0);
+        runTest("test", 0);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 8);
+        runTest("test", 2);
     }
 
     @Test
     public void run3() throws Throwable {
         OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 2);
-    }
-
-    @Test
-    public void run4() throws Throwable {
-        runTest("test", 8);
-    }
-
-    @Test
-    public void run5() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 3);
+        runTest(options, "test", 2);
     }
 
 }

@@ -82,13 +82,12 @@ public final class MonitorExitNode extends AccessMonitorNode implements Virtuali
         }
 
         ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+        if (alias instanceof VirtualObjectNode virtual) {
             if (virtual.hasIdentity()) {
                 MonitorIdNode removedLock = tool.removeLock(virtual);
                 GraalError.guarantee(MonitorIdNode.monitorIdentityEquals(removedLock, getMonitorId()), "mismatch at %s: %s vs. %s", this, removedLock, getMonitorId());
-                tool.delete();
             }
+            tool.delete();
         }
     }
 

@@ -30,13 +30,17 @@ import org.junit.Test;
 
 import jdk.graal.compiler.jtt.JTTTest;
 
-import static jdk.graal.compiler.core.common.GraalOptions.MaximumInliningSize;
-
 /*
  */
-public class BC_ifacmpeq extends JTTTest {
+public class BC_ifacmpeq2 extends JTTTest {
 
-    private static value class ValueTestClass {
+    private interface DummyInterface {
+    }
+
+    private static class DummyTestClass implements DummyInterface {
+    }
+
+    private static value class ValueTestClass implements DummyInterface {
         final int x;
         final double y;
         final Object z;
@@ -53,31 +57,26 @@ public class BC_ifacmpeq extends JTTTest {
     }
 
     public static boolean test(int arg) {
-        ValueTestClass valueObject1 = new ValueTestClass();
-        ValueTestClass valueObject2 = new ValueTestClass();
-        ValueTestClass valueObject3 = new ValueTestClass(3, 3.0, new Object());
+        ValueTestClass valueObject = new ValueTestClass();
+        DummyTestClass dummyObject = new DummyTestClass();
 
-        ValueTestClass obj;
+        Object obj = new Object();
         if (arg == 2) {
-            obj = valueObject1;
-        } else if (arg == 3) {
-            obj = valueObject2;
-        } else {
-            obj = valueObject3;
+            obj = dummyObject;
         }
 
-        return obj == valueObject1;
+        return obj == valueObject;
     }
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 8);
+        runTest("test", 2);
     }
 
     @Test
     public void run1() throws Throwable {
         OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 8);
+        runTest(options,"test", 2);
     }
 
     @Test
@@ -88,18 +87,7 @@ public class BC_ifacmpeq extends JTTTest {
     @Test
     public void run3() throws Throwable {
         OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 2);
-    }
-
-    @Test
-    public void run4() throws Throwable {
-        runTest("test", 8);
-    }
-
-    @Test
-    public void run5() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 3);
+        runTest(options,"test", 8);
     }
 
 }

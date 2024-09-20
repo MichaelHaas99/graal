@@ -63,10 +63,9 @@ public class MidTier extends BaseTier<MidTierContext> {
             appendPhase(new FloatingReadPhase(canonicalizer));
         }
 
-        // TODO: avoid optimization for value objects
-//        if (GraalOptions.ConditionalElimination.getValue(options)) {
-//            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, true));
-//        }
+        if (GraalOptions.ConditionalElimination.getValue(options)) {
+            appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, true));
+        }
 
         if (GraalOptions.LoopPredication.getValue(options) && !GraalOptions.SpeculativeGuardMovement.getValue(options)) {
             appendPhase(new LoopPredicationPhase(canonicalizer));
