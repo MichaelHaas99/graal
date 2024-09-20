@@ -57,7 +57,6 @@ import jdk.graal.compiler.replacements.SnippetTemplate.SnippetInfo;
 import jdk.graal.compiler.replacements.nodes.BasicObjectCloneNode;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.ObjectClone;
-
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -157,7 +156,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
                     // the new instance.
                     CommitAllocationNode commit = newGraph.add(new CommitAllocationNode());
                     newGraph.addAfterFixed(newGraph.start(), commit);
-                    VirtualObjectNode virtualObj = newGraph.add(new VirtualInstanceNode(type, true));
+                    VirtualObjectNode virtualObj = newGraph.add(new VirtualInstanceNode(type, type.isIdentity()));
                     virtualObj.setObjectId(0);
 
                     AllocatedObjectNode newObj = newGraph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
