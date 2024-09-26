@@ -78,26 +78,24 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     @Override
     public boolean canBeInlineType() {
-        // array or empty type or null cant be inline
+        // empty type or array or null can't be inline types
         if (isEmpty() || isAlwaysArray() || alwaysNull())
             return false;
         if (!isExactType()) {
-            // merge which resulted object class as super class
+            // merge which resulted in object class as superclass
             if (type() == null)
                 return true;
-            // type is lower than object class
-            if (type().isIdentity())
-                return false;
-            // type is interface, abstract class or value class
-            return true;
-        } else {
-            if (type().isJavaLangObject())
-                return false;
-            if (type().isIdentity())
-                return false;
-            return true;
-        }
 
+            // interface or abstract class can be a supertype of an inline type
+            if (type().isAbstract() || type().isInterface())
+                return true;
+        }
+        return !type().isIdentity();
+    }
+
+    @Override
+    public boolean isInlineType() {
+        return nonNull() && isExactType() && !type().isIdentity();
     }
 
     @Override
