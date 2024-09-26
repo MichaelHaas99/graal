@@ -89,7 +89,7 @@ import static jdk.graal.compiler.nodes.extended.MembarNode.memoryBarrier;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static jdk.graal.compiler.replacements.nodes.CStringConstant.cstring;
 import static jdk.vm.ci.meta.DeoptimizationAction.None;
-import static jdk.vm.ci.meta.DeoptimizationReason.TransferToInterpreter;
+import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 import static org.graalvm.word.LocationIdentity.any;
 import static org.graalvm.word.WordFactory.unsigned;
 import static org.graalvm.word.WordFactory.zero;
@@ -97,7 +97,6 @@ import static org.graalvm.word.WordFactory.zero;
 import java.util.List;
 import java.util.Objects;
 
-import jdk.graal.compiler.nodes.DeoptimizeNode;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordBase;
@@ -125,6 +124,7 @@ import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.lir.SyncPort;
 import jdk.graal.compiler.nodes.CallTargetNode.InvokeKind;
 import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
@@ -206,7 +206,8 @@ public class MonitorSnippets implements Snippets {
      * CAS operation.
      */
     @Snippet
-    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter int lockDepth, @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
+    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter boolean canBeInlineType, @ConstantParameter boolean isInlineType, @ConstantParameter int lockDepth,
+                    @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
                     @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
         HotSpotReplacementsUtil.verifyOop(object);
 
@@ -221,9 +222,11 @@ public class MonitorSnippets implements Snippets {
 
         incCounter();
 
-        // check mark word for inline type
-        if(mark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))){
-            DeoptimizeNode.deopt(None, TransferToInterpreter);
+        if (canBeInlineType) {
+            // check mark word for inline type
+            if (isInlineType || mark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
+                DeoptimizeNode.deopt(None, RuntimeConstraint);
+            }
         }
 
         if (diagnoseSyncOnValueBasedClasses(INJECTED_VMCONFIG)) {
@@ -834,6 +837,8 @@ public class MonitorSnippets implements Snippets {
             Arguments args = new Arguments(monitorenter, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("object", monitorenterNode.object());
             args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
+            args.addConst("canBeInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).canBeInlineType());
+            args.addConst("isInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).isInlineType());
             args.addConst("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("stackPointerRegister", registers.getStackPointerRegister());

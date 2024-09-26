@@ -28,7 +28,6 @@ import jdk.graal.compiler.core.common.LIRKind;
 import jdk.graal.compiler.core.common.calc.Condition;
 import jdk.graal.compiler.core.common.spi.LIRKindTool;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup.SpeculationContextObject;
-
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
@@ -150,6 +149,13 @@ public abstract class Stamp implements SpeculationContextObject {
      * Tests whether this stamp can represent an inline type
      */
     public boolean canBeInlineType() {
+        return false;
+    }
+
+    /**
+     * Tests whether this stamp is known to be an inline type
+     */
+    public boolean isInlineType() {
         return false;
     }
 
@@ -279,7 +285,7 @@ public abstract class Stamp implements SpeculationContextObject {
         Constant constant = this.asConstant();
         if (constant != null) {
             Constant otherConstant = other.asConstant();
-            return otherConstant != null && constant.equals(otherConstant);
+            return constant.equals(otherConstant);
         }
         return false;
     }
@@ -295,8 +301,7 @@ public abstract class Stamp implements SpeculationContextObject {
      * {@link TriState#UNKNOWN}.
      */
     public TriState tryConstantFold(Condition condition, Constant x, Constant y, boolean unorderedIsTrue, ConstantReflectionProvider constantReflection) {
-        if (x instanceof PrimitiveConstant) {
-            PrimitiveConstant lp = (PrimitiveConstant) x;
+        if (x instanceof PrimitiveConstant lp) {
             PrimitiveConstant rp = (PrimitiveConstant) y;
             return TriState.get(condition.foldCondition(lp, rp, unorderedIsTrue));
         } else {
