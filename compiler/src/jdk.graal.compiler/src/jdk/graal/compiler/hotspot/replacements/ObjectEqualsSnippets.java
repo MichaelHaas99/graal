@@ -20,6 +20,7 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
+import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
@@ -47,8 +48,18 @@ public class ObjectEqualsSnippets implements Snippets {
             SnippetTemplate.Arguments args;
             if (node instanceof ObjectEqualsNode objectEqualsNode) {
                 args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(), tool.getLoweringStage());
-                args.add("x", objectEqualsNode.getX());
-                args.add("y", objectEqualsNode.getY());
+                if (objectEqualsNode.getX() instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode) {
+                    args.add("x", xAnchorNode.object());
+                } else {
+                    args.add("x", objectEqualsNode.getX());
+                }
+                if (objectEqualsNode.getY() instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode) {
+                    args.add("y", yAnchorNode.object());
+                } else {
+                    args.add("y", objectEqualsNode.getY());
+                }
+// args.add("x", ((FixedInlineTypeEqualityAnchorNode) objectEqualsNode.getX()).object());
+// args.add("y", ((FixedInlineTypeEqualityAnchorNode) objectEqualsNode.getY()).object());
             } else {
                 throw GraalError.shouldNotReachHere(node + " " + replacer); // ExcludeFromJacocoGeneratedReport
             }
