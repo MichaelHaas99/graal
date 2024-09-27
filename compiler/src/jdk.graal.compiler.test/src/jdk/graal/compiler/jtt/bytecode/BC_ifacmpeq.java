@@ -24,82 +24,80 @@
  */
 package jdk.graal.compiler.jtt.bytecode;
 
-import jdk.graal.compiler.core.common.GraalOptions;
-import jdk.graal.compiler.options.OptionValues;
 import org.junit.Test;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.jtt.JTTTest;
-
-import static jdk.graal.compiler.core.common.GraalOptions.MaximumInliningSize;
+import jdk.graal.compiler.options.OptionValues;
 
 /*
  */
 public class BC_ifacmpeq extends JTTTest {
 
-    private static value class ValueTestClass {
+    private static class InlineTypeTestClass {
         final int x;
         final double y;
         final Object z;
 
-        ValueTestClass(int x, double y, Object z) {
+        InlineTypeTestClass(int x, double y, Object z) {
             this.x = x;
             this.y = y;
             this.z = z;
         }
 
-        ValueTestClass() {
+        InlineTypeTestClass() {
             this(2, 3.0, new Object());
         }
     }
 
     public static boolean test(int arg) {
-        ValueTestClass valueObject1 = new ValueTestClass();
-        ValueTestClass valueObject2 = new ValueTestClass();
-        ValueTestClass valueObject3 = new ValueTestClass(3, 3.0, new Object());
+        InlineTypeTestClass inlineTypeObject1 = new InlineTypeTestClass();
+        InlineTypeTestClass inlineTypeObject2 = new InlineTypeTestClass();
+        InlineTypeTestClass inlineTypeObject3 = new InlineTypeTestClass(3, 3.0, new Object());
 
-        ValueTestClass obj;
-        if (arg == 2) {
-            obj = valueObject1;
-        } else if (arg == 3) {
-            obj = valueObject2;
+        InlineTypeTestClass comparisonObj = inlineTypeObject1;
+        boolean result;
+        if (arg == 0) {
+            result = comparisonObj == inlineTypeObject1;
+        } else if (arg == 1) {
+            result = comparisonObj == inlineTypeObject2;
         } else {
-            obj = valueObject3;
+            result = comparisonObj == inlineTypeObject3;
         }
 
-        return obj == valueObject1;
+        return result;
     }
+
+    private static final OptionValues withoutPEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
     @Test
     public void run0() throws Throwable {
-        runTest("test", 8);
+        runTest(withoutPEA, "test", 0);
     }
 
     @Test
     public void run1() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 8);
+        runTest(withoutPEA, "test", 1);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 8);
+        runTest(withoutPEA, "test", 2);
     }
 
     @Test
     public void run3() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 2);
+        runTest("test", 0);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTest("test", 8);
+        runTest("test", 1);
     }
 
     @Test
     public void run5() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options,"test", 3);
+        runTest("test", 2);
     }
 
 }
