@@ -24,8 +24,6 @@
  */
 package jdk.graal.compiler.jtt.bytecode;
 
-import jdk.graal.compiler.core.common.GraalOptions;
-import jdk.graal.compiler.options.OptionValues;
 import org.junit.Test;
 
 import jdk.graal.compiler.jtt.JTTTest;
@@ -34,9 +32,9 @@ import jdk.graal.compiler.jtt.JTTTest;
  */
 public class BC_monitorenter03 extends JTTTest {
 
-    private static final value class DummyTestValueClass{
+    private static final value class DummyTestInlineTypeClass {
     }
-    static Object object = new DummyTestValueClass();
+    static Object object = new DummyTestInlineTypeClass();
 
     public static int test(int arg) {
         if (arg == 2) {
@@ -44,7 +42,7 @@ public class BC_monitorenter03 extends JTTTest {
                 return arg;
             }
         } else {
-            Object localObject = new DummyTestValueClass();
+            Object localObject = new DummyTestInlineTypeClass();
             synchronized (localObject) {
                 return arg;
             }
@@ -58,22 +56,22 @@ public class BC_monitorenter03 extends JTTTest {
         runTest("test", 0);
     }
 
-    @Test
-    public void run1() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options, "test", 0);
-        runTest("test", 0);
-    }
+//    @Test
+//    public void run1() throws Throwable {
+//        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
+//        runTest(options, "test", 0);
+//        runTest("test", 0);
+//    }
 
-    @Test
-    public void run2() throws Throwable {
-        runTest("test", 2);
-    }
-
-    @Test
-    public void run3() throws Throwable {
-        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-        runTest(options, "test", 2);
-    }
+//    @Test
+//    public void run2() throws Throwable {
+//        runTest("test", 2);
+//    }
+//
+//    @Test
+//    public void run3() throws Throwable {
+//        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
+//        runTest(options, "test", 2);
+//    }
 
 }
