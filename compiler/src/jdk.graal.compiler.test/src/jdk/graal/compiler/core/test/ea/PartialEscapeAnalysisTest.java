@@ -28,6 +28,11 @@ import java.lang.ref.SoftReference;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 
+import jdk.graal.compiler.jtt.bytecode.BC_ifacmpeq3;
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
+
 import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.core.test.TypeSystemTest;
 import jdk.graal.compiler.graph.Node;
@@ -42,9 +47,6 @@ import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.phases.common.DeadCodeEliminationPhase;
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
 
 /**
  * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
@@ -71,6 +73,22 @@ public class PartialEscapeAnalysisTest extends EATestBase {
         public TestObject2(Object x, Object y) {
             this.x = x;
             this.y = y;
+        }
+    }
+
+    public static value class ValueTestObject {
+        final int x;
+        final float y;
+        final ValueTestObject z;
+
+        ValueTestObject(int x, float y, ValueTestObject z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        ValueTestObject() {
+            this(2, 3.0f, null);
         }
     }
 
@@ -128,6 +146,35 @@ public class PartialEscapeAnalysisTest extends EATestBase {
             return obj;
         } else {
             return null;
+        }
+    }
+
+    @Test
+    public void testIfAcmpeq1() {
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet1", 0.75, 3, StoreFieldNode.class, LoadFieldNode.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static boolean testIfAcmpeqSnippet1(int a, int b) {
+        ValueTestObject valueObject1 = new ValueTestObject();
+        ValueTestObject valueObject2 = new ValueTestObject(2, 3.0f, valueObject1);
+        ValueTestObject valueObject3 = new ValueTestObject(3, 3.0f+2.0f, valueObject1);
+        ValueTestObject valueObject4 = new ValueTestObject(2, 3.0f, valueObject1);
+        ValueTestObject valueObject5 = new ValueTestObject(2+a, 3.0f, valueObject1);
+
+        if(a<0) {
+            if(b<0){
+                return valueObject3 == valueObject4;
+            }else{
+                // causes materialization of these 1,4,5
+                return valueObject4 == valueObject5;
+            }
+        }else{
+            if(b<0){
+                return valueObject1 == valueObject2;
+            }else{
+                return valueObject3 == valueObject5;
+            }
         }
     }
 

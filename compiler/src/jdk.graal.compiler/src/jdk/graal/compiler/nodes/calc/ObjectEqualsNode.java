@@ -162,7 +162,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
 
         if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant())) {
-            // one of them is virtual: they can never be the same objects
+            // one of them is virtual and the other one maybe null: they can never be the same
+            // objects
             return LogicConstantNode.contradiction(graph);
         }
         return null;
@@ -200,21 +201,58 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                         xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0) == JavaKind.Long : Assertions.errorMessage(x, y, xVirtual);
                         return new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
                     } else {
+                        boolean comparisonResultUnknown = false;
                         for (int i = 0; i < xVirtual.entryCount(); i++) {
                             ValueNode xFieldNode = tool.getEntry(xVirtual, i);
                             ValueNode yFieldNode = tool.getEntry(yVirtual, i);
 
+                            // if fields reference the same node they are equal
                             if (xFieldNode == yFieldNode)
                                 continue;
 
-                            LogicNode result = virtualizeComparison(xFieldNode, yFieldNode, graph, tool);
+                            LogicNode result = null;
+                            if (xFieldNode instanceof VirtualObjectNode || yFieldNode instanceof VirtualObjectNode) {
+                                // one field is virtual do a recursive call
+                                result = virtualizeComparison(xFieldNode, yFieldNode, graph, tool);
+                            } else {
+                                // both fields are non-virtual
+                                LogicNode temp = null;
+                                if (xFieldNode.stamp(NodeView.DEFAULT).isIntegerStamp()) {
+                                    temp = IntegerEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
+                                                    tool.getOptions(), null, xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
+                                    temp = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
+                                                    tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
+                                    ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,
+                                                    tool.getConstantReflection());
+                                    ValueNode constantZero = ConstantNode.forConstant(JavaConstant.INT_0, tool.getMetaAccess(), graph);
+                                    temp = IntegerEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
+                                                    tool.getOptions(), null, normalizeNode, constantZero, NodeView.DEFAULT);
+                                }
 
-                            if (result == null)
-                                return null;
+                                if (temp instanceof LogicConstantNode)
+                                    result = temp;
+                            }
+
+                            if (result == null) {
+                                // field comparison result not known at compile time, but continue
+                                // searching for contradiction
+                                comparisonResultUnknown = true;
+                                continue;
+                            }
+
+                            if (result.isTautology())
+                                continue;
 
                             if (result.isContradiction())
                                 return result;
                         }
+
+                        if (comparisonResultUnknown)
+                            return null;
+
+                        // all fields are equal
                         return LogicConstantNode.tautology(graph);
                     }
                 }
@@ -234,8 +272,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         if (getX() instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode) {
             x = xAnchorNode.object();
             setX(x);
-
         }
+
         if (getY() instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode) {
             y = yAnchorNode.object();
             setY(y);
