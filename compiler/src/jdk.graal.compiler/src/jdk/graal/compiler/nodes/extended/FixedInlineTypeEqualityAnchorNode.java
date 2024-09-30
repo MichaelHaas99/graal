@@ -1,7 +1,5 @@
 package jdk.graal.compiler.nodes.extended;
 
-import java.util.Collections;
-
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
@@ -15,7 +13,6 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 
 @NodeInfo()
@@ -53,11 +50,9 @@ public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode i
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
-        // if input is virtual also virtualize to avoid materialization
+        // if input is virtual propagate value
         if (alias instanceof VirtualObjectNode) {
-            VirtualInstanceNode virtualObject = new VirtualInstanceNode(tool.getMetaAccess().lookupJavaType(Object.class), true);
-            tool.createVirtualObject(virtualObject, ValueNode.EMPTY_ARRAY, Collections.emptyList(), getNodeSourcePosition(), false);
-            tool.replaceWithVirtual(virtualObject);
+            tool.replaceWithVirtual((VirtualObjectNode) alias);
         }
     }
 
