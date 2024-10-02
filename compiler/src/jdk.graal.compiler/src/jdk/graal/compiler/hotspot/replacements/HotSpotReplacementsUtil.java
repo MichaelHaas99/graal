@@ -358,6 +358,11 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static int klassProtoTypeHeaderOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassProtoTypeHeaderOffset;
+    }
+
+    @Fold
     public static int jvmAccHasFinalizer(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.jvmAccHasFinalizer;
     }
