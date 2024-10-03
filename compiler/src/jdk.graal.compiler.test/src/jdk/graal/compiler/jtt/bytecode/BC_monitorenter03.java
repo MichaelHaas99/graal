@@ -26,7 +26,9 @@ package jdk.graal.compiler.jtt.bytecode;
 
 import org.junit.Test;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.jtt.JTTTest;
+import jdk.graal.compiler.options.OptionValues;
 
 /*
  */
@@ -49,29 +51,27 @@ public class BC_monitorenter03 extends JTTTest {
         }
 
     }
-
+    private static final OptionValues withoutPEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
     @Test
     public void run0() throws Throwable {
         runTest("test", 0);
     }
 
-//    @Test
-//    public void run1() throws Throwable {
-//        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-//        runTest(options, "test", 0);
-//        runTest("test", 0);
-//    }
+    @Test
+    public void run1() throws Throwable {
+        runTest(withoutPEA, "test", 0);
+        runTest("test", 0);
+    }
 
-//    @Test
-//    public void run2() throws Throwable {
-//        runTest("test", 2);
-//    }
-//
-//    @Test
-//    public void run3() throws Throwable {
-//        OptionValues options = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-//        runTest(options, "test", 2);
-//    }
+    @Test
+    public void run2() throws Throwable {
+        runTest("test", 2);
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        runTest(withoutPEA, "test", 2);
+    }
 
 }
