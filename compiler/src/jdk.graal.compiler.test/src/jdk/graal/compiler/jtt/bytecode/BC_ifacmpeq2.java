@@ -41,53 +41,46 @@ public class BC_ifacmpeq2 extends JTTTest {
     }
 
     private static value class InlineTypeTestClass implements DummyInterface {
-        final int x;
-        final double y;
-        final Object z;
+    }
 
-        InlineTypeTestClass(int x, double y, Object z) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
-
-        InlineTypeTestClass() {
-            this(2, 3.0, new Object());
-        }
+    private static value class InlineTypeTestClass2 implements DummyInterface {
     }
 
     public static boolean test(int arg) {
-        InlineTypeTestClass inlineTypeObject = new InlineTypeTestClass();
-        DummyTestClass dummyObject = new DummyTestClass();
+        DummyInterface inlineTypeObject1 = new InlineTypeTestClass();
+        DummyInterface inlineTypeObject2 = new InlineTypeTestClass2();
+        DummyInterface object = new DummyTestClass();
 
-        Object obj = new Object();
-        if (arg == 2) {
-            obj = dummyObject;
+        boolean result;
+        if (arg == 0) {
+            result = inlineTypeObject1 == inlineTypeObject2;
+        } else {
+            result = inlineTypeObject1 == object;
         }
+        return result;
 
-        return obj == inlineTypeObject;
     }
 
-    private static final OptionValues withoutPEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
+    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
     @Test
     public void run0() throws Throwable {
-        runTest(withoutPEA, "test", 2);
+        runTest(WITHOUT_PEA, "test", 0);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest(withoutPEA, "test", 8);
+        runTest("test", 0);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTest("test", 2);
+        runTest(WITHOUT_PEA, "test", 1);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTest("test", 8);
+        runTest("test", 1);
     }
 
 }
