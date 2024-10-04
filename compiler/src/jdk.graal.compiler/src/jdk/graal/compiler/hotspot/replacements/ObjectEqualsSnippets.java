@@ -58,8 +58,6 @@ public class ObjectEqualsSnippets implements Snippets {
                 } else {
                     args.add("y", objectEqualsNode.getY());
                 }
-// args.add("x", ((FixedInlineTypeEqualityAnchorNode) objectEqualsNode.getX()).object());
-// args.add("y", ((FixedInlineTypeEqualityAnchorNode) objectEqualsNode.getY()).object());
             } else {
                 throw GraalError.shouldNotReachHere(node + " " + replacer); // ExcludeFromJacocoGeneratedReport
             }
