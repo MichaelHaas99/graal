@@ -46,53 +46,57 @@ public class BC_ifacmpeq extends JTTTest {
         }
 
         InlineTypeTestClass() {
-            this(2, 3.0, new Object());
+            this(2, 3.0, null);
+        }
+
+        InlineTypeTestClass(Object z) {
+            this(2, 3.0, z);
         }
     }
 
     public static boolean test(int arg) {
         InlineTypeTestClass inlineTypeObject1 = new InlineTypeTestClass();
         InlineTypeTestClass inlineTypeObject2 = new InlineTypeTestClass();
-        InlineTypeTestClass inlineTypeObject3 = new InlineTypeTestClass(3, 3.0, new Object());
+        InlineTypeTestClass inlineTypeObject3 = new InlineTypeTestClass(inlineTypeObject1);
+        InlineTypeTestClass inlineTypeObject4 = new InlineTypeTestClass(inlineTypeObject1);
+        InlineTypeTestClass inlineTypeObject5 = new InlineTypeTestClass(inlineTypeObject2);
 
-        InlineTypeTestClass comparisonObj = inlineTypeObject1;
         boolean result;
         if (arg == 0) {
-            result = comparisonObj == inlineTypeObject1;
+            result = inlineTypeObject1 == inlineTypeObject2;
         } else if (arg == 1) {
-            result = comparisonObj == inlineTypeObject2;
+            result = inlineTypeObject3 == inlineTypeObject4;
         } else {
-            result = comparisonObj == inlineTypeObject3;
+            result = inlineTypeObject4 == inlineTypeObject5;
         }
-
         return result;
     }
 
-    private static final OptionValues withoutPEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
+    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
     @Test
     public void run0() throws Throwable {
-        runTest(withoutPEA, "test", 0);
+        runTest(WITHOUT_PEA, "test", 0);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest(withoutPEA, "test", 1);
-    }
-
-    @Test
-    public void run2() throws Throwable {
-        runTest(withoutPEA, "test", 2);
-    }
-
-    @Test
-    public void run3() throws Throwable {
         runTest("test", 0);
     }
 
     @Test
-    public void run4() throws Throwable {
+    public void run2() throws Throwable {
+        runTest(WITHOUT_PEA, "test", 1);
+    }
+
+    @Test
+    public void run3() throws Throwable {
         runTest("test", 1);
+    }
+
+    @Test
+    public void run4() throws Throwable {
+        runTest(WITHOUT_PEA, "test", 2);
     }
 
     @Test
