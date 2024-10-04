@@ -1,12 +1,12 @@
 package jdk.graal.compiler.jtt.bytecode;
 
+import java.lang.reflect.Method;
+
 import org.junit.Test;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.jtt.JTTTest;
 import jdk.graal.compiler.options.OptionValues;
-
-import java.lang.reflect.Method;
 
 interface MyInterface {
 
@@ -52,7 +52,7 @@ class MyObject extends MyAbstract {
     int x;
 }
 
-public class BC_ifacmpeq4  extends JTTTest {
+public class BC_ifacmpeq4 extends JTTTest {
     public boolean testEq01_1(Object u1, Object u2) {
         return get(u1) == u2; // new acmp
     }
@@ -78,11 +78,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq02_1(MyValue1 v1, MyValue1 v2) {
-        return get(v1) == (Object)v2; // only true if both null
+        return get(v1) == (Object) v2; // only true if both null
     }
 
     public boolean testEq02_2(MyValue1 v1, MyValue1 v2) {
-        return (Object)v1 == get(v2); // only true if both null
+        return (Object) v1 == get(v2); // only true if both null
     }
 
     public boolean testEq02_3(MyValue1 v1, MyValue1 v2) {
@@ -94,7 +94,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq03_2(MyValue1 v, Object u) {
-        return (Object)v == get(u); // only true if both null
+        return (Object) v == get(u); // only true if both null
     }
 
     public boolean testEq03_3(MyValue1 v, Object u) {
@@ -102,7 +102,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq04_1(Object u, MyValue1 v) {
-        return get(u) == (Object)v; // only true if both null
+        return get(u) == (Object) v; // only true if both null
     }
 
     public boolean testEq04_2(Object u, MyValue1 v) {
@@ -114,7 +114,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq05_1(MyObject o, MyValue1 v) {
-        return get(o) == (Object)v; // only true if both null
+        return get(o) == (Object) v; // only true if both null
     }
 
     public boolean testEq05_2(MyObject o, MyValue1 v) {
@@ -130,7 +130,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq06_2(MyValue1 v, MyObject o) {
-        return (Object)v == get(o); // only true if both null
+        return (Object) v == get(o); // only true if both null
     }
 
     public boolean testEq06_3(MyValue1 v, MyObject o) {
@@ -138,11 +138,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq07_1(MyValue1 v1, MyValue1 v2) {
-        return getNotNull(v1) == (Object)v2; // false
+        return getNotNull(v1) == (Object) v2; // false
     }
 
     public boolean testEq07_2(MyValue1 v1, MyValue1 v2) {
-        return (Object)v1 == getNotNull(v2); // false
+        return (Object) v1 == getNotNull(v2); // false
     }
 
     public boolean testEq07_3(MyValue1 v1, MyValue1 v2) {
@@ -154,7 +154,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq08_2(MyValue1 v, Object u) {
-        return (Object)v == getNotNull(u); // false
+        return (Object) v == getNotNull(u); // false
     }
 
     public boolean testEq08_3(MyValue1 v, Object u) {
@@ -162,7 +162,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq09_1(Object u, MyValue1 v) {
-        return getNotNull(u) == (Object)v; // false
+        return getNotNull(u) == (Object) v; // false
     }
 
     public boolean testEq09_2(Object u, MyValue1 v) {
@@ -174,7 +174,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq10_1(MyObject o, MyValue1 v) {
-        return getNotNull(o) == (Object)v; // false
+        return getNotNull(o) == (Object) v; // false
     }
 
     public boolean testEq10_2(MyObject o, MyValue1 v) {
@@ -190,7 +190,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq11_2(MyValue1 v, MyObject o) {
-        return (Object)v == getNotNull(o); // false
+        return (Object) v == getNotNull(o); // false
     }
 
     public boolean testEq11_3(MyValue1 v, MyObject o) {
@@ -258,7 +258,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq17_1(Object[] a, MyValue1 v) {
-        return get(a) == (Object)v; // only true if both null
+        return get(a) == (Object) v; // only true if both null
     }
 
     public boolean testEq17_2(Object[] a, MyValue1 v) {
@@ -274,7 +274,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq18_2(MyValue1 v, Object[] a) {
-        return (Object)v == get(a); // only true if both null
+        return (Object) v == get(a); // only true if both null
     }
 
     public boolean testEq18_3(MyValue1 v, Object[] a) {
@@ -282,7 +282,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq19_1(Object[] a, MyValue1 v) {
-        return getNotNull(a) == (Object)v; // false
+        return getNotNull(a) == (Object) v; // false
     }
 
     public boolean testEq19_2(Object[] a, MyValue1 v) {
@@ -298,7 +298,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq20_2(MyValue1 v, Object[] a) {
-        return (Object)v == getNotNull(a); // false
+        return (Object) v == getNotNull(a); // false
     }
 
     public boolean testEq20_3(MyValue1 v, Object[] a) {
@@ -358,7 +358,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq22_2(MyValue1 v, MyInterface u) {
-        return (Object)v == get(u); // only true if both null
+        return (Object) v == get(u); // only true if both null
     }
 
     public boolean testEq22_3(MyValue1 v, MyInterface u) {
@@ -370,7 +370,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq22_5(MyValue1 v, MyAbstract u) {
-        return (Object)v == get(u); // only true if both null
+        return (Object) v == get(u); // only true if both null
     }
 
     public boolean testEq22_6(MyValue1 v, MyAbstract u) {
@@ -378,7 +378,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq23_1(MyInterface u, MyValue1 v) {
-        return get(u) == (Object)v; // only true if both null
+        return get(u) == (Object) v; // only true if both null
     }
 
     public boolean testEq23_2(MyInterface u, MyValue1 v) {
@@ -390,7 +390,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq23_4(MyAbstract u, MyValue1 v) {
-        return get(u) == (Object)v; // only true if both null
+        return get(u) == (Object) v; // only true if both null
     }
 
     public boolean testEq23_5(MyAbstract u, MyValue1 v) {
@@ -406,7 +406,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq24_2(MyValue1 v, MyInterface u) {
-        return (Object)v == getNotNull(u); // false
+        return (Object) v == getNotNull(u); // false
     }
 
     public boolean testEq24_3(MyValue1 v, MyInterface u) {
@@ -418,7 +418,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq24_5(MyValue1 v, MyAbstract u) {
-        return (Object)v == getNotNull(u); // false
+        return (Object) v == getNotNull(u); // false
     }
 
     public boolean testEq24_6(MyValue1 v, MyAbstract u) {
@@ -426,7 +426,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq25_1(MyInterface u, MyValue1 v) {
-        return getNotNull(u) == (Object)v; // false
+        return getNotNull(u) == (Object) v; // false
     }
 
     public boolean testEq25_2(MyInterface u, MyValue1 v) {
@@ -438,7 +438,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq25_4(MyAbstract u, MyValue1 v) {
-        return getNotNull(u) == (Object)v; // false
+        return getNotNull(u) == (Object) v; // false
     }
 
     public boolean testEq25_5(MyAbstract u, MyValue1 v) {
@@ -546,7 +546,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq30_1(MyInterface[] a, MyValue1 v) {
-        return get(a) == (Object)v; // only true if both null
+        return get(a) == (Object) v; // only true if both null
     }
 
     public boolean testEq30_2(MyInterface[] a, MyValue1 v) {
@@ -558,7 +558,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq30_4(MyAbstract[] a, MyValue1 v) {
-        return get(a) == (Object)v; // only true if both null
+        return get(a) == (Object) v; // only true if both null
     }
 
     public boolean testEq30_5(MyAbstract[] a, MyValue1 v) {
@@ -574,7 +574,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq31_2(MyValue1 v, MyInterface[] a) {
-        return (Object)v == get(a); // only true if both null
+        return (Object) v == get(a); // only true if both null
     }
 
     public boolean testEq31_3(MyValue1 v, MyInterface[] a) {
@@ -586,7 +586,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq31_5(MyValue1 v, MyAbstract[] a) {
-        return (Object)v == get(a); // only true if both null
+        return (Object) v == get(a); // only true if both null
     }
 
     public boolean testEq31_6(MyValue1 v, MyAbstract[] a) {
@@ -594,7 +594,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq32_1(MyInterface[] a, MyValue1 v) {
-        return getNotNull(a) == (Object)v; // false
+        return getNotNull(a) == (Object) v; // false
     }
 
     public boolean testEq32_2(MyInterface[] a, MyValue1 v) {
@@ -606,7 +606,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq32_4(MyAbstract[] a, MyValue1 v) {
-        return getNotNull(a) == (Object)v; // false
+        return getNotNull(a) == (Object) v; // false
     }
 
     public boolean testEq32_5(MyAbstract[] a, MyValue1 v) {
@@ -622,7 +622,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq33_2(MyValue1 v, MyInterface[] a) {
-        return (Object)v == getNotNull(a); // false
+        return (Object) v == getNotNull(a); // false
     }
 
     public boolean testEq33_3(MyValue1 v, MyInterface[] a) {
@@ -634,18 +634,17 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testEq33_5(MyValue1 v, MyAbstract[] a) {
-        return (Object)v == getNotNull(a); // false
+        return (Object) v == getNotNull(a); // false
     }
 
     public boolean testEq33_6(MyValue1 v, MyAbstract[] a) {
         return getNotNull(v) == getNotNull(a); // false
     }
 
-
     // Null tests
 
     public boolean testNull01_1(MyValue1 v) {
-        return (Object)v == null; // old acmp
+        return (Object) v == null; // old acmp
     }
 
     public boolean testNull01_2(MyValue1 v) {
@@ -653,19 +652,19 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull01_3(MyValue1 v) {
-        return (Object)v == get((Object)null); // old acmp
+        return (Object) v == get((Object) null); // old acmp
     }
 
     public boolean testNull01_4(MyValue1 v) {
-        return get(v) == get((Object)null); // old acmp
+        return get(v) == get((Object) null); // old acmp
     }
 
     public boolean testNull02_1(MyValue1 v) {
-        return null == (Object)v; // old acmp
+        return null == (Object) v; // old acmp
     }
 
     public boolean testNull02_2(MyValue1 v) {
-        return get((Object)null) == (Object)v; // old acmp
+        return get((Object) null) == (Object) v; // old acmp
     }
 
     public boolean testNull02_3(MyValue1 v) {
@@ -673,7 +672,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull02_4(MyValue1 v) {
-        return get((Object)null) == get(v); // old acmp
+        return get((Object) null) == get(v); // old acmp
     }
 
     public boolean testNull03_1(Object u) {
@@ -685,11 +684,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull03_3(Object u) {
-        return u == get((Object)null); // old acmp
+        return u == get((Object) null); // old acmp
     }
 
     public boolean testNull03_4(Object u) {
-        return get(u) == get((Object)null); // old acmp
+        return get(u) == get((Object) null); // old acmp
     }
 
     public boolean testNull04_1(Object u) {
@@ -697,7 +696,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull04_2(Object u) {
-        return get((Object)null) == u; // old acmp
+        return get((Object) null) == u; // old acmp
     }
 
     public boolean testNull04_3(Object u) {
@@ -705,7 +704,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull04_4(Object u) {
-        return get((Object)null) == get(u); // old acmp
+        return get((Object) null) == get(u); // old acmp
     }
 
     public boolean testNull05_1(MyObject o) {
@@ -717,11 +716,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull05_3(MyObject o) {
-        return o == get((Object)null); // old acmp
+        return o == get((Object) null); // old acmp
     }
 
     public boolean testNull05_4(MyObject o) {
-        return get(o) == get((Object)null); // old acmp
+        return get(o) == get((Object) null); // old acmp
     }
 
     public boolean testNull06_1(MyObject o) {
@@ -729,7 +728,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull06_2(MyObject o) {
-        return get((Object)null) == o; // old acmp
+        return get((Object) null) == o; // old acmp
     }
 
     public boolean testNull06_3(MyObject o) {
@@ -737,7 +736,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull06_4(MyObject o) {
-        return get((Object)null) == get(o); // old acmp
+        return get((Object) null) == get(o); // old acmp
     }
 
     public boolean testNull07_1(MyInterface u) {
@@ -749,11 +748,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull07_3(MyInterface u) {
-        return u == get((Object)null); // old acmp
+        return u == get((Object) null); // old acmp
     }
 
     public boolean testNull07_4(MyInterface u) {
-        return get(u) == get((Object)null); // old acmp
+        return get(u) == get((Object) null); // old acmp
     }
 
     public boolean testNull07_5(MyAbstract u) {
@@ -765,11 +764,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull07_7(MyAbstract u) {
-        return u == get((Object)null); // old acmp
+        return u == get((Object) null); // old acmp
     }
 
     public boolean testNull07_8(MyAbstract u) {
-        return get(u) == get((Object)null); // old acmp
+        return get(u) == get((Object) null); // old acmp
     }
 
     public boolean testNull08_1(MyInterface u) {
@@ -777,7 +776,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull08_2(MyInterface u) {
-        return get((Object)null) == u; // old acmp
+        return get((Object) null) == u; // old acmp
     }
 
     public boolean testNull08_3(MyInterface u) {
@@ -785,7 +784,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull08_4(MyInterface u) {
-        return get((Object)null) == get(u); // old acmp
+        return get((Object) null) == get(u); // old acmp
     }
 
     public boolean testNull08_5(MyAbstract u) {
@@ -793,7 +792,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull08_6(MyAbstract u) {
-        return get((Object)null) == u; // old acmp
+        return get((Object) null) == u; // old acmp
     }
 
     public boolean testNull08_7(MyAbstract u) {
@@ -801,7 +800,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNull08_8(MyAbstract u) {
-        return get((Object)null) == get(u); // old acmp
+        return get((Object) null) == get(u); // old acmp
     }
 
     // Same tests as above but negated
@@ -831,11 +830,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq02_1(MyValue1 v1, MyValue1 v2) {
-        return get(v1) != (Object)v2; // only false if both null
+        return get(v1) != (Object) v2; // only false if both null
     }
 
     public boolean testNotEq02_2(MyValue1 v1, MyValue1 v2) {
-        return (Object)v1 != get(v2); // only false if both null
+        return (Object) v1 != get(v2); // only false if both null
     }
 
     public boolean testNotEq02_3(MyValue1 v1, MyValue1 v2) {
@@ -847,7 +846,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq03_2(MyValue1 v, Object u) {
-        return (Object)v != get(u); // only false if both null
+        return (Object) v != get(u); // only false if both null
     }
 
     public boolean testNotEq03_3(MyValue1 v, Object u) {
@@ -855,7 +854,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq04_1(Object u, MyValue1 v) {
-        return get(u) != (Object)v; // only false if both null
+        return get(u) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq04_2(Object u, MyValue1 v) {
@@ -867,7 +866,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq05_1(MyObject o, MyValue1 v) {
-        return get(o) != (Object)v; // only false if both null
+        return get(o) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq05_2(MyObject o, MyValue1 v) {
@@ -883,7 +882,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq06_2(MyValue1 v, MyObject o) {
-        return (Object)v != get(o); // only false if both null
+        return (Object) v != get(o); // only false if both null
     }
 
     public boolean testNotEq06_3(MyValue1 v, MyObject o) {
@@ -891,11 +890,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq07_1(MyValue1 v1, MyValue1 v2) {
-        return getNotNull(v1) != (Object)v2; // true
+        return getNotNull(v1) != (Object) v2; // true
     }
 
     public boolean testNotEq07_2(MyValue1 v1, MyValue1 v2) {
-        return (Object)v1 != getNotNull(v2); // true
+        return (Object) v1 != getNotNull(v2); // true
     }
 
     public boolean testNotEq07_3(MyValue1 v1, MyValue1 v2) {
@@ -907,7 +906,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq08_2(MyValue1 v, Object u) {
-        return (Object)v != getNotNull(u); // true
+        return (Object) v != getNotNull(u); // true
     }
 
     public boolean testNotEq08_3(MyValue1 v, Object u) {
@@ -915,7 +914,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq09_1(Object u, MyValue1 v) {
-        return getNotNull(u) != (Object)v; // true
+        return getNotNull(u) != (Object) v; // true
     }
 
     public boolean testNotEq09_2(Object u, MyValue1 v) {
@@ -927,7 +926,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq10_1(MyObject o, MyValue1 v) {
-        return getNotNull(o) != (Object)v; // true
+        return getNotNull(o) != (Object) v; // true
     }
 
     public boolean testNotEq10_2(MyObject o, MyValue1 v) {
@@ -943,7 +942,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq11_2(MyValue1 v, MyObject o) {
-        return (Object)v != getNotNull(o); // true
+        return (Object) v != getNotNull(o); // true
     }
 
     public boolean testNotEq11_3(MyValue1 v, MyObject o) {
@@ -1011,7 +1010,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq17_1(Object[] a, MyValue1 v) {
-        return get(a) != (Object)v; // only false if both null
+        return get(a) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq17_2(Object[] a, MyValue1 v) {
@@ -1027,7 +1026,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq18_2(MyValue1 v, Object[] a) {
-        return (Object)v != get(a); // only false if both null
+        return (Object) v != get(a); // only false if both null
     }
 
     public boolean testNotEq18_3(MyValue1 v, Object[] a) {
@@ -1035,7 +1034,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq19_1(Object[] a, MyValue1 v) {
-        return getNotNull(a) != (Object)v; // true
+        return getNotNull(a) != (Object) v; // true
     }
 
     public boolean testNotEq19_2(Object[] a, MyValue1 v) {
@@ -1051,7 +1050,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq20_2(MyValue1 v, Object[] a) {
-        return (Object)v != getNotNull(a); // true
+        return (Object) v != getNotNull(a); // true
     }
 
     public boolean testNotEq20_3(MyValue1 v, Object[] a) {
@@ -1111,7 +1110,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq22_2(MyValue1 v, MyInterface u) {
-        return (Object)v != get(u); // only false if both null
+        return (Object) v != get(u); // only false if both null
     }
 
     public boolean testNotEq22_3(MyValue1 v, MyInterface u) {
@@ -1123,7 +1122,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq22_5(MyValue1 v, MyAbstract u) {
-        return (Object)v != get(u); // only false if both null
+        return (Object) v != get(u); // only false if both null
     }
 
     public boolean testNotEq22_6(MyValue1 v, MyAbstract u) {
@@ -1131,7 +1130,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq23_1(MyInterface u, MyValue1 v) {
-        return get(u) != (Object)v; // only false if both null
+        return get(u) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq23_2(MyInterface u, MyValue1 v) {
@@ -1143,7 +1142,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq23_4(MyAbstract u, MyValue1 v) {
-        return get(u) != (Object)v; // only false if both null
+        return get(u) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq23_5(MyAbstract u, MyValue1 v) {
@@ -1159,7 +1158,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq24_2(MyValue1 v, MyInterface u) {
-        return (Object)v != getNotNull(u); // true
+        return (Object) v != getNotNull(u); // true
     }
 
     public boolean testNotEq24_3(MyValue1 v, MyInterface u) {
@@ -1171,7 +1170,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq24_5(MyValue1 v, MyAbstract u) {
-        return (Object)v != getNotNull(u); // true
+        return (Object) v != getNotNull(u); // true
     }
 
     public boolean testNotEq24_6(MyValue1 v, MyAbstract u) {
@@ -1179,7 +1178,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq25_1(MyInterface u, MyValue1 v) {
-        return getNotNull(u) != (Object)v; // true
+        return getNotNull(u) != (Object) v; // true
     }
 
     public boolean testNotEq25_2(MyInterface u, MyValue1 v) {
@@ -1191,7 +1190,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq25_4(MyAbstract u, MyValue1 v) {
-        return getNotNull(u) != (Object)v; // true
+        return getNotNull(u) != (Object) v; // true
     }
 
     public boolean testNotEq25_5(MyAbstract u, MyValue1 v) {
@@ -1299,7 +1298,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq30_1(MyInterface[] a, MyValue1 v) {
-        return get(a) != (Object)v; // only false if both null
+        return get(a) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq30_2(MyInterface[] a, MyValue1 v) {
@@ -1311,7 +1310,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq30_4(MyAbstract[] a, MyValue1 v) {
-        return get(a) != (Object)v; // only false if both null
+        return get(a) != (Object) v; // only false if both null
     }
 
     public boolean testNotEq30_5(MyAbstract[] a, MyValue1 v) {
@@ -1327,7 +1326,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq31_2(MyValue1 v, MyInterface[] a) {
-        return (Object)v != get(a); // only false if both null
+        return (Object) v != get(a); // only false if both null
     }
 
     public boolean testNotEq31_3(MyValue1 v, MyInterface[] a) {
@@ -1339,7 +1338,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq31_5(MyValue1 v, MyAbstract[] a) {
-        return (Object)v != get(a); // only false if both null
+        return (Object) v != get(a); // only false if both null
     }
 
     public boolean testNotEq31_6(MyValue1 v, MyAbstract[] a) {
@@ -1347,7 +1346,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq32_1(MyInterface[] a, MyValue1 v) {
-        return getNotNull(a) != (Object)v; // true
+        return getNotNull(a) != (Object) v; // true
     }
 
     public boolean testNotEq32_2(MyInterface[] a, MyValue1 v) {
@@ -1359,7 +1358,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq32_4(MyAbstract[] a, MyValue1 v) {
-        return getNotNull(a) != (Object)v; // true
+        return getNotNull(a) != (Object) v; // true
     }
 
     public boolean testNotEq32_5(MyAbstract[] a, MyValue1 v) {
@@ -1375,7 +1374,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq33_2(MyValue1 v, MyInterface[] a) {
-        return (Object)v != getNotNull(a); // true
+        return (Object) v != getNotNull(a); // true
     }
 
     public boolean testNotEq33_3(MyValue1 v, MyInterface[] a) {
@@ -1387,7 +1386,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotEq33_5(MyValue1 v, MyAbstract[] a) {
-        return (Object)v != getNotNull(a); // true
+        return (Object) v != getNotNull(a); // true
     }
 
     public boolean testNotEq33_6(MyValue1 v, MyAbstract[] a) {
@@ -1397,7 +1396,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     // Null tests
 
     public boolean testNotNull01_1(MyValue1 v) {
-        return (Object)v != null; // old acmp
+        return (Object) v != null; // old acmp
     }
 
     public boolean testNotNull01_2(MyValue1 v) {
@@ -1405,19 +1404,19 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull01_3(MyValue1 v) {
-        return (Object)v != get((Object)null); // old acmp
+        return (Object) v != get((Object) null); // old acmp
     }
 
     public boolean testNotNull01_4(MyValue1 v) {
-        return get(v) != get((Object)null); // old acmp
+        return get(v) != get((Object) null); // old acmp
     }
 
     public boolean testNotNull02_1(MyValue1 v) {
-        return null != (Object)v; // old acmp
+        return null != (Object) v; // old acmp
     }
 
     public boolean testNotNull02_2(MyValue1 v) {
-        return get((Object)null) != (Object)v; // old acmp
+        return get((Object) null) != (Object) v; // old acmp
     }
 
     public boolean testNotNull02_3(MyValue1 v) {
@@ -1425,7 +1424,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull02_4(MyValue1 v) {
-        return get((Object)null) != get(v); // old acmp
+        return get((Object) null) != get(v); // old acmp
     }
 
     public boolean testNotNull03_1(Object u) {
@@ -1437,11 +1436,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull03_3(Object u) {
-        return u != get((Object)null); // old acmp
+        return u != get((Object) null); // old acmp
     }
 
     public boolean testNotNull03_4(Object u) {
-        return get(u) != get((Object)null); // old acmp
+        return get(u) != get((Object) null); // old acmp
     }
 
     public boolean testNotNull04_1(Object u) {
@@ -1449,7 +1448,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull04_2(Object u) {
-        return get((Object)null) != u; // old acmp
+        return get((Object) null) != u; // old acmp
     }
 
     public boolean testNotNull04_3(Object u) {
@@ -1457,7 +1456,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull04_4(Object u) {
-        return get((Object)null) != get(u); // old acmp
+        return get((Object) null) != get(u); // old acmp
     }
 
     public boolean testNotNull05_1(MyObject o) {
@@ -1469,11 +1468,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull05_3(MyObject o) {
-        return o != get((Object)null); // old acmp
+        return o != get((Object) null); // old acmp
     }
 
     public boolean testNotNull05_4(MyObject o) {
-        return get(o) != get((Object)null); // old acmp
+        return get(o) != get((Object) null); // old acmp
     }
 
     public boolean testNotNull06_1(MyObject o) {
@@ -1481,7 +1480,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull06_2(MyObject o) {
-        return get((Object)null) != o; // old acmp
+        return get((Object) null) != o; // old acmp
     }
 
     public boolean testNotNull06_3(MyObject o) {
@@ -1489,7 +1488,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull06_4(MyObject o) {
-        return get((Object)null) != get(o); // old acmp
+        return get((Object) null) != get(o); // old acmp
     }
 
     public boolean testNotNull07_1(MyInterface u) {
@@ -1501,11 +1500,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull07_3(MyInterface u) {
-        return u != get((Object)null); // old acmp
+        return u != get((Object) null); // old acmp
     }
 
     public boolean testNotNull07_4(MyInterface u) {
-        return get(u) != get((Object)null); // old acmp
+        return get(u) != get((Object) null); // old acmp
     }
 
     public boolean testNotNull07_5(MyAbstract u) {
@@ -1517,11 +1516,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull07_7(MyAbstract u) {
-        return u != get((Object)null); // old acmp
+        return u != get((Object) null); // old acmp
     }
 
     public boolean testNotNull07_8(MyAbstract u) {
-        return get(u) != get((Object)null); // old acmp
+        return get(u) != get((Object) null); // old acmp
     }
 
     public boolean testNotNull08_1(MyInterface u) {
@@ -1529,7 +1528,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull08_2(MyInterface u) {
-        return get((Object)null) != u; // old acmp
+        return get((Object) null) != u; // old acmp
     }
 
     public boolean testNotNull08_3(MyInterface u) {
@@ -1537,7 +1536,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull08_4(MyInterface u) {
-        return get((Object)null) != get(u); // old acmp
+        return get((Object) null) != get(u); // old acmp
     }
 
     public boolean testNotNull08_5(MyAbstract u) {
@@ -1545,7 +1544,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull08_6(MyAbstract u) {
-        return get((Object)null) != u; // old acmp
+        return get((Object) null) != u; // old acmp
     }
 
     public boolean testNotNull08_7(MyAbstract u) {
@@ -1553,10 +1552,11 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public boolean testNotNull08_8(MyAbstract u) {
-        return get((Object)null) != get(u); // old acmp
+        return get((Object) null) != get(u); // old acmp
     }
 
-    // The following methods are used with -XX:+AlwaysIncrementalInline to hide exact types during parsing
+    // The following methods are used with -XX:+AlwaysIncrementalInline to hide exact types during
+    // parsing
 
     public Object get(Object u) {
         return u;
@@ -1571,7 +1571,7 @@ public class BC_ifacmpeq4  extends JTTTest {
     }
 
     public Object getNotNull(MyValue1 v) {
-        return ((Object)v != null) ? v : MyValue1.createDefault();
+        return ((Object) v != null) ? v : MyValue1.createDefault();
     }
 
     public Object get(MyObject o) {
@@ -1590,8 +1590,6 @@ public class BC_ifacmpeq4  extends JTTTest {
         return (a != null) ? a : new Object[1];
     }
 
-
-    // Tests with profiling
     public boolean cmpAlwaysEqual1(Object a, Object b) {
         return a == b;
     }
@@ -1632,7 +1630,7 @@ public class BC_ifacmpeq4  extends JTTTest {
         return a != a;
     }
 
-    private static final OptionValues withoutPEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
+    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
     public void runTest(Method m, Object[] args, int nullMode) throws Exception {
         Class<?>[] parameterTypes = m.getParameterTypes();
@@ -1651,7 +1649,7 @@ public class BC_ifacmpeq4  extends JTTTest {
             if (parameterCount == 1) {
                 // Null checks
                 // Avoid acmp in the computation of the expected result!
-                runTest(withoutPEA, m.getName(), args[i]);
+                runTest(WITHOUT_PEA, m.getName(), args[i]);
                 runTest(m.getName(), args[i]);
             } else {
                 // Equality checks
@@ -1663,7 +1661,7 @@ public class BC_ifacmpeq4  extends JTTTest {
                         continue;
                     }
                     // Avoid acmp in the computation of the expected result!
-                    runTest(withoutPEA, m.getName(), args[i], args[j]);
+                    runTest(WITHOUT_PEA, m.getName(), args[i], args[j]);
                     runTest(m.getName(), args[i], args[j]);
                 }
             }
@@ -1672,16 +1670,15 @@ public class BC_ifacmpeq4  extends JTTTest {
 
     public void run(int nullMode) throws Exception {
         // Prepare test arguments
-        Object[] args =  { null,
-                new Object(),
-                new MyObject(),
-                MyValue1.setX(MyValue1.createDefault(), 42),
-                new Object[10],
-                new MyObject[10],
-                MyValue1.setX(MyValue1.createDefault(), 0x42),
-                MyValue1.setX(MyValue1.createDefault(), 42),
-                MyValue2.setX(MyValue2.createDefault(), 42), };
-
+        Object[] args = {null,
+                        new Object(),
+                        new MyObject(),
+                        MyValue1.setX(MyValue1.createDefault(), 42),
+                        new Object[10],
+                        new MyObject[10],
+                        MyValue1.setX(MyValue1.createDefault(), 0x42),
+                        MyValue1.setX(MyValue1.createDefault(), 42),
+                        MyValue2.setX(MyValue2.createDefault(), 42),};
 
         // Run tests
         for (Method m : getClass().getMethods()) {

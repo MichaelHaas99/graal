@@ -80,8 +80,6 @@ public class PartialEscapeAnalysisTest extends EATestBase {
         final float y;
         final Object z;
 
-        static Object escapedObject;
-
         ValueTestObject(int x, float y, Object z) {
             this.x = x;
             this.y = y;
@@ -162,27 +160,33 @@ public class PartialEscapeAnalysisTest extends EATestBase {
     @SuppressWarnings("deprecation")
     public static boolean testIfAcmpeqSnippet1(int a, int b) {
         ValueTestObject valueObject1 = new ValueTestObject();
-        ValueTestObject valueObject2 = new ValueTestObject(2, 3.0f, new Object());
-        ValueTestObject valueObject3 = new ValueTestObject();
+        ValueTestObject valueObject2 = new ValueTestObject();
+        ValueTestObject valueObject3 = new ValueTestObject(valueObject1);
+        ValueTestObject valueObject4 = new ValueTestObject(valueObject1);
+        ValueTestObject valueObject5 = new ValueTestObject(valueObject2);
 
         if (a < 0) {
             return valueObject1 == valueObject2;
         } else {
-            return valueObject1 == valueObject3;
+            if (b < 0) {
+                return valueObject3 == valueObject4;
+            } else {
+                return valueObject4 == valueObject5;
+            }
         }
     }
 
     @Test
     public void testIfAcmpeq2() {
-        testPartialEscapeAnalysis("testIfAcmpeqSnippet2", 2.0, 3, StoreFieldNode.class);
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet2", 0, 0, StoreFieldNode.class);
     }
 
     @SuppressWarnings("deprecation")
     public static boolean testIfAcmpeqSnippet2(int a, int b) {
-        ValueTestObject.escapedObject = new Object();
-        ValueTestObject valueObject1 = new ValueTestObject(ValueTestObject.escapedObject);
-        ValueTestObject valueObject2 = new ValueTestObject(2, 3.0f, new Object());
-        ValueTestObject valueObject3 = new ValueTestObject(ValueTestObject.escapedObject);
+
+        ValueTestObject valueObject1 = new ValueTestObject(2, 3.0f, null);
+        ValueTestObject valueObject2 = new ValueTestObject(3, 3.0f, null);
+        ValueTestObject valueObject3 = new ValueTestObject(2, 4.0f, null);
 
         if (a < 0) {
             return valueObject1 == valueObject2;
@@ -193,30 +197,46 @@ public class PartialEscapeAnalysisTest extends EATestBase {
 
     @Test
     public void testIfAcmpeq3() {
-        testPartialEscapeAnalysis("testIfAcmpeqSnippet3", 0.75, 3, StoreFieldNode.class, LoadFieldNode.class);
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet3", 2, 4, StoreFieldNode.class, LoadFieldNode.class);
     }
 
     @SuppressWarnings("deprecation")
-    public static boolean testIfAcmpeqSnippet3(int a, int b) {
+    public static boolean testIfAcmpeqSnippet3(int a, float b) {
         ValueTestObject valueObject1 = new ValueTestObject();
-        ValueTestObject valueObject2 = new ValueTestObject(2, 3.0f, valueObject1);
-        ValueTestObject valueObject3 = new ValueTestObject(3, 3.0f + 2.0f, valueObject1);
-        ValueTestObject valueObject4 = new ValueTestObject(2, 3.0f, valueObject1);
-        ValueTestObject valueObject5 = new ValueTestObject(2 + a, 3.0f, valueObject1);
+        ValueTestObject valueObject2 = new ValueTestObject(2 + a, 3.0f, null);
+        ValueTestObject valueObject3 = new ValueTestObject(2, 3.0f + b, null);
+
+        if (a < 0) {
+            // materializes
+            return valueObject1 == valueObject2;
+        } else {
+            // materializes
+            return valueObject1 == valueObject3;
+        }
+    }
+
+    @Test
+    public void testIfAcmpeq4() {
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet4", 2.0, 5, StoreFieldNode.class, LoadFieldNode.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static boolean testIfAcmpeqSnippet4(int a, int b, ValueTestObject c) {
+        ValueTestObject valueObject1 = new ValueTestObject();
+        ValueTestObject valueObject2 = new ValueTestObject(null);
+        ValueTestObject valueObject3 = new ValueTestObject(valueObject1);
+        ValueTestObject valueObject4 = new ValueTestObject(c);
 
         if (a < 0) {
             if (b < 0) {
-                return valueObject3 == valueObject4;
+                return valueObject2 == valueObject3;
             } else {
-                // causes materialization of 1,4,5
-                return valueObject4 == valueObject5;
+                // materializes
+                return valueObject2 == valueObject4;
             }
         } else {
-            if (b < 0) {
-                return valueObject1 == valueObject2;
-            } else {
-                return valueObject3 == valueObject5;
-            }
+            // materializes
+            return valueObject3 == valueObject4;
         }
     }
 
