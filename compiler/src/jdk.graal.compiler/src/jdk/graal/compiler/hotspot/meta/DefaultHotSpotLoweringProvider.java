@@ -101,6 +101,7 @@ import jdk.graal.compiler.hotspot.replacements.LoadExceptionObjectSnippets;
 import jdk.graal.compiler.hotspot.replacements.LogSnippets;
 import jdk.graal.compiler.hotspot.replacements.MonitorSnippets;
 import jdk.graal.compiler.hotspot.replacements.ObjectCloneSnippets;
+import jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets;
 import jdk.graal.compiler.hotspot.replacements.ObjectSnippets;
 import jdk.graal.compiler.hotspot.replacements.RegisterFinalizerSnippets;
 import jdk.graal.compiler.hotspot.replacements.UnsafeCopyMemoryNode;
@@ -144,6 +145,7 @@ import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.NarrowNode;
+import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.calc.RemNode;
 import jdk.graal.compiler.nodes.calc.SignedDivNode;
 import jdk.graal.compiler.nodes.calc.SignedFloatingIntegerDivNode;
@@ -519,8 +521,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 monitorSnippets.lower((MonitorExitNode) n, registers, tool);
             }
-        }else if(n instanceof ObjectEqualsNode objectEqualsNode){
-            if(objectEqualsNode.substituabilityCheck() && graph.getGuardsStage().areFrameStatesAtDeopts()){
+        } else if (n instanceof ObjectEqualsNode objectEqualsNode) {
+            if (objectEqualsNode.substituabilityCheck() && graph.getGuardsStage().areDeoptsFixed()) {
                 objectEqualsSnippets.lower(objectEqualsNode, tool);
             }
         } else if (n instanceof ArrayCopyNode) {

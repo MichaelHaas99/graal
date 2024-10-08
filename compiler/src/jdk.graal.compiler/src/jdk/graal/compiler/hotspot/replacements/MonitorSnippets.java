@@ -247,7 +247,7 @@ public class MonitorSnippets implements Snippets {
 
         if (canBeInlineType) {
             // check mark word for inline type
-            if (isInlineType || mark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
+            if (isInlineType || mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
                 DeoptimizeNode.deopt(None, RuntimeConstraint);
             }
         }
