@@ -446,6 +446,7 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -4128,7 +4129,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         switch (cond) {
             case EQ:
                 if (a.getStackKind() == JavaKind.Object) {
-                    a = append(new FixedInlineTypeEqualityAnchorNode(a));
+                    a = append(new FixedInlineTypeEqualityAnchorNode(a, getProfileForObjectEquals()));
                     b = append(new FixedInlineTypeEqualityAnchorNode(b));
                     return genObjectEquals(a, b);
                 } else {
@@ -4779,6 +4780,14 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         } else {
             return profilingInfo.getTypeProfile(bci());
         }
+    }
+
+    private ACmpDataAccessor getProfileForObjectEquals() {
+        if (parsingIntrinsic() || profilingInfo == null ||
+                        !optimisticOpts.useTypeCheckHints(getOptions())) {
+            return null;
+        }
+        return profilingInfo.getAcmpData(bci());
     }
 
     private void genCheckCast(int cpi) {

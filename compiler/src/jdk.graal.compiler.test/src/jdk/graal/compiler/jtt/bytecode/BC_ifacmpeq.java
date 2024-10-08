@@ -34,7 +34,7 @@ import jdk.graal.compiler.options.OptionValues;
  */
 public class BC_ifacmpeq extends JTTTest {
 
-    private static class InlineTypeTestClass {
+    private static value class InlineTypeTestClass {
         final int x;
         final double y;
         final Object z;
@@ -57,22 +57,23 @@ public class BC_ifacmpeq extends JTTTest {
     public static boolean test(int arg) {
         InlineTypeTestClass inlineTypeObject1 = new InlineTypeTestClass();
         InlineTypeTestClass inlineTypeObject2 = new InlineTypeTestClass();
-        InlineTypeTestClass inlineTypeObject3 = new InlineTypeTestClass(inlineTypeObject1);
-        InlineTypeTestClass inlineTypeObject4 = new InlineTypeTestClass(inlineTypeObject1);
-        InlineTypeTestClass inlineTypeObject5 = new InlineTypeTestClass(inlineTypeObject2);
+// InlineTypeTestClass inlineTypeObject3 = new InlineTypeTestClass(inlineTypeObject1);
+// InlineTypeTestClass inlineTypeObject4 = new InlineTypeTestClass(inlineTypeObject1);
+// InlineTypeTestClass inlineTypeObject5 = new InlineTypeTestClass(inlineTypeObject2);
 
-        boolean result;
-        if (arg == 0) {
-            result = inlineTypeObject1 == inlineTypeObject2;
-        } else if (arg == 1) {
-            result = inlineTypeObject3 == inlineTypeObject4;
-        } else {
-            result = inlineTypeObject4 == inlineTypeObject5;
-        }
-        return result;
+// boolean result;
+// if (arg == 0) {
+// result = inlineTypeObject1 == inlineTypeObject2;
+// } else if (arg == 1) {
+// result = inlineTypeObject3 == inlineTypeObject4;
+// } else {
+// result = inlineTypeObject4 == inlineTypeObject5;
+// }
+// return result;
+        return inlineTypeObject1 == inlineTypeObject2;
     }
 
-    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
+    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, GraalOptions.PrintProfilingInformation, true);
 
     @Test
     public void run0() throws Throwable {
