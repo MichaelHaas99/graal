@@ -14,6 +14,7 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.hotspot.ACmpDataAccessor;
 
 @NodeInfo()
 public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode implements Virtualizable, AnchoringNode, LIRLowerable, Canonicalizable {
@@ -21,6 +22,8 @@ public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode i
     public static final NodeClass<FixedInlineTypeEqualityAnchorNode> TYPE = NodeClass.create(FixedInlineTypeEqualityAnchorNode.class);
 
     @OptionalInput ValueNode object;
+
+    private ACmpDataAccessor profile;
 
     public ValueNode object() {
         return object;
@@ -33,6 +36,15 @@ public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode i
 
     public FixedInlineTypeEqualityAnchorNode(ValueNode object) {
         this(TYPE, object);
+    }
+
+    public FixedInlineTypeEqualityAnchorNode(ValueNode object, ACmpDataAccessor profile) {
+        this(TYPE, object);
+        this.profile = profile;
+    }
+
+    public ACmpDataAccessor getProfile() {
+        return profile;
     }
 
     @Override

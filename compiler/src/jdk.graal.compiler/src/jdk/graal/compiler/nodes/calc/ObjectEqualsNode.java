@@ -308,7 +308,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             yAlias = tool.getAlias(y);
 
             if (getX() instanceof FixedInlineTypeEqualityAnchorNode) {
-                ValueNode xAnchor = new FixedInlineTypeEqualityAnchorNode(xAlias);
+                ValueNode xAnchor = new FixedInlineTypeEqualityAnchorNode(xAlias, ((FixedInlineTypeEqualityAnchorNode) getX()).getProfile());
                 tool.ensureAdded(xAnchor);
                 tool.replaceFirstInput(getX(), xAnchor);
             }
