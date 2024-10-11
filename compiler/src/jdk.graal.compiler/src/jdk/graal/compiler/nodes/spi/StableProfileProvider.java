@@ -419,8 +419,8 @@ public class StableProfileProvider implements ProfileProvider {
         }
 
         @Override
-        public ACmpDataAccessor getAcmpData(int bci) {
-            return realProfile.getAcmpData(bci);
+        public ACmpDataAccessor getACmpData(int bci) {
+            return realProfile.getACmpData(bci);
         }
 
         private BytecodeProfile getBytecodeProfile(int bci) {
