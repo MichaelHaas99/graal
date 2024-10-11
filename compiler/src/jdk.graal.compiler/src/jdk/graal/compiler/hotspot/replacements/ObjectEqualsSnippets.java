@@ -10,7 +10,8 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.lo
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.OptimizedTypeCheckViolated;
+import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
+import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.api.replacements.Snippet.ConstantParameter;
@@ -67,8 +68,15 @@ public class ObjectEqualsSnippets implements Snippets {
                     y = yAnchorNode.object();
                 }
 
+// args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(),
+// tool.getLoweringStage());
+// args.add("x", x);
+// args.add("y", y);
+// args.add("trueValue", replacer.trueValue);
+// args.add("falseValue", replacer.falseValue);
                 if (profile != null) {
-                    args = new SnippetTemplate.Arguments(objectEqualsSnippetWithProfile, node.graph().getGuardsStage(), tool.getLoweringStage());
+                    args = new SnippetTemplate.Arguments(objectEqualsSnippetWithProfile,
+                                    node.graph().getGuardsStage(), tool.getLoweringStage());
                     args.add("x", x);
                     args.add("y", y);
                     args.add("trueValue", replacer.trueValue);
@@ -98,7 +106,8 @@ public class ObjectEqualsSnippets implements Snippets {
 // @ConstantParameter boolean yInlineType, @ConstantParameter boolean yAlwaysNull)
 
                 } else {
-                    args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(), tool.getLoweringStage());
+                    args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(),
+                                    tool.getLoweringStage());
                     args.add("x", x);
                     args.add("y", y);
                     args.add("trueValue", replacer.trueValue);
@@ -155,14 +164,14 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xAlwaysNull) {
             if (xPointer.isNull())
                 return falseValue;
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
         if (yAlwaysNull) {
             if (yPointer.isNull())
                 return falseValue;
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
@@ -173,7 +182,7 @@ public class ObjectEqualsSnippets implements Snippets {
 // KlassPointer xKlassPointer = loadHubIntrinsic(PiNode.piCastNonNull(xPointer, anchorNode));
 // if (xKlassPointer.equal(xProfileHub))
 // return falseValue;
-// DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+// DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
 // return falseValue;
 // }
 //
@@ -184,7 +193,7 @@ public class ObjectEqualsSnippets implements Snippets {
 // KlassPointer yKlassPointer = loadHubIntrinsic(PiNode.piCastNonNull(yPointer, anchorNode));
 // if (yKlassPointer.equal(yProfileHub))
 // return falseValue;
-// DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+// DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
 // return falseValue;
 // }
 
@@ -194,10 +203,10 @@ public class ObjectEqualsSnippets implements Snippets {
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             x = PiNode.piCastNonNull(x, anchorNode);
             final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
-            if (xMark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
+            if (xMark.and(inlineTypePattern(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
                 return falseValue;
             }
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             return falseValue;
         }
 
@@ -207,10 +216,10 @@ public class ObjectEqualsSnippets implements Snippets {
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             y = PiNode.piCastNonNull(y, anchorNode);
             final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
-            if (yMark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
+            if (yMark.and(inlineTypePattern(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
                 return falseValue;
             }
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             return falseValue;
         }
 
