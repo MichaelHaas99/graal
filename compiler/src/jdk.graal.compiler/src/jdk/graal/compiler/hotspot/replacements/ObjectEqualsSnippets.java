@@ -13,14 +13,20 @@ import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.api.replacements.Snippet.ConstantParameter;
+import jdk.graal.compiler.api.replacements.Snippet.VarargsParameter;
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
+import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
+import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
+import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -28,16 +34,21 @@ import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.InstanceOfSnippetsTemplates;
 import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.Snippets;
+import jdk.graal.compiler.replacements.nodes.ExplodeLoopNode;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.hotspot.SingleTypeEntry;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class ObjectEqualsSnippets implements Snippets {
 
@@ -58,14 +69,40 @@ public class ObjectEqualsSnippets implements Snippets {
             SnippetTemplate.Arguments args;
             ACmpDataAccessor profile = null;
             if (node instanceof ObjectEqualsNode objectEqualsNode) {
-                Object x = objectEqualsNode.getX();
-                Object y = objectEqualsNode.getY();
+                ValueNode x = objectEqualsNode.getX();
+                ValueNode y = objectEqualsNode.getY();
                 if (objectEqualsNode.getX() instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode) {
                     profile = xAnchorNode.getProfile();
                     x = xAnchorNode.object();
                 }
                 if (objectEqualsNode.getY() instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode) {
                     y = yAnchorNode.object();
+                }
+                ResolvedJavaType type = null;
+                boolean inlineComparison = true;
+                int[] offsets = new int[0];
+                JavaKind[] kinds = new JavaKind[0];
+                if (x.stamp(NodeView.DEFAULT).isInlineType()) {
+                    AbstractObjectStamp stamp = (AbstractObjectStamp) x.stamp(NodeView.DEFAULT);
+                    type = stamp.type();
+                } else if (y.stamp(NodeView.DEFAULT).isInlineType()) {
+                    AbstractObjectStamp stamp = (AbstractObjectStamp) y.stamp(NodeView.DEFAULT);
+                    type = stamp.type();
+                } else {
+                    inlineComparison = false;
+                }
+                if (type != null) {
+                    ResolvedJavaField[] fields = type.getInstanceFields(true);
+                    offsets = new int[fields.length];
+                    kinds = new JavaKind[fields.length];
+                    for (int i = 0; i < fields.length; i++) {
+                        if (!fields[i].getJavaKind().isPrimitive()) {
+                            inlineComparison = false;
+                            break;
+                        }
+                        offsets[i] = fields[i].getOffset();
+                        kinds[i] = fields[i].getJavaKind();
+                    }
                 }
 
 // args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(),
@@ -112,6 +149,11 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("y", y);
                     args.add("trueValue", replacer.trueValue);
                     args.add("falseValue", replacer.falseValue);
+                    // TODO: get trace enable from option
+                    args.addConst("trace", false);
+                    args.addConst("inlineComparison", inlineComparison);
+                    args.addVarargs("offsets", int.class, StampFactory.forKind(JavaKind.Int), offsets);
+                    args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                 }
 
                 return args;
@@ -122,13 +164,18 @@ public class ObjectEqualsSnippets implements Snippets {
     }
 
     @Snippet
-    protected static Object objectEquals(Object x, Object y, Object trueValue, Object falseValue) {
+    protected static Object objectEquals(Object x, Object y, Object trueValue, Object falseValue, @ConstantParameter boolean trace,
+                    @ConstantParameter boolean inlineComparison,
+                    @VarargsParameter int[] offsets,
+                    @VarargsParameter JavaKind[] kinds) {
         Word xPointer = Word.objectToTrackedPointer(x);
         Word yPointer = Word.objectToTrackedPointer(y);
 
+        trace(trace, "apply pointer comparison");
         if (xPointer.equal(yPointer))
             return trueValue;
 
+        trace(trace, "check both operands against null");
         if (xPointer.isNull() || yPointer.isNull())
             return falseValue;
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
@@ -138,13 +185,58 @@ public class ObjectEqualsSnippets implements Snippets {
         final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
         final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
 
+        trace(trace, "check both operands for inline type bit");
         if (xMark.and(yMark).and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG)))
             return falseValue;
 
+        trace(trace, "applying type comparison");
         KlassPointer xHub = loadHub(x);
         KlassPointer yHub = loadHub(y);
         if (xHub.notEqual(yHub))
             return falseValue;
+
+        // inline fields which are no oop
+        if (inlineComparison) {
+            trace(trace, "inline type comparison");
+            ExplodeLoopNode.explodeLoop();
+            for (int i = 0; i < offsets.length; i++) {
+                JavaKind kind = kinds[i];
+                Object xLoad = null;
+                Object yLoad = null;
+                if (kind == JavaKind.Boolean) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Char, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Char, LocationIdentity.any());
+                } else if (kind == JavaKind.Byte) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Byte, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Byte, LocationIdentity.any());
+                } else if (kind == JavaKind.Char) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Char, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Char, LocationIdentity.any());
+                } else if (kind == JavaKind.Short) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Short, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Short, LocationIdentity.any());
+                } else if (kind == JavaKind.Int) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Int, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Int, LocationIdentity.any());
+                } else if (kind == JavaKind.Long) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Long, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Long, LocationIdentity.any());
+                } else if (kind == JavaKind.Float) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Float, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Float, LocationIdentity.any());
+                } else if (kind == JavaKind.Double) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Double, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Double, LocationIdentity.any());
+                }
+// Object xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Int, LocationIdentity.any());
+// Object yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Int, LocationIdentity.any());
+                if (xLoad != yLoad)
+                    return falseValue;
+            }
+            return trueValue;
+        }
+
+        trace(trace, "call to library for substitutability check");
 
         return substitutabilityCheckStubC(SUBSTITUTABILITYCHECK, x, y) ? trueValue : falseValue;
     }
@@ -248,4 +340,10 @@ public class ObjectEqualsSnippets implements Snippets {
 
     @Node.NodeIntrinsic(ForeignCallNode.class)
     private static native boolean substitutabilityCheckStubC(@Node.ConstantNodeParameter ForeignCallDescriptor descriptor, Object x, Object y);
+
+    private static void trace(boolean enabled, String text) {
+        if (enabled) {
+            Log.println(text);
+        }
+    }
 }

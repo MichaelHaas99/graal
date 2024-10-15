@@ -133,6 +133,9 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
             if (condition != CanonicalCondition.EQ) {
                 return false;
             }
+            if (originalX.stamp(NodeView.DEFAULT).canBeInlineType() && originalY.stamp(NodeView.DEFAULT).canBeInlineType()) {
+                return false;
+            }
             ValueNode forX = GraphUtil.unproxify(originalX);
             ValueNode forY = GraphUtil.unproxify(originalY);
             if (forX != forY) {
@@ -171,7 +174,7 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
             if (isAlwaysFailingVirtualDispatchTest(condition, forX, forY)) {
                 return LogicConstantNode.contradiction();
             }
-            if (isAlwaysFailingEqualityTest(condition, forX, forY) && (!forX.stamp(NodeView.DEFAULT).canBeInlineType() || !forY.stamp(NodeView.DEFAULT).canBeInlineType())) {
+            if (isAlwaysFailingEqualityTest(condition, forX, forY)) {
                 return LogicConstantNode.contradiction();
             }
             return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);

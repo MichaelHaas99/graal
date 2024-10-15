@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.jtt.bytecode;
 
+import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
 import org.junit.Test;
 
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -72,6 +73,7 @@ public class BC_ifacmpeq extends JTTTest {
         return result;
     }
 
+    //HotspotSnippetsOptions.TraceMonitorsTypeFilter
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, GraalOptions.PrintProfilingInformation, true);
 
     @Test
