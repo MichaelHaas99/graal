@@ -214,6 +214,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         return new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
                     } else {
                         boolean comparisonResultUnknown = false;
+                        LogicNode newCondition = LogicConstantNode.tautology(graph);
                         for (int i = 0; i < xVirtual.entryCount(); i++) {
                             ValueNode xFieldNode = tool.getEntry(xVirtual, i);
                             ValueNode yFieldNode = tool.getEntry(yVirtual, i);
@@ -234,6 +235,9 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
                                     result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                     tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                    if (!(result instanceof ObjectEqualsNode node)) {
+                                        result = null;
+                                    }
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
                                     ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,
                                                     tool.getConstantReflection());
@@ -255,13 +259,16 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
                             if (result.isContradiction())
                                 return result;
+
+                            newCondition = LogicConstantNode.and(newCondition, result, null);
                         }
 
                         if (comparisonResultUnknown)
                             return null;
 
+                        return newCondition;
                         // all fields are equal
-                        return LogicConstantNode.tautology(graph);
+                        // return LogicConstantNode.tautology(graph);
                     }
                 }
             } else {
