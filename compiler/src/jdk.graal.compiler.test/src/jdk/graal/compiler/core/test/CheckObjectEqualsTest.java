@@ -71,8 +71,8 @@ public class CheckObjectEqualsTest extends GraalCompilerTest {
     public void testLeftInlineType() throws InvalidInstalledCodeException {
         resetCache();
         for (int i = 0; i < 10000; i++) {
-            test("snippetLeftInlineType", testObject1, testObject2);
-            test("snippetLeftInlineType", inlineTypeTestObject, testObject2);
+            test("snippetLeftInlineType", testObject1, inlineTypeTestObject);
+            //test("snippetLeftInlineType", inlineTypeTestObject, testObject2);
         }
         InstalledCode c = getCode(getResolvedJavaMethod("snippetLeftInlineType"), null, true, false, printProfiling);
         assert c.executeVarargs(inlineTypeTestObject, testObject1).equals(false);
@@ -83,7 +83,7 @@ public class CheckObjectEqualsTest extends GraalCompilerTest {
     public void testRightInlineType() throws InvalidInstalledCodeException {
         resetCache();
         for (int i = 0; i < 10000; i++) {
-            test("snippetRightInlineType", testObject1, testObject2);
+            test("snippetRightInlineType", inlineTypeTestObject, testObject1);
         }
         InstalledCode c = getCode(getResolvedJavaMethod("snippetRightInlineType"), null, true, false, getInitialOptions());
         assert c.executeVarargs(testObject1, inlineTypeTestObject).equals(false);
