@@ -248,7 +248,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
                             }
 
-                            result = result instanceof LogicConstantNode ? result : null;
+                            // result = result instanceof LogicConstantNode ? result : null;
 
                             if (result == null) {
                                 // field comparison result not known at compile time, but continue
