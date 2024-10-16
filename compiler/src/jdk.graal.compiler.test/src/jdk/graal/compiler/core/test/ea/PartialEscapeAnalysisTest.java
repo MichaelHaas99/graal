@@ -197,7 +197,7 @@ public class PartialEscapeAnalysisTest extends EATestBase {
 
     @Test
     public void testIfAcmpeq3() {
-        testPartialEscapeAnalysis("testIfAcmpeqSnippet3", 2, 4, StoreFieldNode.class, LoadFieldNode.class);
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet3", 0, 0, StoreFieldNode.class, LoadFieldNode.class);
     }
 
     @SuppressWarnings("deprecation")
@@ -207,10 +207,10 @@ public class PartialEscapeAnalysisTest extends EATestBase {
         ValueTestObject valueObject3 = new ValueTestObject(2, 3.0f + b, null);
 
         if (a < 0) {
-            // materializes
+            // no need to materialize just produce comparison against int
             return valueObject1 == valueObject2;
         } else {
-            // materializes
+            // no need to materialize just produce comparison against float
             return valueObject1 == valueObject3;
         }
     }
