@@ -29,6 +29,7 @@ import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
@@ -150,7 +151,7 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("trueValue", replacer.trueValue);
                     args.add("falseValue", replacer.falseValue);
                     // TODO: get trace enable from option
-                    args.addConst("trace", false);
+                    args.addConst("trace", isTracingEnabledForMethod(node.graph()));
                     args.addConst("inlineComparison", inlineComparison);
                     args.addVarargs("offsets", int.class, StampFactory.forKind(JavaKind.Int), offsets);
                     args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
@@ -159,6 +160,21 @@ public class ObjectEqualsSnippets implements Snippets {
                 return args;
             } else {
                 throw GraalError.shouldNotReachHere(node + " " + replacer); // ExcludeFromJacocoGeneratedReport
+            }
+        }
+
+        public static boolean isTracingEnabledForMethod(StructuredGraph graph) {
+            String filter = HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter.getValue(graph.getOptions());
+            if (filter == null) {
+                return false;
+            } else {
+                if (filter.length() == 0) {
+                    return true;
+                }
+                if (graph.method() == null) {
+                    return false;
+                }
+                return (graph.method().format("%H.%n").contains(filter));
             }
         }
     }
@@ -189,7 +205,7 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xMark.and(yMark).and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG)))
             return falseValue;
 
-        trace(trace, "applying type comparison");
+        trace(trace, "apply type comparison");
         KlassPointer xHub = loadHub(x);
         KlassPointer yHub = loadHub(y);
         if (xHub.notEqual(yHub))
