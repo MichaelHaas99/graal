@@ -26,8 +26,8 @@ package jdk.graal.compiler.hotspot.replacements;
 
 import jdk.graal.compiler.options.EnumOptionKey;
 import jdk.graal.compiler.options.Option;
-import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionKey;
+import jdk.graal.compiler.options.OptionType;
 
 /**
  * Options related to HotSpot snippets in this package.
@@ -63,6 +63,9 @@ public class HotspotSnippetsOptions {
 
     @Option(help = "Trace monitor operations in methods whose fully qualified name contains this substring.", type = OptionType.Debug)
     public static final OptionKey<String> TraceMonitorsMethodFilter = new OptionKey<>(null);
+
+    @Option(help = "Trace substitutability check in methods whose fully qualified name contains this substring.", type = OptionType.Debug)
+    public static final OptionKey<String> TraceSubstitutabilityCheckMethodFilter = new OptionKey<>(null);
 
     @Option(help = "Emit extra code to dynamically check monitor operations are balanced.", type = OptionType.Debug)
     public static final OptionKey<Boolean> VerifyBalancedMonitors = new OptionKey<>(false);
