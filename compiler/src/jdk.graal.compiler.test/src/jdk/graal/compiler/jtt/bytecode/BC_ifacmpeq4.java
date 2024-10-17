@@ -1649,8 +1649,8 @@ public class BC_ifacmpeq4 extends JTTTest {
             if (parameterCount == 1) {
                 // Null checks
                 // Avoid acmp in the computation of the expected result!
-                runTest(WITHOUT_PEA, m.getName(), args[i]);
-                runTest(m.getName(), args[i]);
+                test(m.getName(), args[i]);
+                test(WITHOUT_PEA, m.getName(), args[i]);
             } else {
                 // Equality checks
                 for (int j = 0; j < args.length; ++j) {
@@ -1661,8 +1661,8 @@ public class BC_ifacmpeq4 extends JTTTest {
                         continue;
                     }
                     // Avoid acmp in the computation of the expected result!
-                    runTest(WITHOUT_PEA, m.getName(), args[i], args[j]);
-                    runTest(m.getName(), args[i], args[j]);
+                    test(m.getName(), args[i], args[j]);
+                    test(WITHOUT_PEA, m.getName(), args[i], args[j]);
                 }
             }
         }
@@ -1684,16 +1684,22 @@ public class BC_ifacmpeq4 extends JTTTest {
         for (Method m : getClass().getMethods()) {
             if (m.getName().startsWith("test")) {
                 // Do some warmup runs
+                for(int i=0; i<1000;i++){
+                    runTest(m, args, nullMode);
+                }
+                System.out.println(m.getName()+" done");
                 runTest(m, args, nullMode);
             }
         }
+
     }
 
     @Test
     public void run0() throws Throwable {
-        int nullMode = Integer.valueOf(0);
         BC_ifacmpeq4 t = new BC_ifacmpeq4();
-        t.run(nullMode);
+        for(int i=0;i<3;i++){
+            t.run(i);
+        }
     }
 
 }
