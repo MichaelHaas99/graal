@@ -74,7 +74,7 @@ public class BC_ifacmpeq extends JTTTest {
     }
 
     //HotspotSnippetsOptions.TraceMonitorsTypeFilter
-    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, GraalOptions.PrintProfilingInformation, true);
+    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, GraalOptions.PrintProfilingInformation, true, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test");
 
     @Test
     public void run0() throws Throwable {
