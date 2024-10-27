@@ -366,6 +366,7 @@ suite = {
       "forceJavac": True,
       "workingSets" : "Graal,HotSpot,Test",
       "graalCompilerSourceEdition": "ignore",
+      "javaPreviewNeeded": "21+",
     },
 
         "jdk.graal.compiler.virtual.bench": {
@@ -405,7 +406,7 @@ suite = {
       "graalCompilerSourceEdition": "ignore",
     },
 
-    # ------------- blackbox micro benchmarks -------------
+        # ------------- blackbox micro benchmarks -------------
 
         "org.graalvm.micro.benchmarks": {
             "subDir": "src",
@@ -760,30 +761,30 @@ suite = {
             },
         },
 
-    "GRAAL_PROFDIFF": {
-      "subDir" : "src",
-      "dependencies" : [
-        "org.graalvm.profdiff",
-      ],
-      "distDependencies" : [
-        "sdk:COLLECTIONS",
-        "GRAAL",
-      ],
-      "maven" : False,
-      "graalCompilerSourceEdition": "ignore",
-    },
+        "GRAAL_PROFDIFF": {
+            "subDir": "src",
+            "dependencies": [
+                "org.graalvm.profdiff",
+            ],
+            "distDependencies": [
+                "sdk:COLLECTIONS",
+                "GRAAL",
+            ],
+            "maven": False,
+            "graalCompilerSourceEdition": "ignore",
+        },
 
-    "GRAAL_IGVUTIL": {
-      "subDir" : "src",
-      "dependencies" : [
-        "org.graalvm.igvutil",
-      ],
-      "distDependencies" : [
-        "GRAAL",
-      ],
-      "maven" : False,
-      "graalCompilerSourceEdition": "ignore",
-    },
+        "GRAAL_IGVUTIL": {
+            "subDir": "src",
+            "dependencies": [
+                "org.graalvm.igvutil",
+            ],
+            "distDependencies": [
+                "GRAAL",
+            ],
+            "maven": False,
+            "graalCompilerSourceEdition": "ignore",
+        },
 
     "GRAAL_PROFDIFF_TEST" : {
       "subDir" : "src",
@@ -801,20 +802,20 @@ suite = {
       "graalCompilerSourceEdition": "ignore",
     },
 
-    "GRAAL_IGVUTIL_TEST" : {
-      "subDir" : "src",
-      "dependencies" : [
-        "org.graalvm.igvutil.test",
-      ],
-      "distDependencies" : [
-        "GRAAL_IGVUTIL",
-      ],
-      "exclude" : [
-        "mx:JUNIT",
-      ],
-      "unittestConfig": "graal",
-      "maven": False,
-      "graalCompilerSourceEdition": "ignore",
+        "GRAAL_IGVUTIL_TEST": {
+            "subDir": "src",
+            "dependencies": [
+                "org.graalvm.igvutil.test",
+            ],
+            "distDependencies": [
+                "GRAAL_IGVUTIL",
+            ],
+            "exclude": [
+                "mx:JUNIT",
+            ],
+            "unittestConfig": "graal",
+            "maven": False,
+            "graalCompilerSourceEdition": "ignore",
+        },
     },
-  },
 }

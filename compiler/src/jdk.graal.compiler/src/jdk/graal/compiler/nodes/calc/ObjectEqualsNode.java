@@ -52,6 +52,7 @@ import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
@@ -69,6 +70,16 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
     public boolean substituabilityCheck() {
         return substituabilityCheck;
+    }
+
+    private ACmpDataAccessor profile;
+
+    public ACmpDataAccessor getProfile() {
+        return profile;
+    }
+
+    public void setProfile(ACmpDataAccessor profile) {
+        this.profile = profile;
     }
 
     public ObjectEqualsNode(ValueNode x, ValueNode y) {
@@ -235,7 +246,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
                                     result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                     tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
-                                    if (!(result instanceof ObjectEqualsNode node)) {
+                                    if (!(result instanceof ObjectEqualsNode node) || node.substituabilityCheck()) {
                                         result = null;
                                     }
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
@@ -315,7 +326,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             yAlias = tool.getAlias(y);
 
             if (getX() instanceof FixedInlineTypeEqualityAnchorNode) {
-                ValueNode xAnchor = new FixedInlineTypeEqualityAnchorNode(xAlias, ((FixedInlineTypeEqualityAnchorNode) getX()).getProfile());
+                ValueNode xAnchor = new FixedInlineTypeEqualityAnchorNode(xAlias);
                 tool.ensureAdded(xAnchor);
                 tool.replaceFirstInput(getX(), xAnchor);
             }
