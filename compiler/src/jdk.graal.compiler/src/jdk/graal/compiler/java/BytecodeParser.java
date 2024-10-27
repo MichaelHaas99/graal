@@ -4187,9 +4187,14 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         switch (cond) {
             case EQ:
                 if (a.getStackKind() == JavaKind.Object) {
-                    a = append(new FixedInlineTypeEqualityAnchorNode(a, getProfileForObjectEquals()));
+                    a = append(new FixedInlineTypeEqualityAnchorNode(a));
                     b = append(new FixedInlineTypeEqualityAnchorNode(b));
-                    return genObjectEquals(a, b);
+
+                    LogicNode node = genObjectEquals(a, b);
+                    if (node instanceof ObjectEqualsNode) {
+                        ((ObjectEqualsNode) node).setProfile(getProfileForObjectEquals());
+                    }
+                    return node;
                 } else {
                     return genIntegerEquals(a, b);
                 }

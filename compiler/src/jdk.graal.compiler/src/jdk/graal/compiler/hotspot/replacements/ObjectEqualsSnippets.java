@@ -70,10 +70,10 @@ public class ObjectEqualsSnippets implements Snippets {
             SnippetTemplate.Arguments args;
             ACmpDataAccessor profile = null;
             if (node instanceof ObjectEqualsNode objectEqualsNode) {
+                profile = objectEqualsNode.getProfile();
                 ValueNode x = objectEqualsNode.getX();
                 ValueNode y = objectEqualsNode.getY();
                 if (objectEqualsNode.getX() instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode) {
-                    profile = xAnchorNode.getProfile();
                     x = xAnchorNode.object();
                 }
                 if (objectEqualsNode.getY() instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode) {
@@ -97,12 +97,14 @@ public class ObjectEqualsSnippets implements Snippets {
                     offsets = new int[fields.length];
                     kinds = new JavaKind[fields.length];
                     for (int i = 0; i < fields.length; i++) {
-                        if (!fields[i].getJavaKind().isPrimitive()) {
+                        if (fields[i].getJavaKind().isPrimitive() || fields[i].getType() instanceof ResolvedJavaType fieldType && fieldType.isIdentity()) {
+                            offsets[i] = fields[i].getOffset();
+                            kinds[i] = fields[i].getJavaKind();
+                        } else {
                             inlineComparison = false;
                             break;
                         }
-                        offsets[i] = fields[i].getOffset();
-                        kinds[i] = fields[i].getJavaKind();
+
                     }
                 }
 
@@ -243,6 +245,9 @@ public class ObjectEqualsSnippets implements Snippets {
                 } else if (kind == JavaKind.Double) {
                     xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Double, LocationIdentity.any());
                     yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Double, LocationIdentity.any());
+                } else if (kind == JavaKind.Object) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Object, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Object, LocationIdentity.any());
                 }
 // Object xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Int, LocationIdentity.any());
 // Object yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Int, LocationIdentity.any());
