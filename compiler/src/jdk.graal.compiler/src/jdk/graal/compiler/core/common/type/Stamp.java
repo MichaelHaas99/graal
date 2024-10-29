@@ -285,7 +285,7 @@ public abstract class Stamp implements SpeculationContextObject {
         Constant constant = this.asConstant();
         if (constant != null) {
             Constant otherConstant = other.asConstant();
-            return constant.equals(otherConstant);
+            return otherConstant != null && constant.equals(otherConstant);
         }
         return false;
     }
