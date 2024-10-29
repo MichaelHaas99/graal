@@ -24,29 +24,58 @@
  */
 package jdk.graal.compiler.replacements;
 
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
+import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.api.replacements.Snippet;
+import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
+import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
+import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
-import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
 import jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates;
 import jdk.graal.compiler.replacements.SnippetTemplate.Arguments;
 import jdk.graal.compiler.replacements.SnippetTemplate.SnippetInfo;
-import org.graalvm.word.LocationIdentity;
+import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
+import jdk.graal.compiler.word.Word;
 
 public abstract class IdentityHashCodeSnippets implements Snippets {
 
     @Snippet
-    private int identityHashCodeSnippet(final Object thisObj) {
+    private int identityHashCodeSnippet(final Object thisObj, @Snippet.ConstantParameter boolean canBeInlineType, @Snippet.ConstantParameter boolean isInlineType) {
         if (probability(NOT_FREQUENT_PROBABILITY, thisObj == null)) {
             return 0;
         }
+
+        // check mark word for inline type
+        if (canBeInlineType) {
+            Word mark = loadWordFromObject(thisObj, markOffset(INJECTED_VMCONFIG));
+            if (isInlineType || mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
+                return valueObjectHashCodeStubC(VALUEOBJECTHASHCODE, thisObj);
+            }
+        }
+
         return computeIdentityHashCode(thisObj);
     }
+
+    public static final HotSpotForeignCallDescriptor VALUEOBJECTHASHCODE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "valueObjectHashCode", int.class,
+                    Object.class);
+
+    @Node.NodeIntrinsic(ForeignCallNode.class)
+    private static native int valueObjectHashCodeStubC(@Node.ConstantNodeParameter ForeignCallDescriptor descriptor, Object x);
 
     protected abstract int computeIdentityHashCode(Object thisObj);
 
@@ -70,6 +99,8 @@ public abstract class IdentityHashCodeSnippets implements Snippets {
             StructuredGraph graph = node.graph();
             Arguments args = new Arguments(identityHashCodeSnippet, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("thisObj", node.object());
+            args.addConst("canBeInlineType", node.object().stamp(NodeView.DEFAULT).canBeInlineType());
+            args.addConst("isInlineType", node.object().stamp(NodeView.DEFAULT).isInlineType());
             SnippetTemplate template = template(tool, node, args);
             template.instantiate(tool.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
