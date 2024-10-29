@@ -66,6 +66,9 @@ public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode i
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         }
+        if (!stamp(NodeView.DEFAULT).canBeInlineType()) {
+            return object;
+        }
         return this;
     }
 }
