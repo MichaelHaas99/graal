@@ -33,3 +33,26 @@
 - `mx unittest jdk.graal.compiler.jtt.bytecode.BC_monitorenter03`
 - `mx unittest jdk.graal.compiler.core.test.CheckObjectEqualsTest`
 - `mx unittest jdk.graal.compiler.core.test.ea.PartialEscapeAnalysisTest`
+
+## Current status
+
+### Work completed
+
+Graal support for the new semantics introduced in JEP 401
+
+- if_acmp (substitutability check for inline types)
+- monitorenter (not allowed for inline types)
+- adaption of hashCode plugin in Graal
+- PEA supports substitutability checks and avoids materialization of operands if possible
+- access to new acmp profiling data over JVMCI (profiling data not yet optimal)
+- usage of acmp profiling data
+- inlining of equality comparison instead of slow call to Java library
+
+### Working on
+
+- Support for flattened inline type fields in objects
+
+### Future work/ideas:
+
+- Support for flat inline type arrays
+- Scalarization of inline types which are function arguments or return values
