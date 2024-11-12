@@ -1839,7 +1839,8 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         StoreFieldNode storeFieldNode = new StoreFieldNode(receiver, field, maskSubWordValue(value, field.getJavaKind()));
         append(storeFieldNode);
-        storeFieldNode.setStateAfter(this.createFrameState(stream.currentBCI(), storeFieldNode));
+        // storeFieldNode.setStateAfter(this.createFrameState(stream.currentBCI(), storeFieldNode));
+        storeFieldNode.setStateAfter(graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
     }
 
     /**
@@ -5276,30 +5277,46 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         if (!resolvedField.isFlat()) {
             fieldRead = append(genLoadField(receiver, resolvedField));
         } else {
-            assert resolvedField.isNullFreeInlineType() : "can't handle nullable flattened inline type yet";
-            HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) resolvedField.getType();
+            if (!resolvedField.isNullFreeInlineType()) {
+                // field is flat and nullable
 
-            int srcOff = resolvedField.getOffset();
+                ValueNode y = genLoadField(receiver, resolvedField.getNullMarkerField());
+                append(y);
+                ConstantNode x = appendConstant(JavaConstant.INT_0);
 
-            NewInstanceNode newInstance = new NewInstanceNode(fieldType, false);
-            append(newInstance);
-            ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
+                FixedWithNextNode previousInstruction = lastInstr;
+                BeginNode trueBegin = graph.add(new BeginNode());
+                EndNode trueEnd = graph.add(new EndNode());
+                trueBegin.setNext(trueEnd);
 
-            for (int i = 0; i < innerFields.length; i++) {
-                ResolvedJavaField innerField = innerFields[i];
-                assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
+                BeginNode falseBegin = graph.add(new BeginNode());
+                EndNode falseEnd = graph.add(new EndNode());
 
-                // returned fields include a header offset of their holder
-                int off = innerField.getOffset() - fieldType.firstFieldOffset();
+                MergeNode merge = graph.addWithoutUnique(new MergeNode());
+                merge.addForwardEnd(trueEnd);
+                merge.addForwardEnd(falseEnd);
+                merge.setStateAfter(graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
 
-                // holder has no header so remove the header offset
-                ValueNode load = genLoadField(receiver, innerField.changeOffset(srcOff + off));
-                append(load);
+                ConstantNode nullPointer = appendConstant(JavaConstant.NULL_POINTER);
+                lastInstr = falseBegin;
+                ValueNode instance = genGetFlattenedLoadField(resolvedField, receiver);
+                lastInstr.setNext(falseEnd);
+                ValuePhiNode phiNode = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forDeclaredType(getAssumptions(), resolvedField.getType(), false).getTrustedStamp(), merge,
+                                nullPointer, instance));
 
-                // new holder has a header
-                genFlattenedStoreField(newInstance, innerField, load);
+                LogicNode condition = genIntegerEquals(x, y);
+                graph.addOrUnique(condition);
+                IfNode ifNode = new IfNode(condition, trueBegin, falseBegin, BranchProbabilityData.unknown());
+                graph.add(ifNode);
+                previousInstruction.setNext(ifNode);
+                lastInstr = merge;
+                fieldRead = phiNode;
+
+            } else {
+                // field is flat and null restricted
+                fieldRead = genGetFlattenedLoadField(resolvedField, receiver);
             }
-            fieldRead = newInstance;
+
         }
 
         if (resolvedField.getDeclaringClass().getName().equals("Ljava/lang/ref/Reference;") && resolvedField.getName().equals("referent")) {
@@ -5310,6 +5327,35 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         JavaKind fieldKind = resolvedField.getJavaKind();
 
         pushLoadField(resolvedField, fieldRead, fieldKind);
+    }
+
+    private ValueNode genGetFlattenedLoadField(ResolvedJavaField resolvedField, ValueNode receiver) {
+        HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) resolvedField.getType();
+
+        int srcOff = resolvedField.getOffset();
+
+        NewInstanceNode newInstance = new NewInstanceNode(fieldType, false);
+        append(newInstance);
+
+        newInstance.setStateBefore(createCurrentFrameState());
+
+        ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
+
+        for (int i = 0; i < innerFields.length; i++) {
+            ResolvedJavaField innerField = innerFields[i];
+            assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
+
+            // returned fields include a header offset of their holder
+            int off = innerField.getOffset() - fieldType.firstFieldOffset();
+
+            // holder has no header so remove the header offset
+            ValueNode load = genLoadField(receiver, innerField.changeOffset(srcOff + off));
+            append(load);
+
+            // new holder has a header
+            genFlattenedStoreField(newInstance, innerField, load);
+        }
+        return newInstance;
     }
 
     /**

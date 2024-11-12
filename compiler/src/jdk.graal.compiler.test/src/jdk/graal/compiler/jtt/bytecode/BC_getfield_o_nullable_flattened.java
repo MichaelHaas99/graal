@@ -38,87 +38,54 @@ import jdk.internal.vm.annotation.NullRestricted;
 import jdk.vm.ci.meta.DeoptimizationReason;
 
 @AddExports("java.base/jdk.internal.vm.annotation")
-public class BC_getfield_o_flattened extends JTTTest {
+public class BC_getfield_o_nullable_flattened extends JTTTest {
 
     @ImplicitlyConstructible
     @LooselyConsistentValue
-    public static value class MyValue2Inline {
-        double d;
+    static value class Value0 {
         long l;
+        int i;
+        short s;
+        byte b;
 
-        public MyValue2Inline(double d, long l) {
-            this.d = d;
-            this.l = l;
+        Value0() {
+            l = 0;
+            i = 0;
+            s = 0;
+            b = 0;
         }
 
-        public static MyValue2Inline createDefault() {
-            return new MyValue2Inline(3, 4);
-        }
-
-    }
-
-    @ImplicitlyConstructible
-    @LooselyConsistentValue
-    public static value class MyValue2 {
-        int x;
-        byte y;
-        @NullRestricted MyValue2Inline v;
-
-        public MyValue2(int x, byte y, MyValue2Inline v) {
-            this.x = x;
-            this.y = y;
-            this.v = v;
-        }
-
-        public static MyValue2 createDefaultInline() {
-            return new MyValue2(1, (byte) 2, MyValue2Inline.createDefault());
+        Value0(long l0, int i0, short s0, byte b0) {
+            l = l0;
+            i = i0;
+            s = s0;
+            b = b0;
         }
     }
 
-    @ImplicitlyConstructible
-    @LooselyConsistentValue
-    public static value class MyValue1 {
-        int x;
-        long y;
-        short z;
-        Integer o;
-        int[] oa;
-        @NullRestricted MyValue2 v1;
-        @NullRestricted MyValue2 v2;
-        @NullRestricted MyValue2 v5;
-        int c;
-
-        public MyValue1(int x, long y, short z, Integer o, int[] oa, MyValue2 v1, MyValue2 v2, MyValue2 v5, int c) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.o = o;
-            this.oa = oa;
-            this.v1 = v1;
-            this.v2 = v2;
-            this.v5 = v5;
-            this.c = c;
-        }
-
-        static MyValue1 createDefaultInline() {
-            return new MyValue1(0, 0, (short) 0, null, null, MyValue2.createDefaultInline(), MyValue2.createDefaultInline(), MyValue2.createDefaultInline(), 0);
-        }
+    static class Container0 {
+        Value0 val;
+        long l;
+        int i;
     }
 
-    public static long test(MyValue1 object) {
-        return object.v1.v.l;
+    // Container0 had a external null marker located just between two Java fields,
+    // and test0 checks that updating the null marker doesn't corrupt
+    // the surrounding fields and vice-versa.
+    static Value0 test(Container0 c) {
+        return c.val;
     }
 
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
     @Test
     public void run0() throws Throwable {
-        runTest(EnumSet.allOf(DeoptimizationReason.class), "test", MyValue1.createDefaultInline());
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test", new Container0());
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test", MyValue1.createDefaultInline());
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test", new Container0());
     }
 
 }
