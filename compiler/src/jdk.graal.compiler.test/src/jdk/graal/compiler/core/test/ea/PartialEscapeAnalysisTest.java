@@ -217,7 +217,7 @@ public class PartialEscapeAnalysisTest extends EATestBase {
 
     @Test
     public void testIfAcmpeq4() {
-        testPartialEscapeAnalysis("testIfAcmpeqSnippet4", 2.0, 5, StoreFieldNode.class, LoadFieldNode.class);
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet4", 1.5, 3, StoreFieldNode.class, LoadFieldNode.class);
     }
 
     @SuppressWarnings("deprecation")
@@ -231,7 +231,6 @@ public class PartialEscapeAnalysisTest extends EATestBase {
             if (b < 0) {
                 return valueObject2 == valueObject3;
             } else {
-                // materializes
                 return valueObject2 == valueObject4;
             }
         } else {
