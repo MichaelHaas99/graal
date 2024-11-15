@@ -137,6 +137,11 @@ public class HotSpotSnippetMetaAccessProvider implements MetaAccessProvider {
     }
 
     @Override
+    public int getFlatArrayBaseOffset() {
+        return delegate.getFlatArrayBaseOffset();
+    }
+
+    @Override
     public int getArrayIndexScale(JavaKind elementKind) {
         return delegate.getArrayIndexScale(elementKind);
     }
