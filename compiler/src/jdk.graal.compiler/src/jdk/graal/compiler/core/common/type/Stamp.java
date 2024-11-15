@@ -160,6 +160,20 @@ public abstract class Stamp implements SpeculationContextObject {
     }
 
     /**
+     * Tests whether this stamp can represent an inline type array
+     */
+    public boolean canBeInlineTypeArray() {
+        return false;
+    }
+
+    /**
+     * Tests whether this stamp is known to be an inline type array
+     */
+    public boolean isInlineTypeArray() {
+        return false;
+    }
+
+    /**
      * Tests whether this stamp represents an integer value.
      */
     public boolean isIntegerStamp() {

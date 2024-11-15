@@ -28,6 +28,7 @@ import java.util.AbstractList;
 import java.util.Objects;
 import java.util.RandomAccess;
 
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -96,6 +97,28 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     @Override
     public boolean isInlineType() {
         return nonNull() && isExactType() && !type().isIdentity();
+    }
+
+    @Override
+    public boolean canBeInlineTypeArray() {
+        // empty type or array or null can't be inline types
+        if (isEmpty() || alwaysNull() || !isAlwaysArray())
+            return false;
+        if (!isExactType()) {
+            // merge which resulted in object class as superclass array
+            if (type() == null)
+                return true;
+
+            // interface or abstract class can be a supertype of an inline type
+            if (type().isAbstract() || type().isInterface())
+                return true;
+        }
+        return !type().isIdentity();
+    }
+
+    @Override
+    public boolean isInlineTypeArray() {
+        return nonNull() && isAlwaysArray() && isExactType() && ((HotSpotResolvedObjectType) type).isFlatArray() && !type().isIdentity();
     }
 
     @Override

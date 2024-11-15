@@ -50,9 +50,13 @@ Graal support for the new semantics introduced in JEP 401
 
 ### Working on
 
-- Support for flattened inline type fields in objects
+- Support for flattened inline types in objects and arrays
+  - need to refactor it into a node plugin
+- Nullable flattened inline types cause problems in the JVM
+  - can't test my implementation (also not yet implemented in C1 and C2)
 
 ### Future work/ideas:
 
-- Support for flat inline type arrays
 - Scalarization of inline types which are function arguments or return values
+  - start with avoiding jump to scalarization entry point when the option is enabled
+  - decide if it is worth it to also implement it in Graal
