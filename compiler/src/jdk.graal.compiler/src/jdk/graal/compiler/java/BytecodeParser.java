@@ -4405,11 +4405,33 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         JavaKind actualKind = refineComponentType(array, kind);
         if (actualKind != null) {
-            frameState.push(actualKind, append(genLoadIndexed(array, index, boundsCheck, actualKind)));
+            if (array.stamp(NodeView.DEFAULT).isInlineTypeArray()) {
+                // array is known to be flat at compile time
+                int arrayBaseOffset = getMetaAccess().getFlatArrayBaseOffset();
+                HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(getMetaAccess());
+                int idx = index.isConstant() ? index.asJavaConstant().asInt() : -1;
+                assert idx >= 0 : "can't handle non-constant indexes yet in flat arrays";
+                int shift = resolvedType.getLog2ComponentSize();
+                int offset = arrayBaseOffset + (idx << shift);
+                frameState.push(actualKind, genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, offset));
+            } else {
+                frameState.push(actualKind, append(genLoadIndexed(array, index, boundsCheck, actualKind)));
+            }
+
         } else {
             GraalError.guarantee(kind == JavaKind.Byte, "refineComponentType should not have failed for %s", kind);
             genByteSizedLoadIndexed(index, array, boundsCheck);
         }
+    }
+
+    private ValueNode genFlattenedArrayLoadField(HotSpotResolvedObjectType componentType, ValueNode receiver, ValueNode index, int srcOff) {
+        frameState.push(JavaKind.Object, receiver);
+        frameState.push(JavaKind.Int, index);
+        FrameState currentState = createCurrentFrameState();
+        frameState.pop(JavaKind.Int);
+        frameState.pop(JavaKind.Object);
+        return genFlattenedGetLoadField(componentType, receiver, srcOff, currentState);
+
     }
 
     /**
@@ -5241,7 +5263,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
                 ConstantNode nullPointer = appendConstant(JavaConstant.NULL_POINTER);
                 lastInstr = falseBegin;
-                ValueNode instance = genGetFlattenedLoadField(resolvedField, receiver);
+                ValueNode instance = genFlattenedGetLoadField(resolvedField, receiver);
                 lastInstr.setNext(falseEnd);
                 ValuePhiNode phiNode = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forDeclaredType(getAssumptions(), resolvedField.getType(), false).getTrustedStamp(), merge,
                                 nullPointer, instance));
@@ -5256,7 +5278,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
             } else {
                 // field is flat and null restricted
-                fieldRead = genGetFlattenedLoadField(resolvedField, receiver);
+                fieldRead = genFlattenedGetLoadField(resolvedField, receiver);
             }
 
         }
@@ -5271,15 +5293,20 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         pushLoadField(resolvedField, fieldRead, fieldKind);
     }
 
-    private ValueNode genGetFlattenedLoadField(ResolvedJavaField resolvedField, ValueNode receiver) {
-        HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) resolvedField.getType();
+    private ValueNode genFlattenedGetLoadField(ResolvedJavaField resolvedField, ValueNode receiver) {
+        frameState.push(JavaKind.Object, receiver);
+        FrameState currentState = createCurrentFrameState();
+        frameState.pop(JavaKind.Object);
+        return genFlattenedGetLoadField((HotSpotResolvedObjectType) resolvedField.getType(), receiver, resolvedField.getOffset(), currentState);
 
-        int srcOff = resolvedField.getOffset();
+    }
+
+    private ValueNode genFlattenedGetLoadField(HotSpotResolvedObjectType fieldType, ValueNode receiver, int srcOff, FrameState currentState) {
 
         NewInstanceNode newInstance = new NewInstanceNode(fieldType, false);
         append(newInstance);
 
-        newInstance.setStateBefore(createCurrentFrameState());
+        newInstance.setStateBefore(currentState);
 
         ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
 
