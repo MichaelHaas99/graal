@@ -170,8 +170,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
     }
 
-    private static int substitutabilityChecks = 0;
-
     private static LogicNode virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, StructuredGraph graph, VirtualizerTool tool) {
         if (virtual instanceof VirtualBoxingNode virtualBoxingNode && other.isConstant()) {
             if (virtualBoxingNode.getBoxingKind() == JavaKind.Boolean) {
@@ -249,9 +247,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
                                     result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                     tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
-                                    if (result instanceof ObjectEqualsNode node && node.substituabilityCheck()) {
-                                        substitutabilityChecks++;
-                                    }
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
                                     ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,
                                                     tool.getConstantReflection());
@@ -276,7 +271,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             newCondition = LogicConstantNode.and(newCondition, result, null);
                         }
 
-                        if (comparisonResultUnknown || substitutabilityChecks > 1)
+                        if (comparisonResultUnknown)
                             return null;
 
                         return newCondition;

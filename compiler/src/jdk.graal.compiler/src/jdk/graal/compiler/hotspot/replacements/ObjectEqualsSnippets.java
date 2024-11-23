@@ -98,16 +98,12 @@ public class ObjectEqualsSnippets implements Snippets {
                     offsets = new int[fields.length];
                     kinds = new JavaKind[fields.length];
 
-                    // avoid multiple possible jumps into external substitutability library
-                    int substitutabilityChecks = 0;
                     for (int i = 0; i < fields.length; i++) {
-                        if (fields[i].getJavaKind().isPrimitive() || noInlineType(fields[i].getType()) || substitutabilityChecks == 0) {
+                        offsets[i] = fields[i].getOffset();
+                        kinds[i] = fields[i].getJavaKind();
+                        if (fields[i].getJavaKind().isPrimitive() || fields[i].getJavaKind().isObject()) {
                             offsets[i] = fields[i].getOffset();
                             kinds[i] = fields[i].getJavaKind();
-
-                            // possible comparison of two inline types
-                            if (!fields[i].getJavaKind().isPrimitive() && canBeInlineType(fields[i].getType()))
-                                substitutabilityChecks++;
                         } else {
                             inlineComparison = false;
                             break;
