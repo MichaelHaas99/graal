@@ -28,14 +28,14 @@ import static jdk.graal.compiler.nodeinfo.InputType.State;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.StateSplit;
@@ -48,8 +48,8 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-import org.graalvm.word.LocationIdentity;
-
+import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
@@ -62,6 +62,36 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, SingleMemoryKill {
 
     public static final NodeClass<StoreIndexedNode> TYPE = NodeClass.create(StoreIndexedNode.class);
+
+    private int additionalOffset = 0;
+
+    public int getAdditionalOffset() {
+        return additionalOffset;
+    }
+
+    public void setAdditionalOffset(int additionalOffset) {
+        this.additionalOffset = additionalOffset;
+    }
+
+    private boolean flatAccess = false;
+
+    public boolean isFlatAccess() {
+        return flatAccess;
+    }
+
+    public void setFlatAccess(boolean flatAccess) {
+        this.flatAccess = flatAccess;
+    }
+
+    @OptionalInput private ValueNode shift;
+
+    public ValueNode getShift() {
+        return shift;
+    }
+
+    public void setShift(ValueNode shift) {
+        this.shift = shift;
+    }
 
     @OptionalInput(InputType.Guard) private GuardingNode storeCheck;
     @Input ValueNode value;
