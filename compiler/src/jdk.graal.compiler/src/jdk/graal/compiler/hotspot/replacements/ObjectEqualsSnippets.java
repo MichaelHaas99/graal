@@ -45,9 +45,10 @@ import jdk.graal.compiler.replacements.Snippets;
 import jdk.graal.compiler.replacements.nodes.ExplodeLoopNode;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.hotspot.ACmpDataAccessor;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.hotspot.SingleTypeEntry;
+import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -96,10 +97,17 @@ public class ObjectEqualsSnippets implements Snippets {
                     ResolvedJavaField[] fields = type.getInstanceFields(true);
                     offsets = new int[fields.length];
                     kinds = new JavaKind[fields.length];
+
+                    // avoid multiple possible jumps into external substitutability library
+                    int substitutabilityChecks = 0;
                     for (int i = 0; i < fields.length; i++) {
-                        if (fields[i].getJavaKind().isPrimitive() || fields[i].getType() instanceof ResolvedJavaType fieldType && fieldType.isIdentity()) {
+                        if (fields[i].getJavaKind().isPrimitive() || noInlineType(fields[i].getType()) || substitutabilityChecks == 0) {
                             offsets[i] = fields[i].getOffset();
                             kinds[i] = fields[i].getJavaKind();
+
+                            // possible comparison of two inline types
+                            if (!fields[i].getJavaKind().isPrimitive() && canBeInlineType(fields[i].getType()))
+                                substitutabilityChecks++;
                         } else {
                             inlineComparison = false;
                             break;
@@ -108,12 +116,6 @@ public class ObjectEqualsSnippets implements Snippets {
                     }
                 }
 
-// args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(),
-// tool.getLoweringStage());
-// args.add("x", x);
-// args.add("y", y);
-// args.add("trueValue", replacer.trueValue);
-// args.add("falseValue", replacer.falseValue);
                 if (profile != null) {
                     args = new SnippetTemplate.Arguments(objectEqualsSnippetWithProfile,
                                     node.graph().getGuardsStage(), tool.getLoweringStage());
@@ -121,29 +123,22 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("y", y);
                     args.add("trueValue", replacer.trueValue);
                     args.add("falseValue", replacer.falseValue);
+                    args.addConst("trace", isTracingEnabledForMethod(node.graph()));
+                    args.addConst("inlineComparison", inlineComparison);
+                    args.addVarargs("offsets", int.class, StampFactory.forKind(JavaKind.Int), offsets);
+                    args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                     SingleTypeEntry leftEntry = profile.getLeft();
                     SingleTypeEntry rightEntry = profile.getRight();
                     boolean xAlwaysNull = leftEntry.alwaysNull();
                     boolean xInlineType = leftEntry.inlineType();
                     boolean yAlwaysNull = rightEntry.alwaysNull();
                     boolean yInlineType = rightEntry.inlineType();
-                    HotSpotResolvedObjectType test = leftEntry.getValidType();
-                    HotSpotResolvedObjectType test2 = rightEntry.getValidType();
+                    // HotSpotResolvedObjectType test = leftEntry.getValidType();
+                    // HotSpotResolvedObjectType test2 = rightEntry.getValidType();
                     args.addConst("xAlwaysNull", xAlwaysNull);
                     args.addConst("xInlineType", xInlineType);
                     args.addConst("yAlwaysNull", yAlwaysNull);
                     args.addConst("yInlineType", yInlineType);
-
-// (Object x, Object y, Object trueValue, Object falseValue, KlassPointer xProfileHub,
-// @ConstantParameter boolean xProfileHubInline,
-// @ConstantParameter boolean xAlwaysNull,
-// @ConstantParameter boolean xInlineType, KlassPointer yProfileHub,
-// @ConstantParameter boolean yProfileHubInline,
-// @ConstantParameter boolean yInlineType, @ConstantParameter boolean yAlwaysNull)
-
-// @ConstantParameter boolean xAlwaysNull,
-// @ConstantParameter boolean xInlineType,
-// @ConstantParameter boolean yInlineType, @ConstantParameter boolean yAlwaysNull)
 
                 } else {
                     args = new SnippetTemplate.Arguments(objectEqualsSnippet, node.graph().getGuardsStage(),
@@ -152,7 +147,6 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("y", y);
                     args.add("trueValue", replacer.trueValue);
                     args.add("falseValue", replacer.falseValue);
-                    // TODO: get trace enable from option
                     args.addConst("trace", isTracingEnabledForMethod(node.graph()));
                     args.addConst("inlineComparison", inlineComparison);
                     args.addVarargs("offsets", int.class, StampFactory.forKind(JavaKind.Int), offsets);
@@ -165,7 +159,15 @@ public class ObjectEqualsSnippets implements Snippets {
             }
         }
 
-        public static boolean isTracingEnabledForMethod(StructuredGraph graph) {
+        private static boolean noInlineType(JavaType type) {
+            return !StampFactory.forDeclaredType(new Assumptions(), type, false).getTrustedStamp().canBeInlineType();
+        }
+
+        private static boolean canBeInlineType(JavaType type) {
+            return !noInlineType(type);
+        }
+
+        private static boolean isTracingEnabledForMethod(StructuredGraph graph) {
             String filter = HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter.getValue(graph.getOptions());
             if (filter == null) {
                 return false;
@@ -193,77 +195,14 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xPointer.equal(yPointer))
             return trueValue;
 
-        trace(trace, "check both operands against null");
-        if (xPointer.isNull() || yPointer.isNull())
-            return falseValue;
-        GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        x = PiNode.piCastNonNull(x, anchorNode);
-        y = PiNode.piCastNonNull(y, anchorNode);
-
-        final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
-        final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
-
-        trace(trace, "check both operands for inline type bit");
-        if (xMark.and(yMark).and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG)))
-            return falseValue;
-
-        trace(trace, "apply type comparison");
-        KlassPointer xHub = loadHub(x);
-        KlassPointer yHub = loadHub(y);
-        if (xHub.notEqual(yHub))
-            return falseValue;
-
-        // inline fields which are no oop
-        if (inlineComparison) {
-            trace(trace, "inline type comparison");
-            ExplodeLoopNode.explodeLoop();
-            for (int i = 0; i < offsets.length; i++) {
-                JavaKind kind = kinds[i];
-                Object xLoad = null;
-                Object yLoad = null;
-                if (kind == JavaKind.Boolean) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Char, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Char, LocationIdentity.any());
-                } else if (kind == JavaKind.Byte) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Byte, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Byte, LocationIdentity.any());
-                } else if (kind == JavaKind.Char) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Char, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Char, LocationIdentity.any());
-                } else if (kind == JavaKind.Short) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Short, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Short, LocationIdentity.any());
-                } else if (kind == JavaKind.Int) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Int, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Int, LocationIdentity.any());
-                } else if (kind == JavaKind.Long) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Long, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Long, LocationIdentity.any());
-                } else if (kind == JavaKind.Float) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Float, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Float, LocationIdentity.any());
-                } else if (kind == JavaKind.Double) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Double, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Double, LocationIdentity.any());
-                } else if (kind == JavaKind.Object) {
-                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Object, LocationIdentity.any());
-                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Object, LocationIdentity.any());
-                }
-// Object xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Int, LocationIdentity.any());
-// Object yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Int, LocationIdentity.any());
-                if (xLoad != yLoad)
-                    return falseValue;
-            }
-            return trueValue;
-        }
-
-        trace(trace, "call to library for substitutability check");
-
-        return substitutabilityCheckStubC(SUBSTITUTABILITYCHECK, x, y) ? trueValue : falseValue;
+        return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds);
     }
 
     @Snippet
-    protected static Object objectEqualsWithProfile(Object x, Object y, Object trueValue, Object falseValue,
+    protected static Object objectEqualsWithProfile(Object x, Object y, Object trueValue, Object falseValue, @ConstantParameter boolean trace,
+                    @ConstantParameter boolean inlineComparison,
+                    @VarargsParameter int[] offsets,
+                    @VarargsParameter JavaKind[] kinds,
                     @ConstantParameter boolean xAlwaysNull,
                     @ConstantParameter boolean xInlineType, @ConstantParameter boolean yAlwaysNull,
                     @ConstantParameter boolean yInlineType) {
@@ -271,6 +210,7 @@ public class ObjectEqualsSnippets implements Snippets {
         Word xPointer = Word.objectToTrackedPointer(x);
         Word yPointer = Word.objectToTrackedPointer(y);
 
+        trace(trace, "apply pointer comparison");
         if (xPointer.equal(yPointer))
             return trueValue;
 
@@ -336,6 +276,14 @@ public class ObjectEqualsSnippets implements Snippets {
             return falseValue;
         }
 
+        return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds);
+    }
+
+    private static Object commonPart(Object x, Object y, Object trueValue, Object falseValue, Word xPointer, Word yPointer, boolean trace,
+                    boolean inlineComparison,
+                    int[] offsets,
+                    JavaKind[] kinds) {
+        trace(trace, "check both operands against null");
         if (xPointer.isNull() || yPointer.isNull())
             return falseValue;
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
@@ -345,13 +293,59 @@ public class ObjectEqualsSnippets implements Snippets {
         final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
         final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
 
+        trace(trace, "check both operands for inline type bit");
         if (xMark.and(yMark).and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG)))
             return falseValue;
 
+        trace(trace, "apply type comparison");
         KlassPointer xHub = loadHub(x);
         KlassPointer yHub = loadHub(y);
         if (xHub.notEqual(yHub))
             return falseValue;
+
+        // inline field comparison
+        if (inlineComparison) {
+            trace(trace, "inline type comparison");
+            ExplodeLoopNode.explodeLoop();
+            for (int i = 0; i < offsets.length; i++) {
+                JavaKind kind = kinds[i];
+                Object xLoad = null;
+                Object yLoad = null;
+                if (kind == JavaKind.Boolean) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Char, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Char, LocationIdentity.any());
+                } else if (kind == JavaKind.Byte) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Byte, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Byte, LocationIdentity.any());
+                } else if (kind == JavaKind.Char) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Char, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Char, LocationIdentity.any());
+                } else if (kind == JavaKind.Short) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Short, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Short, LocationIdentity.any());
+                } else if (kind == JavaKind.Int) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Int, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Int, LocationIdentity.any());
+                } else if (kind == JavaKind.Long) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Long, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Long, LocationIdentity.any());
+                } else if (kind == JavaKind.Float) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Float, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Float, LocationIdentity.any());
+                } else if (kind == JavaKind.Double) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Double, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Double, LocationIdentity.any());
+                } else if (kind == JavaKind.Object) {
+                    xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Object, LocationIdentity.any());
+                    yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Object, LocationIdentity.any());
+                }
+                if (xLoad != yLoad)
+                    return falseValue;
+            }
+            return trueValue;
+        }
+
+        trace(trace, "call to library for substitutability check");
 
         return substitutabilityCheckStubC(SUBSTITUTABILITYCHECK, x, y) ? trueValue : falseValue;
     }
