@@ -528,6 +528,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public AddressNode createArrayAddress(StructuredGraph graph, ValueNode array, int arrayBaseOffset, JavaKind elementKind, ValueNode index) {
+        return createArrayAddress(graph, array, arrayBaseOffset, elementKind, index, null);
+    }
+
+    public AddressNode createArrayAddress(StructuredGraph graph, ValueNode array, int arrayBaseOffset, JavaKind elementKind, ValueNode index, ValueNode shiftCount) {
         ValueNode wordIndex;
         if (target.wordSize > 4) {
             wordIndex = graph.unique(new SignExtendNode(index, target.wordSize * 8));
@@ -535,8 +539,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             assert target.wordSize == 4 : "unsupported word size";
             wordIndex = index;
         }
-        int shift = CodeUtil.log2(metaAccess.getArrayIndexScale(elementKind));
-        ValueNode scaledIndex = graph.unique(new LeftShiftNode(wordIndex, ConstantNode.forInt(shift, graph)));
+        ValueNode shift = shiftCount != null ? shiftCount : ConstantNode.forInt(CodeUtil.log2(metaAccess.getArrayIndexScale(elementKind)), graph);
+        ValueNode scaledIndex = graph.unique(new LeftShiftNode(wordIndex, shift));
         ValueNode offset = graph.unique(new AddNode(scaledIndex, ConstantNode.forIntegerKind(target.wordJavaKind, arrayBaseOffset, graph)));
         return graph.unique(new OffsetAddressNode(array, offset));
     }
@@ -547,7 +551,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public void lowerLoadIndexedNode(LoadIndexedNode loadIndexed, LoweringTool tool) {
-        int arrayBaseOffset = metaAccess.getArrayBaseOffset(loadIndexed.elementKind());
+        int arrayBaseOffset = loadIndexed.isFlatAccess() ? metaAccess.getFlatArrayBaseOffset() + loadIndexed.getAdditionalOffset() : metaAccess.getArrayBaseOffset(loadIndexed.elementKind());
         lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
     }
 
@@ -564,7 +568,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             index = graph.addOrUniqueWithInputs(proxyIndex(loadIndexed, index, array, tool));
         }
         ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
-        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex);
+        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex, loadIndexed.getShift());
 
         LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(elementKind);
         ReadNode memoryRead = graph.add(new ReadNode(address, arrayLocation, loadStamp, barrierSet.readBarrierType(arrayLocation, address, loadStamp), MemoryOrderMode.PLAIN));

@@ -394,12 +394,15 @@ import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
+import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
+import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.StateSplitProxyNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GeneratedInvocationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -1833,6 +1836,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     protected void genFlattenedStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value) {
+        genFlattenedStoreField(receiver, field, value, null);
+    }
+
+    protected void genFlattenedStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value, FrameState current) {
         if (needBarrierAfterFieldStore(field)) {
             finalBarrierRequired = true;
         }
@@ -1840,7 +1847,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         StoreFieldNode storeFieldNode = new StoreFieldNode(receiver, field, maskSubWordValue(value, field.getJavaKind()));
         append(storeFieldNode);
         // storeFieldNode.setStateAfter(this.createFrameState(stream.currentBCI(), storeFieldNode));
-        storeFieldNode.setStateAfter(graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+        if (current != null)
+            storeFieldNode.setStateAfter(current);
+        else
+            storeFieldNode.setStateAfter(graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
     }
 
     /**
@@ -4449,6 +4459,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     private void genLoadIndexed(JavaKind kind) {
+        FrameState currentState = createCurrentFrameState();
         ValueNode index = frameState.pop(JavaKind.Int);
         ValueNode array = frameState.pop(JavaKind.Object);
 
@@ -4464,14 +4475,62 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         JavaKind actualKind = refineComponentType(array, kind);
         if (actualKind != null) {
             if (array.stamp(NodeView.DEFAULT).isInlineTypeArray()) {
-                // array is known to be flat at compile time
-                int arrayBaseOffset = getMetaAccess().getFlatArrayBaseOffset();
+                // array is known to consist of inline type objects
+
                 HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(getMetaAccess());
-                int idx = index.isConstant() ? index.asJavaConstant().asInt() : -1;
-                assert idx >= 0 : "can't handle non-constant indexes yet in flat arrays";
-                int shift = resolvedType.getLog2ComponentSize();
-                int offset = arrayBaseOffset + (idx << shift);
-                frameState.push(actualKind, genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, offset));
+                if (resolvedType.isFlatArray()) {
+
+                    int shift = resolvedType.getLog2ComponentSize();
+                    frameState.push(actualKind,
+                                    genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, boundsCheck, ConstantNode.forInt(shift, graph),
+                                                    currentState));
+                    // array not known to be flat
+                } else {
+                    // runtime check necessary
+
+                    ValueAnchorNode anchor = append(new ValueAnchorNode());
+                    FixedWithNextNode previousInstruction = lastInstr;
+
+                    LogicNode condition = new IsFlatArrayNode(array, anchor);
+
+                    BeginNode trueBegin = graph.add(new BeginNode());
+                    EndNode trueEnd = graph.add(new EndNode());
+
+                    BeginNode falseBegin = graph.add(new BeginNode());
+                    EndNode falseEnd = graph.add(new EndNode());
+
+                    MergeNode merge = graph.addWithoutUnique(new MergeNode());
+                    merge.addForwardEnd(trueEnd);
+                    merge.addForwardEnd(falseEnd);
+                    merge.setStateAfter(currentState);
+
+                    // flat array
+                    lastInstr = trueBegin;
+                    anchor = append(new ValueAnchorNode());
+                    ValueNode shift = append(new FlatArrayComponentSizeNode(array, anchor));
+                    ValueNode instanceFromFlattened = genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, boundsCheck, shift, currentState);
+                    lastInstr.setNext(trueEnd);
+
+                    // no flat array
+                    lastInstr = falseBegin;
+                    ValueNode instanceFromUnflattened = append(genLoadIndexed(array, index, boundsCheck, actualKind));
+                    lastInstr.setNext(falseEnd);
+                    ValuePhiNode phiNode = graph.addWithoutUnique(new ValuePhiNode(StampFactory.forDeclaredType(getAssumptions(), resolvedType.getComponentType(), false).getTrustedStamp(), merge,
+                                    instanceFromFlattened, instanceFromUnflattened));
+
+                    graph.addOrUnique(condition);
+                    // TODO: insert profiling data
+                    IfNode ifNode = new IfNode(condition, trueBegin, falseBegin, BranchProbabilityData.unknown());
+                    graph.add(ifNode);
+                    previousInstruction.setNext(ifNode);
+                    lastInstr = merge;
+                    frameState.push(actualKind, phiNode);
+                }
+
+            } else if (array.stamp(NodeView.DEFAULT).canBeInlineTypeArray()) {
+                // TODO: array is maybe flat, go back to interpreter for the moment, will be
+                // replaced with a runtime call
+                append(new DeoptimizeNode(None, DeoptimizationReason.TransferToInterpreter));
             } else {
                 frameState.push(actualKind, append(genLoadIndexed(array, index, boundsCheck, actualKind)));
             }
@@ -4482,14 +4541,32 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
     }
 
-    private ValueNode genFlattenedArrayLoadField(HotSpotResolvedObjectType componentType, ValueNode receiver, ValueNode index, int srcOff) {
-        frameState.push(JavaKind.Object, receiver);
-        frameState.push(JavaKind.Int, index);
-        FrameState currentState = createCurrentFrameState();
-        frameState.pop(JavaKind.Int);
-        frameState.pop(JavaKind.Object);
-        return genFlattenedGetLoadField(componentType, receiver, srcOff, currentState);
+    private ValueNode genFlattenedArrayLoadField(HotSpotResolvedObjectType componentType, ValueNode receiver, ValueNode index, GuardingNode boundsCheck, ValueNode shift, FrameState state) {
+        NewInstanceNode newInstance = new NewInstanceNode(componentType, false);
+        append(newInstance);
 
+        newInstance.setStateBefore(state);
+
+        ResolvedJavaField[] innerFields = componentType.getInstanceFields(true);
+
+        for (int i = 0; i < innerFields.length; i++) {
+            ResolvedJavaField innerField = innerFields[i];
+            assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
+
+            // returned fields include a header offset of their holder
+            int off = innerField.getOffset() - componentType.firstFieldOffset();
+
+            LoadIndexedNode load = (LoadIndexedNode) genLoadIndexed(receiver, index, boundsCheck, innerField.getJavaKind());
+            load.setFlatAccess(true);
+            // holder has no header so remove the header offset
+            load.setAdditionalOffset(off);
+            load.setShift(shift);
+            append(load);
+
+            // new holder has a header
+            genFlattenedStoreField(newInstance, innerField, load, state);
+        }
+        return newInstance;
     }
 
     /**

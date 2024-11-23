@@ -50,6 +50,7 @@ import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode;
 import jdk.graal.compiler.hotspot.nodes.type.KlassPointerStamp;
+import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.hotspot.word.PointerCastNode;
 import jdk.graal.compiler.nodes.CanonicalizableLocation;
@@ -392,6 +393,21 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int klassProtoTypeHeaderOffset(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.klassProtoTypeHeaderOffset;
+    }
+
+    @Fold
+    public static int klassKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassKind;
+    }
+
+    @Fold
+    public static int flatArrayKlassKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassFlatArrayKlassKind;
+    }
+
+    @Fold
+    public static int flatArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.flatArrayPattern;
     }
 
     @Fold
