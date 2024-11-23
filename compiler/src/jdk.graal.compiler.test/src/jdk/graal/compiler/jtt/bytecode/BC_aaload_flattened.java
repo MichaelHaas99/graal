@@ -78,12 +78,13 @@ public class BC_aaload_flattened extends JTTTest {
     }
 
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
-    private static final Value0[] va = (Value0[])ValueClass.newNullRestrictedArray(Value0.class, 2);
+    private static Value0[] va = (Value0[])ValueClass.newNullRestrictedArray(Value0.class, 2);
     //private static final Value0[] va = new Value0[2];
 
 
     @Test
     public void run0() throws Throwable {
+        va[1] = new Value0(1,1,(short)1,(byte)1);
         runTest(EnumSet.allOf(DeoptimizationReason.class), "test");
     }
 

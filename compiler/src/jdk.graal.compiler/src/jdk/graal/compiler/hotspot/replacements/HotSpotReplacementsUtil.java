@@ -30,9 +30,6 @@ import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.VE
 
 import java.lang.ref.Reference;
 
-import jdk.graal.compiler.core.common.type.Stamp;
-import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
-import jdk.vm.ci.meta.Constant;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.api.replacements.Fold;
@@ -40,11 +37,13 @@ import jdk.graal.compiler.api.replacements.Fold.InjectedParameter;
 import jdk.graal.compiler.core.common.SuppressFBWarnings;
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node.ConstantNodeParameter;
 import jdk.graal.compiler.graph.Node.NodeIntrinsic;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
+import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.nodes.CanonicalizableLocation;
 import jdk.graal.compiler.nodes.CompressionNode;
@@ -71,6 +70,7 @@ import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
+import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -360,6 +360,21 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int klassProtoTypeHeaderOffset(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.klassProtoTypeHeaderOffset;
+    }
+
+    @Fold
+    public static int klassKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassKind;
+    }
+
+    @Fold
+    public static int flatArrayKlassKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassFlatArrayKlassKind;
+    }
+
+    @Fold
+    public static int flatArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.flatArrayPattern;
     }
 
     @Fold

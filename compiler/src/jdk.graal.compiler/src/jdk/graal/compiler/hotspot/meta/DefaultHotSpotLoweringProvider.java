@@ -38,9 +38,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import jdk.graal.compiler.serviceprovider.LibGraalService;
-import jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets;
-import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.CompressEncoding;
@@ -81,6 +78,7 @@ import jdk.graal.compiler.hotspot.replacements.AssertionSnippets;
 import jdk.graal.compiler.hotspot.replacements.ClassGetHubNode;
 import jdk.graal.compiler.hotspot.replacements.DigestBaseSnippets;
 import jdk.graal.compiler.hotspot.replacements.FastNotifyNode;
+import jdk.graal.compiler.hotspot.replacements.FlatArrayComponentSizeSnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotAllocationSnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotHashCodeSnippets;
@@ -89,6 +87,7 @@ import jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil;
 import jdk.graal.compiler.hotspot.replacements.HotSpotSerialWriteBarrierSnippets;
 import jdk.graal.compiler.hotspot.replacements.HubGetClassNode;
 import jdk.graal.compiler.hotspot.replacements.InstanceOfSnippets;
+import jdk.graal.compiler.hotspot.replacements.IsFlatArraySnippets;
 import jdk.graal.compiler.hotspot.replacements.KlassLayoutHelperNode;
 import jdk.graal.compiler.hotspot.replacements.LoadExceptionObjectSnippets;
 import jdk.graal.compiler.hotspot.replacements.LogSnippets;
@@ -112,6 +111,7 @@ import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeadEndNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
+import jdk.graal.compiler.nodes.EnsureRuntimeHubUsageNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
@@ -147,9 +147,11 @@ import jdk.graal.compiler.nodes.debug.VerifyHeapNode;
 import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
+import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.LoadMethodNode;
 import jdk.graal.compiler.nodes.extended.OSRLocalNode;
@@ -207,6 +209,7 @@ import jdk.graal.compiler.replacements.nodes.AssertionNode;
 import jdk.graal.compiler.replacements.nodes.CStringConstant;
 import jdk.graal.compiler.replacements.nodes.LogNode;
 import jdk.graal.compiler.serviceprovider.GraalServices;
+import jdk.graal.compiler.serviceprovider.LibGraalService;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -272,6 +275,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected HotSpotAllocationSnippets.Templates allocationSnippets;
     protected MonitorSnippets.Templates monitorSnippets;
     protected ObjectEqualsSnippets.Templates objectEqualsSnippets;
+    protected IsFlatArraySnippets.Templates isFlatArraySnippets;
+    protected FlatArrayComponentSizeSnippets.Templates flatArrayComponentSizeSnippets;
     protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
     protected HotSpotG1WriteBarrierSnippets.Templates g1WriteBarrierSnippets;
     protected LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
@@ -325,6 +330,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         allocationSnippets = allocationSnippetTemplates;
         monitorSnippets = new MonitorSnippets.Templates(options, runtime, providers, config);
         objectEqualsSnippets = new ObjectEqualsSnippets.Templates(options, providers);
+        isFlatArraySnippets = new IsFlatArraySnippets.Templates(options, providers, target);
+        flatArrayComponentSizeSnippets = new FlatArrayComponentSizeSnippets.Templates(options, providers);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, runtime, providers, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, runtime, providers);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers);
@@ -583,6 +590,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (graph.getGuardsStage() == GuardsStage.AFTER_FSA) {
                 virtualThreadUpdateJFRSnippets.lower((VirtualThreadUpdateJFRNode) n, registers, tool);
             }
+        } else if (n instanceof IsFlatArrayNode) {
+            lowerIsFlatArray((IsFlatArrayNode) n, tool, graph);
+        } else if (n instanceof FlatArrayComponentSizeNode) {
+            lowerFlatArrayComponentSize((FlatArrayComponentSizeNode) n, tool, graph);
         } else {
             return false;
         }
@@ -751,6 +762,26 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             monitor.setObject(objectNonNull);
             monitor.setObjectData(graph.addOrUnique(LoadHubNode.create(objectNonNull, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection())));
         }
+    }
+
+    protected void lowerIsFlatArray(IsFlatArrayNode node, LoweringTool tool, StructuredGraph graph) {
+        ValueNode array = node.getValue();
+        assert node.getAnchor() instanceof FixedNode : "incorrect usage of isFlatArray";
+        array = createNullCheckedValue(array, (FixedNode) node.getAnchor(), tool);
+        EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode = graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array, (FixedNode) node.getAnchor()));
+        node.setValue(ensureRuntimeHubUsageNode);
+        isFlatArraySnippets.lower(node, tool);
+
+    }
+
+    protected void lowerFlatArrayComponentSize(FlatArrayComponentSizeNode node, LoweringTool tool, StructuredGraph graph) {
+        ValueNode array = node.getValue();
+        assert node.getAnchor() instanceof FixedNode : "incorrect usage of flatArrayComponentSizeNode";
+        array = createNullCheckedValue(array, (FixedNode) node.getAnchor(), tool);
+        EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode = graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array, (FixedNode) node.getAnchor()));
+        node.setValue(ensureRuntimeHubUsageNode);
+        flatArrayComponentSizeSnippets.lower(node, tool);
+
     }
 
     private void lowerKlassLayoutHelperNode(KlassLayoutHelperNode n, LoweringTool tool) {

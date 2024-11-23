@@ -224,6 +224,9 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int klassMiscFlagsOffset = getFieldOffset("Klass::_misc_flags._flags", Integer.class, "u1", 0, JDK >= 24);
     public final int klassLayoutHelperOffset = getFieldOffset("Klass::_layout_helper", Integer.class, "jint");
     public final int klassProtoTypeHeaderOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord");
+    public final int klassKind = getFieldOffset("Klass::_kind", Integer.class, "Klass::KlassKind const");
+    public final int klassFlatArrayKlassKind = getConstant("Klass::FlatArrayKlassKind", Integer.class);
+    public final int flatArrayPattern = getConstant("markWord::flat_array_pattern", Integer.class);
 
     public final int klassLayoutHelperNeutralValue = getConstant("Klass::_lh_neutral_value", Integer.class);
     public final int layoutHelperLog2ElementSizeShift = getConstant("Klass::_lh_log2_element_size_shift", Integer.class);
@@ -386,7 +389,9 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
      */
     public final int uninitializedIdentityHashCodeValue = getConstant("markWord::no_hash", Integer.class);
 
-    public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry", Integer.class, "address");
+    // public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
+    // Integer.class, "address");
+    public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_inline_entry", Integer.class, "address");
 
     public final int compilationLevelFullOptimization = getConstant("CompLevel_full_optimization", Integer.class);
 
