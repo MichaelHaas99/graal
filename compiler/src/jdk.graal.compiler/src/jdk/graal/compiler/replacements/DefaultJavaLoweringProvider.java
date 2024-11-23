@@ -580,7 +580,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool) {
-        int arrayBaseOffset = metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
+        int arrayBaseOffset = storeIndexed.isFlatAccess() ? metaAccess.getFlatArrayBaseOffset() + storeIndexed.getAdditionalOffset() : metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
         lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset);
     }
 
@@ -625,7 +625,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
         BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
         ValueNode positiveIndex = createPositiveIndex(graph, storeIndexed.index(), boundsCheck);
-        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex);
+        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
         WriteNode memoryWrite = graph.add(new WriteNode(address, NamedLocationIdentity.getArrayLocation(storageKind), implicitStoreConvert(graph, storageKind, value),
                         barrierType, MemoryOrderMode.PLAIN));
         memoryWrite.setGuard(boundsCheck);
