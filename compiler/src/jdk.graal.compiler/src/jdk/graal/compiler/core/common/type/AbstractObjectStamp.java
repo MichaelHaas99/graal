@@ -28,7 +28,6 @@ import java.util.AbstractList;
 import java.util.Objects;
 import java.util.RandomAccess;
 
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -101,8 +100,10 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     @Override
     public boolean canBeInlineTypeArray() {
-        // empty type or array or null can't be inline types
-        if (isEmpty() || alwaysNull() || !isAlwaysArray())
+        ResolvedJavaType componentType = type().getComponentType();
+        // empty type, null, no array, multidimensional or primitve arrays can't be inline type
+        // arrays
+        if (isEmpty() || alwaysNull() || !isAlwaysArray() || componentType != null && (componentType.isArray() || componentType.getJavaKind() != JavaKind.Object))
             return false;
         if (!isExactType()) {
             // merge which resulted in object class as superclass array
@@ -113,12 +114,13 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             if (type().isAbstract() || type().isInterface())
                 return true;
         }
-        return !type().isIdentity();
+        return componentType == null || !componentType.isIdentity();
     }
 
     @Override
     public boolean isInlineTypeArray() {
-        return nonNull() && isAlwaysArray() && isExactType() && ((HotSpotResolvedObjectType) type).isFlatArray() && !type().isIdentity();
+        ResolvedJavaType componentType = type().getComponentType();
+        return isAlwaysArray() && isExactType() && !componentType.isArray() && componentType.getJavaKind() == JavaKind.Object && !componentType.isIdentity();
     }
 
     @Override
