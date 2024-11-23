@@ -33,10 +33,6 @@ public class IsFlatArrayNode extends LogicNode implements Canonicalizable.Unary<
         this.anchor = anchor;
     }
 
-    public IsFlatArrayNode(ValueNode value) {
-        this(value, null);
-    }
-
     @Override
     public ValueNode getValue() {
         return value;

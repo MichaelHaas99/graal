@@ -301,7 +301,7 @@ public class ObjectEqualsSnippets implements Snippets {
 
         // inline field comparison
         if (inlineComparison) {
-            trace(trace, "inline type comparison");
+            trace(trace, "inline comparison");
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];

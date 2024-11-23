@@ -227,12 +227,15 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int klassKind = getFieldOffset("Klass::_kind", Integer.class, "Klass::KlassKind const");
     public final int klassFlatArrayKlassKind = getConstant("Klass::FlatArrayKlassKind", Integer.class);
     public final int flatArrayPattern = getConstant("markWord::flat_array_pattern", Integer.class);
+    public final int nullFreeArrayPattern = getConstant("markWord::null_free_array_pattern", Integer.class);
 
     public final int klassLayoutHelperNeutralValue = getConstant("Klass::_lh_neutral_value", Integer.class);
     public final int layoutHelperLog2ElementSizeShift = getConstant("Klass::_lh_log2_element_size_shift", Integer.class);
     public final int layoutHelperLog2ElementSizeMask = getConstant("Klass::_lh_log2_element_size_mask", Integer.class);
     public final int layoutHelperHeaderSizeShift = getConstant("Klass::_lh_header_size_shift", Integer.class);
     public final int layoutHelperHeaderSizeMask = getConstant("Klass::_lh_header_size_mask", Integer.class);
+    public final int layoutHelperNullFreeShift = getConstant("Klass::_lh_null_free_shift", Integer.class);
+    public final int layoutHelperNullFreeMask = getConstant("Klass::_lh_null_free_mask", Integer.class);
 
     public final int instanceKlassInitStateOffset = getFieldOffset("InstanceKlass::_init_state", Integer.class, "InstanceKlass::ClassState");
     public final int instanceKlassInitThreadOffset = getFieldOffset("InstanceKlass::_init_thread", Integer.class, "JavaThread*");

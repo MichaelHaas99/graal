@@ -378,6 +378,11 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static int nullFreeArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.nullFreeArrayPattern;
+    }
+
+    @Fold
     public static int jvmAccHasFinalizer(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.jvmAccHasFinalizer;
     }
@@ -975,6 +980,16 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int layoutHelperLog2ElementSizeMask(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.layoutHelperLog2ElementSizeMask;
+    }
+
+    @Fold
+    public static int layoutHelperNullFreeShift(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.layoutHelperNullFreeShift;
+    }
+
+    @Fold
+    public static int layoutHelperNullFreeMask(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.layoutHelperNullFreeMask;
     }
 
     @NodeIntrinsic(ForeignCallNode.class)
