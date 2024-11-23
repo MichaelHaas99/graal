@@ -170,6 +170,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
     }
 
+    private static int substitutabilityChecks = 0;
+
     private static LogicNode virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, StructuredGraph graph, VirtualizerTool tool) {
         if (virtual instanceof VirtualBoxingNode virtualBoxingNode && other.isConstant()) {
             if (virtualBoxingNode.getBoxingKind() == JavaKind.Boolean) {
@@ -185,7 +187,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
 
         if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant())) {
-            // one of them is virtual and the other one maybe null: they can never be the same
+            // one of them is virtual and has identity or the other is null: they can never be the
+            // same
             // objects
             return LogicConstantNode.contradiction(graph);
         }
@@ -246,8 +249,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
                                     result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                     tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
-                                    if (!(result instanceof ObjectEqualsNode node) || node.substituabilityCheck()) {
-                                        result = null;
+                                    if (result instanceof ObjectEqualsNode node && node.substituabilityCheck()) {
+                                        substitutabilityChecks++;
                                     }
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
                                     ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,
@@ -259,7 +262,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
                             }
 
-                            // result = result instanceof LogicConstantNode ? result : null;
 
                             if (result == null) {
                                 // field comparison result not known at compile time, but continue
@@ -274,12 +276,10 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             newCondition = LogicConstantNode.and(newCondition, result, null);
                         }
 
-                        if (comparisonResultUnknown)
+                        if (comparisonResultUnknown || substitutabilityChecks > 1)
                             return null;
 
                         return newCondition;
-                        // all fields are equal
-                        // return LogicConstantNode.tautology(graph);
                     }
                 }
             } else {
