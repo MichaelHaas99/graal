@@ -35,8 +35,6 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
@@ -54,7 +52,8 @@ import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-
+import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -71,6 +70,36 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable, Canonicalizable, Simplifiable, MemoryAccess {
 
     public static final NodeClass<LoadIndexedNode> TYPE = NodeClass.create(LoadIndexedNode.class);
+
+    private int additionalOffset = 0;
+
+    public int getAdditionalOffset() {
+        return additionalOffset;
+    }
+
+    public void setAdditionalOffset(int additionalOffset) {
+        this.additionalOffset = additionalOffset;
+    }
+
+    private boolean flatAccess = false;
+
+    public boolean isFlatAccess() {
+        return flatAccess;
+    }
+
+    public void setFlatAccess(boolean flatAccess) {
+        this.flatAccess = flatAccess;
+    }
+
+    @OptionalInput private ValueNode shift;
+
+    public ValueNode getShift() {
+        return shift;
+    }
+
+    public void setShift(ValueNode shift) {
+        this.shift = shift;
+    }
 
     /**
      * Creates a new LoadIndexedNode.
