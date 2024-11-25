@@ -149,6 +149,7 @@ import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.tiers.CompilerConfiguration;
 import jdk.graal.compiler.replacements.InlineDuringParsingPlugin;
+import jdk.graal.compiler.replacements.InlineTypePlugin;
 import jdk.graal.compiler.replacements.IntrinsicGraphBuilder;
 import jdk.graal.compiler.replacements.InvocationPluginHelper;
 import jdk.graal.compiler.replacements.MethodHandlePlugin;
@@ -217,6 +218,7 @@ public class HotSpotGraphBuilderPlugins {
         InvocationPlugins invocationPlugins = new HotSpotInvocationPlugins(graalRuntime, config, compilerConfiguration, options, target);
 
         Plugins plugins = new Plugins(invocationPlugins);
+        plugins.appendNodePlugin(new InlineTypePlugin());
         plugins.appendNodePlugin(new HotSpotExceptionDispatchPlugin(config, wordTypes.getWordKind()));
         StandardGraphBuilderPlugins.registerConstantFieldLoadPlugin(plugins);
         if (!IS_IN_NATIVE_IMAGE) {
