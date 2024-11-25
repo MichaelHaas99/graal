@@ -77,6 +77,48 @@ public class BC_aaload_flattened extends JTTTest {
         return va[1].l;
     }
 
+    static abstract value class A{}
+    static value class B{}
+    static class C extends A{}
+    static Object test2(boolean b){
+        Object[] a;
+        if(b){
+            a=new B[1];
+        }else{
+            a= new C[1];
+        }
+        return a;
+    }
+
+    static final int LEN = 200;
+
+    static class MyObject {
+        long val = Integer.MAX_VALUE;
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class ManyOops {
+        MyObject o1 = new MyObject();
+        MyObject o2 = new MyObject();
+        MyObject o3 = new MyObject();
+        MyObject o4 = new MyObject();
+
+        long hash() {
+            return o1.val + o2.val + o3.val + o4.val;
+        }
+    }
+
+    //private static ManyOops[] array = (ManyOops[])ValueClass.newNullRestrictedArray(ManyOops.class, LEN);
+
+    static ManyOops createValueClassArray() {
+        ManyOops[] array = (ManyOops[])ValueClass.newNullRestrictedArray(ManyOops.class, LEN);
+        for (int i = 0; i < LEN; ++i) {
+            array[i] = new ManyOops();
+        }
+        return array[0];
+    }
+
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
     private static Value0[] va = (Value0[])ValueClass.newNullRestrictedArray(Value0.class, 2);
     //private static final Value0[] va = new Value0[2];
@@ -91,6 +133,16 @@ public class BC_aaload_flattened extends JTTTest {
     @Test
     public void run1() throws Throwable {
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test");
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test2", false);
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "createValueClassArray");
     }
 
 }
