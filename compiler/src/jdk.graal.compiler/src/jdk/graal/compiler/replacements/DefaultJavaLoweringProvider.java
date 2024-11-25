@@ -597,7 +597,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         JavaKind storageKind = storeIndexed.elementKind();
 
         LogicNode condition = null;
-        if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value)) {
+        if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value) && !storeIndexed.isFlatAccess()) {
             /* Array store check. */
             TypeReference arrayType = StampTool.typeReferenceOrNull(array);
             if (arrayType != null && arrayType.isExact()) {
