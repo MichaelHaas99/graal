@@ -48,15 +48,27 @@ Graal support for the new semantics introduced in JEP 401
 - usage of acmp profiling data
 - inlining of equality comparison instead of slow call to Java library
 
+optimizations for JEP 401
+
+- access and store operations on null-restricted flat fields
+- access and store operations on null-restricted flat arrays
+
 ### Working on
 
-- Support for flattened inline types in objects and arrays
-  - need to refactor it into a node plugin
+- refactoring of bytecode parser changes into a node plugin
+- flattened inline type fields
+  - empty inline types can be optimized, not yet considered. maybe cause problem if flat?
+  - getfields on flattened fields can be delayed to avoid creation of unused nodes
+- flat arrays
+  - use profiling data for flat arrays
+  - if inline type is not known at compile time do a runtime call (deoptimization at the moment)
+
 - Nullable flattened inline types cause problems in the JVM
   - can't test my implementation (also not yet implemented in C1 and C2)
+  - wait for changes on the valhalla repo
+
+- `Assert.java` maybe needs to be compiled with the preview feature? delivers wrong results for substitutability check
 
 ### Future work/ideas:
 
 - Scalarization of inline types which are function arguments or return values
-  - start with avoiding jump to scalarization entry point when the option is enabled
-  - decide if it is worth it to also implement it in Graal
