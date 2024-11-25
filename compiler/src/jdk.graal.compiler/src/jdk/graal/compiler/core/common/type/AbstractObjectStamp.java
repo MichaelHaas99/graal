@@ -100,27 +100,32 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     @Override
     public boolean canBeInlineTypeArray() {
+        // empty type, null, no array can't be inline type arrays
+        if (isEmpty() || alwaysNull() || !isAlwaysArray())
+            return false;
+
         ResolvedJavaType componentType = type().getComponentType();
-        // empty type, null, no array, multidimensional or primitve arrays can't be inline type
-        // arrays
-        if (isEmpty() || alwaysNull() || !isAlwaysArray() || componentType != null && (componentType.isArray() || componentType.getJavaKind() != JavaKind.Object))
+        assert componentType != null : "stamp is always array, so component type of resolved type can't be null";
+
+        // multidimensional array is no inline type array as well as array of primitives
+        if (componentType.isArray() || componentType.isPrimitive())
             return false;
         if (!isExactType()) {
-            // merge which resulted in object class as superclass array
-            if (type() == null)
+            // merge which resulted in object class as superclass for array elements
+            if (componentType.isJavaLangObject())
                 return true;
 
             // interface or abstract class can be a supertype of an inline type
-            if (type().isAbstract() || type().isInterface())
+            if (componentType.isAbstract() || componentType.isInterface())
                 return true;
         }
-        return componentType == null || !componentType.isIdentity();
+        return !componentType.isIdentity();
     }
 
     @Override
     public boolean isInlineTypeArray() {
         ResolvedJavaType componentType = type().getComponentType();
-        return isAlwaysArray() && isExactType() && !componentType.isArray() && componentType.getJavaKind() == JavaKind.Object && !componentType.isIdentity();
+        return isAlwaysArray() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
     }
 
     @Override

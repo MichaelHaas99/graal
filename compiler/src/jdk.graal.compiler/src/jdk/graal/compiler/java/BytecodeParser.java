@@ -4637,6 +4637,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                                     currentState);
                     // array not known to be flat
                 } else {
+                    // TODO: check if inline class has no flat array class, in this case check that
+                    // the null restriction
+                    // is fulfilled
                     // runtime check necessary
 
                     ValueAnchorNode anchor = append(new ValueAnchorNode());
@@ -4657,9 +4660,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
                     // flat array
                     lastInstr = trueBegin;
-                    anchor = append(new ValueAnchorNode());
-                    ValueNode shift = append(new FlatArrayComponentSizeNode(array, anchor));
-                    genFlattenedArrayStoreField((HotSpotResolvedObjectType) resolvedType.getComponentType(), value, array, index, boundsCheck, storeCheck, shift, currentState);
+
+                    int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
+                    genFlattenedArrayStoreField((HotSpotResolvedObjectType) resolvedType.getComponentType(), value, array, index, boundsCheck, storeCheck, ConstantNode.forInt(shift, graph),
+                                    currentState);
                     lastInstr.setNext(trueEnd);
 
                     // no flat array
@@ -5123,6 +5127,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     ResolvedJavaType singleType = profile.asSingleType();
                     if (singleType != null && checkedType.getType().isAssignableFrom(singleType)) {
                         LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
+                        if (singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                            // also check against the flat array class
+                            LogicNode flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+                            typeCheck = append(LogicNode.or(typeCheck, flatArrayTypeCheck, BranchProbabilityData.unknown()));
+                        }
                         if (typeCheck.isTautology()) {
                             castNode = object;
                         } else {
@@ -5138,6 +5147,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         boolean nonNull = ((ObjectStamp) object.stamp(NodeView.DEFAULT)).nonNull();
         if (castNode == null) {
             LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, null));
+            if (resolvedType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                // also check against the flat array class
+                TypeReference flatArrayCheckedType = TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray());
+                LogicNode flatArrayTypeCheck = append(createInstanceOf(flatArrayCheckedType, object, profile));
+                condition = append(LogicNode.or(condition, flatArrayTypeCheck, BranchProbabilityData.unknown()));
+            }
             if (condition.isTautology()) {
                 castNode = object;
             } else {
