@@ -29,7 +29,7 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleLoadField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
-        ValueNode fieldRead;
+
         if (field.isFlat()) {
             if (!field.isNullFreeInlineType()) {
                 // field is flat and nullable
@@ -42,7 +42,7 @@ public class InlineTypePlugin implements NodePlugin {
 
                 BeginNode trueBegin = b.getGraph().add(new BeginNode());
                 BeginNode falseBegin = b.getGraph().add(new BeginNode());
-                IfNode ifNode = b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+                b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
 
                 // true branch
                 EndNode trueEnd = b.add(new EndNode());
@@ -60,16 +60,13 @@ public class InlineTypePlugin implements NodePlugin {
 
                 ConstantNode nullPointer = b.add(ConstantNode.forConstant(JavaConstant.NULL_POINTER, b.getMetaAccess()));
 
-                ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), merge,
+                b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), merge,
                                 nullPointer, instance));
-
-                fieldRead = phiNode;
 
             } else {
                 // field is flat and null restricted
-                fieldRead = genGetLoadFlatField(b, object, (HotSpotResolvedObjectType) field.getType(), field.getOffset());
+                genGetLoadFlatField(b, object, (HotSpotResolvedObjectType) field.getType(), field.getOffset());
             }
-            b.push(JavaKind.Object, fieldRead);
             return true;
         }
         return false;
@@ -78,6 +75,7 @@ public class InlineTypePlugin implements NodePlugin {
     private ValueNode genGetLoadFlatField(GraphBuilderContext b, ValueNode object, HotSpotResolvedObjectType fieldType, int srcOff) {
 
         NewInstanceNode newInstance = b.add(new NewInstanceNode(fieldType, false));
+        b.push(JavaKind.Object, newInstance);
 
         ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
 

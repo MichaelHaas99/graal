@@ -6,7 +6,7 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 
@@ -16,18 +16,18 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
  * normal array hub.
  */
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
-public class EnsureRuntimeHubUsageNode extends FloatingGuardedNode implements LIRLowerable {
+public class EnsureRuntimeHubUsageNode extends FloatingNode implements LIRLowerable {
 
     public static final NodeClass<EnsureRuntimeHubUsageNode> TYPE = NodeClass.create(EnsureRuntimeHubUsageNode.class);
     @Input ValueNode object;
 
-    protected EnsureRuntimeHubUsageNode(NodeClass<? extends FloatingGuardedNode> c, ValueNode object, GuardingNode guard) {
-        super(c, StampFactory.objectNonNull(), guard);
+    protected EnsureRuntimeHubUsageNode(NodeClass<EnsureRuntimeHubUsageNode> c, ValueNode object) {
+        super(c, StampFactory.objectNonNull());
         this.object = object;
     }
 
-    public static EnsureRuntimeHubUsageNode create(ValueNode object, ValueNode guard) {
-        return new EnsureRuntimeHubUsageNode(TYPE, object, (GuardingNode) guard);
+    public static EnsureRuntimeHubUsageNode create(ValueNode object) {
+        return new EnsureRuntimeHubUsageNode(TYPE, object);
     }
 
     public ValueNode object() {

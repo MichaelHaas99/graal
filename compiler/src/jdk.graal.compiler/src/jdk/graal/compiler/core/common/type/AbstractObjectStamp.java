@@ -28,6 +28,7 @@ import java.util.AbstractList;
 import java.util.Objects;
 import java.util.RandomAccess;
 
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -85,11 +86,8 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             // merge which resulted in object class as superclass
             if (type() == null)
                 return true;
-
-            // interface or abstract class can be a supertype of an inline type
-            if (type().isAbstract() || type().isInterface())
-                return true;
         }
+        // abstract class also needs to specify value keyword, interface does not have identity
         return !type().isIdentity();
     }
 
@@ -104,6 +102,8 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         if (isEmpty() || alwaysNull() || !isAlwaysArray())
             return false;
 
+        if (type() == null)
+            return true;
         ResolvedJavaType componentType = type().getComponentType();
         assert componentType != null : "stamp is always array, so component type of resolved type can't be null";
 
@@ -115,15 +115,14 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             if (componentType.isJavaLangObject())
                 return true;
 
-            // interface or abstract class can be a supertype of an inline type
-            if (componentType.isAbstract() || componentType.isInterface())
-                return true;
         }
         return !componentType.isIdentity();
     }
 
     @Override
     public boolean isInlineTypeArray() {
+        if (type() == null)
+            return false;
         ResolvedJavaType componentType = type().getComponentType();
         return isAlwaysArray() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
     }
@@ -191,11 +190,12 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         } else {
             // Append "[]" for arrays, but only if it's not included in the type.
             boolean forceArrayNotation = alwaysArray && !(type != null && type.isArray());
+            boolean flatArray = type != null && type.isArray() && type instanceof HotSpotResolvedObjectType objectType && objectType.isFlatArray();
             str.append(nonNull() ? "!" : "").//
                             append(exactType ? "#" : "").//
                             append(' ').//
                             append(type == null ? "java.lang.Object" : type.toJavaName()).//
-                            append(forceArrayNotation ? "[]" : "").//
+                            append(forceArrayNotation ? (flatArray ? "[]flat" : "[]") : "").//
                             append(alwaysNull() ? " NULL" : "");
         }
     }
