@@ -799,8 +799,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         ValueNode array = node.getValue();
         assert node.getAnchor() instanceof FixedNode : "incorrect usage of isFlatArray";
         array = createNullCheckedValue(array, (FixedNode) node.getAnchor(), tool);
-        EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode = graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
-        node.setValue(ensureRuntimeHubUsageNode);
+        node.setValue(array);
         isFlatArraySnippets.lower(node, tool);
 
     }
