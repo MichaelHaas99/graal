@@ -259,7 +259,7 @@ public class ReadNode extends FloatableAccessNode
                 long displacement = offset.asJavaConstant().asLong();
                 int stableDimension = ((ConstantNode) object).getStableDimension();
 
-                if (locationIdentity.isImmutable() || stableDimension > 0) {
+                if ((locationIdentity.isImmutable() || stableDimension > 0)) {
                     Constant constant = resultStamp.readConstant(constantReflection.getMemoryAccessProvider(), object.asConstant(), displacement, accessStamp);
                     boolean isDefaultStable = locationIdentity.isImmutable() || ((ConstantNode) object).isDefaultStable();
                     if (constant != null && (isDefaultStable || !constant.isDefaultForKind())) {
@@ -278,7 +278,7 @@ public class ReadNode extends FloatableAccessNode
                 }
             }
         }
-        if (locationIdentity instanceof CanonicalizableLocation) {
+        if (locationIdentity instanceof CanonicalizableLocation && !object.stamp(view).canBeInlineTypeArray()) {
             CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
             ValueNode result = canonicalize.canonicalizeRead(read, object, offset, view, tool);
             assert result != null;
