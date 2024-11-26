@@ -62,12 +62,11 @@ optimizations for JEP 401
 - flat arrays
   - use profiling data for flat arrays
   - if inline type is not known at compile time do a runtime call (deoptimization at the moment)
+  - API for flat arrays in JVMCI
 
 - Nullable flattened inline types cause problems in the JVM
   - can't test my implementation (also not yet implemented in C1 and C2)
   - wait for changes on the valhalla repo
-
-- `Assert.java` maybe needs to be compiled with the preview feature? delivers wrong results for substitutability check
 
 ### Future work/ideas:
 

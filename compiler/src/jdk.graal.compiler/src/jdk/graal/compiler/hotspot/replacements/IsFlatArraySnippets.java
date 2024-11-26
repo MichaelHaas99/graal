@@ -46,7 +46,7 @@ public class IsFlatArraySnippets implements Snippets {
             SnippetTemplate.Arguments args;
             if (node instanceof IsFlatArrayNode isFlatArrayNode) {
                 StructuredGraph graph = node.graph();
-                assert ((ObjectStamp) isFlatArrayNode.getValue().stamp(NodeView.DEFAULT)).nonNull();
+                assert ((ObjectStamp) isFlatArrayNode.getValue().stamp(NodeView.DEFAULT)).nonNull() : "expected a non null value";
                 if (target.wordSize > 4) {
                     args = new SnippetTemplate.Arguments(isFlatArrayFromMarkWordSnippet, graph.getGuardsStage(), tool.getLoweringStage());
                     args.add("object", isFlatArrayNode.getValue());
