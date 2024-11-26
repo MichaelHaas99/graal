@@ -392,9 +392,10 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
      */
     public final int uninitializedIdentityHashCodeValue = getConstant("markWord::no_hash", Integer.class);
 
-    // public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
-    // Integer.class, "address");
-    public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_inline_entry", Integer.class, "address");
+    public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
+                    Integer.class, "address");
+    // public final int methodCompiledEntryOffset =
+    // getFieldOffset("Method::_from_compiled_inline_entry", Integer.class, "address");
 
     public final int compilationLevelFullOptimization = getConstant("CompLevel_full_optimization", Integer.class);
 
