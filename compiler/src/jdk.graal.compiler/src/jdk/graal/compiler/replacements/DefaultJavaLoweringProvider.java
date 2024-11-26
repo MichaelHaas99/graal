@@ -63,6 +63,7 @@ import jdk.graal.compiler.nodes.ComputeObjectAddressNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
+import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
@@ -105,6 +106,7 @@ import jdk.graal.compiler.nodes.extended.ClassIsArrayNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.extended.JavaReadNode;
 import jdk.graal.compiler.nodes.extended.JavaWriteNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
@@ -592,11 +594,29 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
         array = this.createNullCheckedValue(array, storeIndexed, tool);
 
+        // create a guard for store operations into null free arrays
+        if (!StampTool.isPointerNonNull(value) && storeIndexed.elementKind().isObject() && !storeIndexed.isFlatAccess()) {
+            LogicNode storeIsNull = graph.unique(IsNullNode.create(value));
+            IsNullFreeArrayNode arrayIsNullFreeRead = new IsNullFreeArrayNode(array);
+            arrayIsNullFreeRead = graph.addOrUnique(arrayIsNullFreeRead);
+            graph.addBeforeFixed(storeIndexed, arrayIsNullFreeRead);
+            LogicNode arrayIsNullFree = graph.addOrUnique(new IntegerEqualsNode(arrayIsNullFreeRead, ConstantNode.forInt(1, graph)));
+
+            arrayIsNullFree = graph.addOrUnique(arrayIsNullFree);
+
+            FixedGuardNode guardNode = graph.addOrUnique(
+                            new FixedGuardNode(graph.addOrUnique(LogicNode.and(storeIsNull, arrayIsNullFree, BranchProbabilityData.unknown())), NullCheckException, DeoptimizationAction.None, true));
+
+            graph.addBeforeFixed(storeIndexed, guardNode);
+
+        }
+
         GuardingNode boundsCheck = getBoundsCheck(storeIndexed, array, tool);
 
         JavaKind storageKind = storeIndexed.elementKind();
 
         LogicNode condition = null;
+        // for flat access, stores are known to be correct
         if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value) && !storeIndexed.isFlatAccess()) {
             /* Array store check. */
             TypeReference arrayType = StampTool.typeReferenceOrNull(array);

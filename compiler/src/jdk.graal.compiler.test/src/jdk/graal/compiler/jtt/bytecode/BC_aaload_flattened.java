@@ -119,6 +119,61 @@ public class BC_aaload_flattened extends JTTTest {
         return array[0];
     }
 
+    static interface TestA{}
+    static class TestB implements TestA{}
+    static class TestC implements TestA{}
+
+    static boolean test3(boolean variable, TestA input){
+        TestA result;
+        if(variable){
+            result = new TestC();
+        }else{
+            result =input;
+        }
+        return result == input;
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    value class MyValue1 {
+        int x = 42;
+        int[] array = new int[1];
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    value class MyValue2 {
+        int[] a = new int[1];
+        int[] b = new int[6];
+        int[] c = new int[5];
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    value class MyValue3 {
+        int[] intArray = new int[1];
+        float[] floatArray = new float[1];
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    value class MyValue4 {
+        short b = 2;
+        int c = 8;
+    }
+    void test15() {
+        MyValue4 val = new MyValue4();
+        for (int i = 0; i < 10; ++i) {
+            for (int j = 0; j < 10; ++j) {
+                MyValue4[] array = (MyValue4[])ValueClass.newNullRestrictedArray(MyValue4.class, 1);
+                for (int k = 0; k < 10; ++k) {
+                    array[0] = val;
+                    val = array[0];
+                }
+            }
+        }
+    }
+
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
     private static Value0[] va = (Value0[])ValueClass.newNullRestrictedArray(Value0.class, 2);
     //private static final Value0[] va = new Value0[2];
@@ -143,6 +198,11 @@ public class BC_aaload_flattened extends JTTTest {
     @Test
     public void run3() throws Throwable {
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "createValueClassArray");
+    }
+
+    @Test
+    public void run4() throws Throwable {
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test15");
     }
 
 }

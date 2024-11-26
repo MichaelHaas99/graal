@@ -74,7 +74,8 @@ public class BC_aastore_flattened extends JTTTest {
     // and test0 checks that updating the null marker doesn't corrupt
     // the surrounding fields and vice-versa.
     static Value0 test() {
-        va[1] = new Value0(2,3,(short)4,(byte)5);
+        //va[1] = new Value0(2,3,(short)4,(byte)5);
+        va[1] = null;
         return va[0];
     }
 
@@ -86,12 +87,16 @@ public class BC_aastore_flattened extends JTTTest {
     @Test
     public void run0() throws Throwable {
         //va[1] = new Value0(1,1,(short)1,(byte)1);
-        runTest(EnumSet.allOf(DeoptimizationReason.class), "test");
+        EnumSet set = EnumSet.allOf(DeoptimizationReason.class);
+        set.remove(DeoptimizationReason.NullCheckException);
+        runTest(set, "test");
     }
 
     @Test
     public void run1() throws Throwable {
-        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test");
+        EnumSet set = EnumSet.allOf(DeoptimizationReason.class);
+        set.remove(DeoptimizationReason.NullCheckException);
+        runTest(WITHOUT_PEA, set, "test");
     }
 
 }
