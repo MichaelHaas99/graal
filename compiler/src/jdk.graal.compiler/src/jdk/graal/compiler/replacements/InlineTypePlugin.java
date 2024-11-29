@@ -207,7 +207,7 @@ public class InlineTypePlugin implements NodePlugin {
 
                 int shift = resolvedType.getLog2ComponentSize();
                 b.push(elementKind,
-                                genArrayLoadFlatField(b, array, (HotSpotResolvedObjectType) resolvedType.getComponentType(), index, boundsCheck, shift));
+                                genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType, shift));
 
             } else if (resolvedType.convertToFlatArray().isFlatArray()) {
                 // runtime check necessary
@@ -218,7 +218,7 @@ public class InlineTypePlugin implements NodePlugin {
 
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
                 // true branch - flat array
-                NewInstanceNode instanceFlatArray = genArrayLoadFlatField(b, array, (HotSpotResolvedObjectType) resolvedType.getComponentType(), index, boundsCheck,
+                NewInstanceNode instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
                                 shift);
                 trueBegin.setNext(instanceFlatArray);
                 EndNode trueEnd = b.add(new EndNode());
@@ -257,7 +257,8 @@ public class InlineTypePlugin implements NodePlugin {
         return false;
     }
 
-    private NewInstanceNode genArrayLoadFlatField(GraphBuilderContext b, ValueNode array, HotSpotResolvedObjectType componentType, ValueNode index, GuardingNode boundsCheck, int shift) {
+    private NewInstanceNode genArrayLoadFlatField(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift) {
+        HotSpotResolvedObjectType componentType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
         NewInstanceNode newInstance = b.add(new NewInstanceNode(componentType, false));
         b.push(JavaKind.Object, newInstance);
 
@@ -297,11 +298,11 @@ public class InlineTypePlugin implements NodePlugin {
 
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
             if (resolvedType.isFlatArray()) {
-                // array not known to be flat
+                // array known to be flat
 
                 int shift = resolvedType.getLog2ComponentSize();
-                b.push(elementKind,
-                                genArrayLoadFlatField(b, array, (HotSpotResolvedObjectType) resolvedType.getComponentType(), index, boundsCheck, shift));
+                genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
+                                value, shift);
 
             } else if (resolvedType.convertToFlatArray().isFlatArray()) {
                 // runtime check necessary
@@ -313,8 +314,8 @@ public class InlineTypePlugin implements NodePlugin {
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
 
                 // true branch - flat array
-                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, (HotSpotResolvedObjectType) resolvedType.getComponentType(), index, boundsCheck, storeCheck,
-                                shift, value);
+                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
+                                value, shift);
                 EndNode trueEnd = b.add(new EndNode());
                 if (firstFixedNode instanceof FixedNode fixedNode) {
                     trueBegin.setNext(fixedNode);
@@ -348,10 +349,10 @@ public class InlineTypePlugin implements NodePlugin {
         return false;
     }
 
-    private ValueNode genArrayStoreFlatField(GraphBuilderContext b, ValueNode array, HotSpotResolvedObjectType componentType, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck,
-                    int shift,
-                    ValueNode value) {
-        ResolvedJavaField[] innerFields = componentType.getInstanceFields(true);
+    private ValueNode genArrayStoreFlatField(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
+                    ValueNode value, int shift) {
+        HotSpotResolvedObjectType elementType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
+        ResolvedJavaField[] innerFields = elementType.getInstanceFields(true);
 
         ValueNode returnValue = null;
 
@@ -360,7 +361,7 @@ public class InlineTypePlugin implements NodePlugin {
             assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
 
             // returned fields include a header offset of their holder
-            int off = innerField.getOffset() - componentType.firstFieldOffset();
+            int off = innerField.getOffset() - elementType.firstFieldOffset();
 
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
 
