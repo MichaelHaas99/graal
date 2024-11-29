@@ -83,15 +83,13 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
         this.flatAccess = flatAccess;
     }
 
-    @OptionalInput private ValueNode shift;
+    private int shift;
 
-    public ValueNode getShift() {
+    public int getShift() {
         return shift;
     }
 
-    public void setShift(ValueNode shift) {
-        assert shift == null || shift.isAlive() : "shift must be in a graph";
-        updateUsages(this.shift, shift);
+    public void setShift(int shift) {
         this.shift = shift;
     }
 
