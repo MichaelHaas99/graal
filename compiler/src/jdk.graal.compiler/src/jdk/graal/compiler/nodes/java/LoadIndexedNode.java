@@ -98,6 +98,8 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
     }
 
     public void setShift(ValueNode shift) {
+        assert shift == null || shift.isAlive() : "shift must be in a graph";
+        updateUsages(this.shift, shift);
         this.shift = shift;
     }
 

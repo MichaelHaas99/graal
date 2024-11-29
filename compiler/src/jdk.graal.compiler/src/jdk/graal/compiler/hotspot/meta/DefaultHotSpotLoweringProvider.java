@@ -796,9 +796,14 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     protected void lowerIsFlatArray(IsFlatArrayNode node, LoweringTool tool, StructuredGraph graph) {
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
+            return;
+        }
         ValueNode array = node.getValue();
-        assert node.getAnchor() instanceof FixedNode : "incorrect usage of isFlatArray";
-        array = createNullCheckedValue(array, (FixedNode) node.getAnchor(), tool);
+        array = createNullCheckedValue(array, node, tool);
+// EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode =
+// graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
+// node.setValue(ensureRuntimeHubUsageNode);
         node.setValue(array);
         isFlatArraySnippets.lower(node, tool);
 
@@ -810,8 +815,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         }
         ValueNode array = node.getValue();
         array = createNullCheckedValue(array, node, tool);
-        EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode = graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
-        node.setValue(ensureRuntimeHubUsageNode);
+// EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode =
+// graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
+        node.setValue(array);
         isNullFreeArraySnippets.lower(node, tool);
 
     }
