@@ -400,7 +400,6 @@ import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.StateSplitProxyNode;
-import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GeneratedInvocationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -4437,10 +4436,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 } else if (resolvedType.convertToFlatArray().isFlatArray()) {
                     // runtime check necessary
 
-                    ValueAnchorNode anchor = append(new ValueAnchorNode());
                     FixedWithNextNode previousInstruction = lastInstr;
 
-                    LogicNode condition = new IsFlatArrayNode(array, anchor);
+                    IsFlatArrayNode isFlatArrayNode = append(new IsFlatArrayNode(array));
+                    LogicNode condition = append(new IntegerEqualsNode(isFlatArrayNode, ConstantNode.forConstant(JavaConstant.INT_1, getMetaAccess(), graph)));
 
                     BeginNode trueBegin = graph.add(new BeginNode());
                     EndNode trueEnd = graph.add(new EndNode());
@@ -4582,10 +4581,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 } else if (resolvedType.convertToFlatArray().isFlatArray()) {
                     // array known to have a flat array representation, check at runtime
 
-                    ValueAnchorNode anchor = append(new ValueAnchorNode());
+
                     FixedWithNextNode previousInstruction = lastInstr;
 
-                    LogicNode condition = new IsFlatArrayNode(array, anchor);
+                    IsFlatArrayNode isFlatArrayNode = append(new IsFlatArrayNode(array));
+                    LogicNode condition = append(new IntegerEqualsNode(isFlatArrayNode, ConstantNode.forConstant(JavaConstant.INT_1, getMetaAccess(), graph)));
 
                     BeginNode trueBegin = graph.add(new BeginNode());
                     EndNode trueEnd = graph.add(new EndNode());
