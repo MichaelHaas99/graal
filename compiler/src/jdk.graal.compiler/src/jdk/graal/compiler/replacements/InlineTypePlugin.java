@@ -276,7 +276,7 @@ public class InlineTypePlugin implements NodePlugin {
                 loadIndexed.setFlatAccess(true);
                 // holder has no header so remove the header offset
                 loadIndexed.setAdditionalOffset(off);
-                loadIndexed.setShift(ConstantNode.forInt(shift, b.getGraph()));
+                loadIndexed.setShift(shift);
             }
 
             // new holder has a header
@@ -373,7 +373,7 @@ public class InlineTypePlugin implements NodePlugin {
                             storeCheck, innerField.getJavaKind(), load));
             node.setFlatAccess(true);
             node.setAdditionalOffset(off);
-            node.setShift(ConstantNode.forInt(shift, b.getGraph()));
+            node.setShift(shift);
 
             if (i == 0 && returnValue == null) {
                 returnValue = node;

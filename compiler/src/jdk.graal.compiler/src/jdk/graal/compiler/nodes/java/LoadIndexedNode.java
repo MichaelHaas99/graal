@@ -91,15 +91,13 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         this.flatAccess = flatAccess;
     }
 
-    @OptionalInput private ValueNode shift;
+    private int shift = -1;
 
-    public ValueNode getShift() {
+    public int getShift() {
         return shift;
     }
 
-    public void setShift(ValueNode shift) {
-        assert shift == null || shift.isAlive() : "shift must be in a graph";
-        updateUsages(this.shift, shift);
+    public void setShift(int shift) {
         this.shift = shift;
     }
 

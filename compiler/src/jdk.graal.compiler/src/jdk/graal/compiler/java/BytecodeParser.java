@@ -1597,7 +1597,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         add(new StoreIndexedNode(array, index, boundsCheck, storeCheck, kind, value));
     }
 
-    protected void genFlattenedStoreIndexed(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind kind, ValueNode value, int offset, ValueNode shift) {
+    protected void genFlattenedStoreIndexed(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind kind, ValueNode value, int offset, int shift) {
         StoreIndexedNode node = new StoreIndexedNode(array, index, boundsCheck, storeCheck, kind, value);
         node.setFlatAccess(true);
         node.setAdditionalOffset(offset);
@@ -4488,7 +4488,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
                     int shift = resolvedType.getLog2ComponentSize();
                     frameState.push(actualKind,
-                                    genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, boundsCheck, ConstantNode.forInt(shift, graph),
+                                    genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, boundsCheck, shift,
                                                     currentState));
                     // array not known to be flat
                 } else if (resolvedType.convertToFlatArray().isFlatArray()) {
@@ -4514,7 +4514,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     lastInstr = trueBegin;
                     int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
                     ValueNode instanceFromFlattened = genFlattenedArrayLoadField((HotSpotResolvedObjectType) resolvedType.getComponentType(), array, index, boundsCheck,
-                                    ConstantNode.forInt(shift, graph), currentState);
+                                    shift, currentState);
                     lastInstr.setNext(trueEnd);
 
                     // no flat array
@@ -4549,7 +4549,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
     }
 
-    private ValueNode genFlattenedArrayLoadField(HotSpotResolvedObjectType componentType, ValueNode receiver, ValueNode index, GuardingNode boundsCheck, ValueNode shift, FrameState state) {
+    private ValueNode genFlattenedArrayLoadField(HotSpotResolvedObjectType componentType, ValueNode receiver, ValueNode index, GuardingNode boundsCheck, int shift, FrameState state) {
         NewInstanceNode newInstance = new NewInstanceNode(componentType, false);
         append(newInstance);
 
@@ -4633,7 +4633,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
                     int shift = resolvedType.getLog2ComponentSize();
 
-                    genFlattenedArrayStoreField((HotSpotResolvedObjectType) resolvedType.getComponentType(), value, array, index, boundsCheck, storeCheck, ConstantNode.forInt(shift, graph),
+                    genFlattenedArrayStoreField((HotSpotResolvedObjectType) resolvedType.getComponentType(), value, array, index, boundsCheck, storeCheck, shift,
                                     currentState);
 
                 } else if (resolvedType.convertToFlatArray().isFlatArray()) {
@@ -4659,7 +4659,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     // flat array
                     lastInstr = trueBegin;
                     int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
-                    genFlattenedArrayStoreField((HotSpotResolvedObjectType) resolvedType.getComponentType(), value, array, index, boundsCheck, storeCheck, ConstantNode.forInt(shift, graph),
+                    genFlattenedArrayStoreField((HotSpotResolvedObjectType) resolvedType.getComponentType(), value, array, index, boundsCheck, storeCheck, shift,
                                     currentState);
                     lastInstr.setNext(trueEnd);
 
@@ -4695,7 +4695,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     private void genFlattenedArrayStoreField(HotSpotResolvedObjectType componentType, ValueNode value, ValueNode receiver, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck,
-                    ValueNode shift,
+                    int shift,
                     FrameState state) {
 
         ResolvedJavaField[] innerFields = componentType.getInstanceFields(true);
