@@ -85,12 +85,11 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    private List<StoreIndexedWrapper> wrappers = new ArrayList<>();
+    private final List<StoreIndexedWrapper> wrappers = new ArrayList<>();
 
     public List<StoreIndexedNode> getWriteOperations() {
         return wrappers.stream().map(w -> {
             StoreIndexedNode node = new StoreIndexedNode(array, index, getBoundsCheck(), storeCheck, w.elementKind, values.get(w.index));
-            node.setFlatAccess(true);
             node.setAdditionalOffset(w.additionalOffset);
             node.setShift(w.shift);
             return node;
@@ -140,10 +139,6 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
     public boolean hasSideEffect() {
         return true;
     }
-
-// public StoreIndexedNode[] getWriteOperations() {
-// return values;
-// }
 
     public StoreFlatIndexedNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind,
                     List<StoreFlatIndexedNode.StoreIndexedWrapper> writeOperations) {

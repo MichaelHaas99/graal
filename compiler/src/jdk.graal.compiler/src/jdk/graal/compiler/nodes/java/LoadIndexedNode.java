@@ -71,24 +71,18 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
 
     public static final NodeClass<LoadIndexedNode> TYPE = NodeClass.create(LoadIndexedNode.class);
 
-    private int additionalOffset = 0;
+    private int additionalOffset = -1;
 
     public int getAdditionalOffset() {
-        return additionalOffset;
+        return Math.max(additionalOffset, 0);
     }
 
     public void setAdditionalOffset(int additionalOffset) {
         this.additionalOffset = additionalOffset;
     }
 
-    private boolean flatAccess = false;
-
     public boolean isFlatAccess() {
-        return flatAccess;
-    }
-
-    public void setFlatAccess(boolean flatAccess) {
-        this.flatAccess = flatAccess;
+        return additionalOffset < 0;
     }
 
     private int shift = -1;
