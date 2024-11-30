@@ -634,7 +634,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 if (arrayType != null && arrayType.isExact()) {
                     ResolvedJavaType elementType = arrayType.getType().getComponentType();
                     if (!elementType.isJavaLangObject()) {
-                        TypeReference typeReference = TypeReference.createTrusted(storeIndexed.graph().getAssumptions(), elementType);
+                        TypeReference typeReference = TypeReference.createTrusted(graph.getAssumptions(), elementType);
                         LogicNode typeTest = graph.addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value));
                         condition = LogicNode.or(graph.unique(IsNullNode.create(value)), typeTest, BranchProbabilityNode.NOT_LIKELY_PROFILE);
                     }

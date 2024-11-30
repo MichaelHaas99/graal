@@ -1582,7 +1582,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected void genFlattenedStoreIndexed(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind kind, ValueNode value, int offset, int shift) {
         StoreIndexedNode node = new StoreIndexedNode(array, index, boundsCheck, storeCheck, kind, value);
-        node.setFlatAccess(true);
         node.setAdditionalOffset(offset);
         node.setShift(shift);
         add(node);
