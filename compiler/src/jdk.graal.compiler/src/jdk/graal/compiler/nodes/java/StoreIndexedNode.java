@@ -74,7 +74,7 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
     }
 
     public boolean isFlatAccess() {
-        return additionalOffset < 0;
+        return additionalOffset >= 0;
     }
 
     private int shift = -1;

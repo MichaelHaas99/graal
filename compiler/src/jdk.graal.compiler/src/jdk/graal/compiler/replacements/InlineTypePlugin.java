@@ -275,7 +275,6 @@ public class InlineTypePlugin implements NodePlugin {
 
             ValueNode load = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, innerField.getJavaKind(), b.getMetaAccess(), b.getConstantReflection()));
             if (load instanceof LoadIndexedNode loadIndexed) {
-                loadIndexed.setFlatAccess(true);
                 // holder has no header so remove the header offset
                 loadIndexed.setAdditionalOffset(off);
                 loadIndexed.setShift(shift);
@@ -359,6 +358,7 @@ public class InlineTypePlugin implements NodePlugin {
         List<ValueNode> readOperations = new ArrayList<>();
         List<StoreFlatIndexedNode.StoreIndexedWrapper> writeOperations = new ArrayList<>();
 
+        // empty inline type will have no fields
         ValueNode returnValue = null;
 
         for (int i = 0; i < innerFields.length; i++) {
