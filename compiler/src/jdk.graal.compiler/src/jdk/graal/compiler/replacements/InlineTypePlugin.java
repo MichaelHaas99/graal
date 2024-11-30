@@ -105,11 +105,12 @@ public class InlineTypePlugin implements NodePlugin {
             LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off)));
 
             // new holder has a header
-            StoreFieldNode storeFieldNode = b.add(new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind())));
+            StoreFieldNode storeFieldNode = new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind()));
             if (i != innerFields.length - 1) {
                 // only last store should have a valid framestate
-                storeFieldNode.setStateAfter(b.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                storeFieldNode.noSideEffect();
             }
+            b.add(storeFieldNode);
 
         }
         b.add(new FinalFieldBarrierNode(newInstance));
@@ -280,11 +281,12 @@ public class InlineTypePlugin implements NodePlugin {
             }
 
             // new holder has a header
-            StoreFieldNode storeFieldNode = b.add(new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind())));
+            StoreFieldNode storeFieldNode = new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind()));
             if (i != innerFields.length - 1) {
                 // only last store should have a valid framestate
-                storeFieldNode.setStateAfter(b.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                storeFieldNode.noSideEffect();
             }
+            b.add(storeFieldNode);
 
         }
         b.add(new FinalFieldBarrierNode(newInstance));
