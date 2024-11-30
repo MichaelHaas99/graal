@@ -63,24 +63,18 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
 
     public static final NodeClass<StoreIndexedNode> TYPE = NodeClass.create(StoreIndexedNode.class);
 
-    private int additionalOffset = 0;
+    private int additionalOffset = -1;
 
     public int getAdditionalOffset() {
-        return additionalOffset;
+        return Math.max(additionalOffset, 0);
     }
 
     public void setAdditionalOffset(int additionalOffset) {
         this.additionalOffset = additionalOffset;
     }
 
-    private boolean flatAccess = false;
-
     public boolean isFlatAccess() {
-        return flatAccess;
-    }
-
-    public void setFlatAccess(boolean flatAccess) {
-        this.flatAccess = flatAccess;
+        return additionalOffset < 0;
     }
 
     private int shift = -1;

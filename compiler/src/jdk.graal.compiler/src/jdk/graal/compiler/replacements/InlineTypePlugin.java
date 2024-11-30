@@ -379,7 +379,6 @@ public class InlineTypePlugin implements NodePlugin {
             // StoreIndexedNode node = b.add(new StoreIndexedNode(array, index, boundsCheck,
             // storeCheck, innerField.getJavaKind(), load));
             StoreIndexedNode node = new StoreIndexedNode(array, index, boundsCheck, storeCheck, innerField.getJavaKind(), load);
-            node.setFlatAccess(true);
             node.setAdditionalOffset(off);
             node.setShift(shift);
             // flatIndexedNode.
