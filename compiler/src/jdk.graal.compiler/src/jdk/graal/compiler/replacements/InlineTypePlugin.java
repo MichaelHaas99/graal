@@ -324,7 +324,7 @@ public class InlineTypePlugin implements NodePlugin {
                 }
 
                 // false branch - no flat array
-                StoreIndexedNode storeIndexed = b.add(new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, value));
+                StoreIndexedNode storeIndexed = b.add(new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, b.maskSubWordValue(value, elementKind)));
                 falseBegin.setNext(storeIndexed);
                 EndNode falseEnd = b.add(new EndNode());
 
@@ -370,7 +370,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // new holder has a header
             StoreIndexedNode node = b.add(new StoreIndexedNode(array, index, boundsCheck,
-                            storeCheck, innerField.getJavaKind(), load));
+                            storeCheck, innerField.getJavaKind(), b.maskSubWordValue(load, innerField.getJavaKind())));
             node.setFlatAccess(true);
             node.setAdditionalOffset(off);
             node.setShift(shift);
