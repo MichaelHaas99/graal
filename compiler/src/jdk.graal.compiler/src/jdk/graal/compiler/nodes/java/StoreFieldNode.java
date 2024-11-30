@@ -26,6 +26,8 @@ package jdk.graal.compiler.nodes.java;
 
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.memory.MemoryOrderMode;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
@@ -33,8 +35,6 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.StateSplit;
@@ -44,8 +44,8 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-import org.graalvm.word.LocationIdentity;
-
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -59,6 +59,8 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
+
+    private boolean hasSideEffect = true;
 
     @Override
     public FrameState stateAfter() {
@@ -74,7 +76,11 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     @Override
     public boolean hasSideEffect() {
-        return true;
+        return hasSideEffect;
+    }
+
+    public void noSideEffect() {
+        hasSideEffect = false;
     }
 
     public ValueNode value() {
