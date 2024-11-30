@@ -83,7 +83,7 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
         this.flatAccess = flatAccess;
     }
 
-    private int shift;
+    private int shift = -1;
 
     public int getShift() {
         return shift;
