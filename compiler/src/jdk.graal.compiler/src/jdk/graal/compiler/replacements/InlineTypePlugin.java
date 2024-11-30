@@ -2,6 +2,9 @@ package jdk.graal.compiler.replacements;
 
 import static jdk.vm.ci.meta.DeoptimizationAction.None;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
@@ -26,6 +29,7 @@ import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
+import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
@@ -106,10 +110,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // new holder has a header
             StoreFieldNode storeFieldNode = new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind()));
-            if (i != innerFields.length - 1) {
-                // only last store should have a valid framestate
-                storeFieldNode.noSideEffect();
-            }
+            storeFieldNode.noSideEffect();
             b.add(storeFieldNode);
 
         }
@@ -282,10 +283,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // new holder has a header
             StoreFieldNode storeFieldNode = new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind()));
-            if (i != innerFields.length - 1) {
-                // only last store should have a valid framestate
-                storeFieldNode.noSideEffect();
-            }
+            storeFieldNode.noSideEffect();
             b.add(storeFieldNode);
 
         }
@@ -356,6 +354,11 @@ public class InlineTypePlugin implements NodePlugin {
         HotSpotResolvedObjectType elementType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
         ResolvedJavaField[] innerFields = elementType.getInstanceFields(true);
 
+        // ValueNode returnValue = null;
+
+        List<ValueNode> readOperations = new ArrayList<>();
+        List<StoreFlatIndexedNode.StoreIndexedWrapper> writeOperations = new ArrayList<>();
+
         ValueNode returnValue = null;
 
         for (int i = 0; i < innerFields.length; i++) {
@@ -366,26 +369,38 @@ public class InlineTypePlugin implements NodePlugin {
             int off = innerField.getOffset() - elementType.firstFieldOffset();
 
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
+            readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
+            // flatIndexedNode.addValue(load);
             if (i == 0)
                 returnValue = load;
 
             // new holder has a header
-            StoreIndexedNode node = b.add(new StoreIndexedNode(array, index, boundsCheck,
-                            storeCheck, innerField.getJavaKind(), b.maskSubWordValue(load, innerField.getJavaKind())));
+            // StoreIndexedNode node = b.add(new StoreIndexedNode(array, index, boundsCheck,
+            // storeCheck, innerField.getJavaKind(), load));
+            StoreIndexedNode node = new StoreIndexedNode(array, index, boundsCheck, storeCheck, innerField.getJavaKind(), load);
             node.setFlatAccess(true);
             node.setAdditionalOffset(off);
             node.setShift(shift);
-
+            // flatIndexedNode.
+            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedWrapper(i, innerField.getJavaKind(), off, shift));
+            // flatIndexedNode.addStoreIndexed(i, innerField.getJavaKind(), off, shift);
             if (i == 0 && returnValue == null) {
                 returnValue = node;
             }
             if (i != innerFields.length - 1) {
                 // only last store should have a valid frame state
-                node.setStateAfter(b.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                // node.setStateAfter(b.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
             }
+            // writeOperations[i] = node;
 
         }
+        StoreFlatIndexedNode flatIndexedNode = new StoreFlatIndexedNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations);
+        flatIndexedNode = b.add(flatIndexedNode);
+        flatIndexedNode.addValues(readOperations);
+
+        if (returnValue == null)
+            returnValue = flatIndexedNode;
         return returnValue;
     }
 
