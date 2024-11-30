@@ -82,7 +82,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
     }
 
     public boolean isFlatAccess() {
-        return additionalOffset < 0;
+        return additionalOffset >= 0;
     }
 
     private int shift = -1;

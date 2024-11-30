@@ -4566,7 +4566,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             int off = innerField.getOffset() - componentType.firstFieldOffset();
 
             LoadIndexedNode load = (LoadIndexedNode) genLoadIndexed(receiver, index, boundsCheck, innerField.getJavaKind());
-            load.setFlatAccess(true);
             // holder has no header so remove the header offset
             load.setAdditionalOffset(off);
             load.setShift(shift);
