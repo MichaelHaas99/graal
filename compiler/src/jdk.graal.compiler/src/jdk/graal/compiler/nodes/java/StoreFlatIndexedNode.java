@@ -72,11 +72,6 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
             this.additionalOffset = additionalOffset;
             this.shift = shift;
         }
-
-// public StoreIndexedNode createStoreIndexedNode() {
-// return new StoreIndexedNode(array, StoreFlatIndexedNode.this.index, getBoundsCheck(), storeCheck,
-// elementKind, values.get(index));
-// }
     }
 
     public static final NodeClass<StoreFlatIndexedNode> TYPE = NodeClass.create(StoreFlatIndexedNode.class);
@@ -96,10 +91,6 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
         }).toList();
     }
 
-// public void addStoreIndexed(int index, JavaKind elementKind, int additionalOffset, int shift) {
-// wrappers.add(new StoreIndexedWrapper(index, elementKind, additionalOffset, shift));
-// }
-
     public List<ValueNode> getValues() {
         return values;
     }
@@ -107,12 +98,6 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
     public void addValues(List<ValueNode> newValues) {
         values.addAll(newValues);
     }
-
-// public void addValue(ValueNode value) {
-// values.add(value);
-// }
-
-    // private final StoreIndexedNode[] values;
 
     public GuardingNode getStoreCheck() {
         return storeCheck;
@@ -151,6 +136,7 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
         return getLocationIdentity();
     }
 
+    // TODO: flat arrays can't be virtual yet so not necessary at the moment but in the future
     @Override
     public void virtualize(VirtualizerTool tool) {
 // ValueNode alias = tool.getAlias(array());
@@ -185,6 +171,8 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
         if (array().isNullConstant()) {
             return new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
         }
+        if (values.isEmpty())
+            return null;
         return this;
     }
 }
