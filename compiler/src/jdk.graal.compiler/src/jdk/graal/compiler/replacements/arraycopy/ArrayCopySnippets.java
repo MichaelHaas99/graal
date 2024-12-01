@@ -56,12 +56,9 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.UnreachableNode;
-import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
-import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
-import jdk.graal.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
@@ -126,15 +123,18 @@ public abstract class ArrayCopySnippets implements Snippets {
     }
 
     public static void registerSystemArraycopyPlugin(InvocationPlugins.Registration r, boolean forceAnyLocation) {
-        r.register(new InvocationPlugin("arraycopy", Object.class, int.class, Object.class, int.class, int.class) {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
-                ValueNode nonNullSrc = b.nullCheckedValue(src);
-                ValueNode nonNullDst = b.nullCheckedValue(dst);
-                b.add(new ArrayCopyNode(b.bci(), nonNullSrc, srcPos, nonNullDst, dstPos, length, forceAnyLocation));
-                return true;
-            }
-        });
+// r.register(new InvocationPlugin("arraycopy", Object.class, int.class, Object.class, int.class,
+// int.class) {
+// @Override
+// public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver,
+// ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
+// ValueNode nonNullSrc = b.nullCheckedValue(src);
+// ValueNode nonNullDst = b.nullCheckedValue(dst);
+// b.add(new ArrayCopyNode(b.bci(), nonNullSrc, srcPos, nonNullDst, dstPos, length,
+// forceAnyLocation));
+// return true;
+// }
+// });
     }
 
     protected enum ArrayCopyTypeCheck {

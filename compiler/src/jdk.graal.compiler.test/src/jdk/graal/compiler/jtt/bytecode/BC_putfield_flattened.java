@@ -81,6 +81,34 @@ public class BC_putfield_flattened extends JTTTest {
         return arg.v;
     }
 
+    static class MyObject {
+        long val = Integer.MAX_VALUE;
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class ManyOops {
+        MyObject o1 = new MyObject();
+        MyObject o2 = new MyObject();
+        MyObject o3 = new MyObject();
+        MyObject o4 = new MyObject();
+
+        long hash() {
+            return o1.val + o2.val + o3.val + o4.val;
+        }
+    }
+
+    static class ManyOopsWrapper{
+        @NullRestricted ManyOops o1 = new ManyOops();
+    }
+    public static ManyOopsWrapper globalMany= new ManyOopsWrapper();
+
+    public static Object test2() {
+        ManyOops newValue = new ManyOops();
+        globalMany.o1 = newValue;
+        return globalMany;
+    }
+
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);
 
 
@@ -92,6 +120,16 @@ public class BC_putfield_flattened extends JTTTest {
     @Test
     public void run1() throws Throwable {
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test", MyValue2.createDefaultInline());
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test2");
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test2");
     }
 
 }

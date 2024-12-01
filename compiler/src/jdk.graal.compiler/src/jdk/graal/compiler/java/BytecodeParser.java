@@ -5091,7 +5091,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             if (resolvedType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                 // also check against the flat array class
                 TypeReference flatArrayCheckedType = TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray());
-                LogicNode flatArrayTypeCheck = append(createInstanceOfAllowNull(flatArrayCheckedType, object, profile));
+                LogicNode flatArrayTypeCheck = append(createInstanceOfAllowNull(flatArrayCheckedType, object, null));
                 condition = append(LogicNode.or(condition, flatArrayTypeCheck, BranchProbabilityData.unknown()));
             }
             if (condition.isTautology()) {
