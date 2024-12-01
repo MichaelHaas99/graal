@@ -11,7 +11,6 @@ import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
-import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
@@ -29,9 +28,9 @@ import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
+import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
-import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
@@ -168,6 +167,9 @@ public class InlineTypePlugin implements NodePlugin {
 
         ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
 
+        List<ValueNode> readOperations = new ArrayList<>();
+        List<StoreFlatFieldNode.StoreFieldWrapper> writeOperations = new ArrayList<>();
+
         for (int i = 0; i < innerFields.length; i++) {
             ResolvedJavaField innerField = innerFields[i];
             assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
@@ -177,15 +179,13 @@ public class InlineTypePlugin implements NodePlugin {
 
             // holder has a header
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
+            readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder has no header so remove the header offset
-            StoreFieldNode storeFieldNode = b.add(new StoreFieldNode(object, innerField.changeOffset(destOff + off), b.maskSubWordValue(load, innerField.getJavaKind())));
-            if (i != innerFields.length - 1) {
-                // only last store should have a valid framestate
-                storeFieldNode.setStateAfter(b.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
-            }
-
+            writeOperations.add(new StoreFlatFieldNode.StoreFieldWrapper(i, innerField.changeOffset(destOff + off)));
         }
+        StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
+        storeFlatFieldNode.addValues(readOperations);
     }
 
     private void genFlatFieldNullCheck(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, BeginNode trueBegin, BeginNode falseBegin) {
@@ -385,8 +385,7 @@ public class InlineTypePlugin implements NodePlugin {
         }
 
         // create wrapper for the store operations
-        StoreFlatIndexedNode storeFlatIndexedNode = new StoreFlatIndexedNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations);
-        storeFlatIndexedNode = b.add(storeFlatIndexedNode);
+        StoreFlatIndexedNode storeFlatIndexedNode = b.add(new StoreFlatIndexedNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations));
         storeFlatIndexedNode.addValues(readOperations);
 
         return returnValue;
