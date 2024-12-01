@@ -63,6 +63,7 @@ optimizations for JEP 401
   - use profiling data for flat arrays
   - if inline type is not known at compile time do a runtime call (deoptimization at the moment)
   - API for flat arrays in JVMCI
+  - `System.arraycopy` snippets works incorrectly, throws ClassCastException because doesn't expect a fat array
 
 - Nullable flattened inline types cause problems in the JVM
   - can't test my implementation (also not yet implemented in C1 and C2)
