@@ -206,6 +206,10 @@ public abstract class BasicArrayCopyNode extends WithExceptionNode
         return length;
     }
 
+    public boolean canBeInlineTypeCopy() {
+        return getSource().stamp(NodeView.DEFAULT).canBeInlineTypeArray() || getDestination().stamp(NodeView.DEFAULT).canBeInlineTypeArray();
+    }
+
     public void setSource(ValueNode value) {
         updateUsages(this.src, value);
         this.src = value;

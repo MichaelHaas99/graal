@@ -41,4 +41,7 @@ public class IsFlatArrayNode extends FixedWithNextNode implements Lowerable, Can
         }
         return this;
     }
+
+    @NodeIntrinsic
+    public static native boolean isFlatArray(Object node);
 }
