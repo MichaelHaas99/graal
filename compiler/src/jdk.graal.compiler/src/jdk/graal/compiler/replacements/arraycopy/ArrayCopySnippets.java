@@ -29,6 +29,7 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
+import static jdk.graal.compiler.nodes.extended.IsFlatArrayNode.isFlatArray;
 import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
 
 import java.util.EnumMap;
@@ -56,9 +57,12 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.UnreachableNode;
+import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
+import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
@@ -123,18 +127,18 @@ public abstract class ArrayCopySnippets implements Snippets {
     }
 
     public static void registerSystemArraycopyPlugin(InvocationPlugins.Registration r, boolean forceAnyLocation) {
-// r.register(new InvocationPlugin("arraycopy", Object.class, int.class, Object.class, int.class,
-// int.class) {
-// @Override
-// public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver,
-// ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
-// ValueNode nonNullSrc = b.nullCheckedValue(src);
-// ValueNode nonNullDst = b.nullCheckedValue(dst);
-// b.add(new ArrayCopyNode(b.bci(), nonNullSrc, srcPos, nonNullDst, dstPos, length,
-// forceAnyLocation));
-// return true;
-// }
-// });
+        r.register(new InvocationPlugin("arraycopy", Object.class, int.class, Object.class, int.class,
+                        int.class) {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver,
+                            ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
+                ValueNode nonNullSrc = b.nullCheckedValue(src);
+                ValueNode nonNullDst = b.nullCheckedValue(dst);
+                b.add(new ArrayCopyNode(b.bci(), nonNullSrc, srcPos, nonNullDst, dstPos, length,
+                                forceAnyLocation));
+                return true;
+            }
+        });
     }
 
     protected enum ArrayCopyTypeCheck {
@@ -208,7 +212,7 @@ public abstract class ArrayCopySnippets implements Snippets {
      * Snippet that performs a stub call for an {@linkplain BasicArrayCopyNode#isExact() exact}
      * array copy.
      */
-    @Snippet
+    @Snippet(allowPartialIntrinsicArgumentMismatch = true)
     public void arraycopyExactStubCallSnippet(@NonNullParameter Object src, int srcPos, @NonNullParameter Object dest, int destPos, int length, @ConstantParameter ArrayCopyTypeCheck arrayTypeCheck,
                     @ConstantParameter JavaKind elementKind, @ConstantParameter LocationIdentity locationIdentity, @ConstantParameter SnippetCounter elementKindCounter,
                     @ConstantParameter SnippetCounter elementKindCopiedCounter, @ConstantParameter Counters counters) {
@@ -221,6 +225,13 @@ public abstract class ArrayCopySnippets implements Snippets {
 
         elementKindCounter.inc();
         elementKindCopiedCounter.add(checkedLength);
+
+        boolean oneArrayIsFlat = isFlatArray(src) || isFlatArray(dest);
+
+        if (oneArrayIsFlat) {
+            System.arraycopy(src, srcPos, dest, destPos, length);
+            return;
+        }
 
         doArraycopyExactStubCallSnippet(src, checkedSrcPos, dest, checkedDestPos, checkedLength, elementKind, locationIdentity, counters);
     }
@@ -308,17 +319,38 @@ public abstract class ArrayCopySnippets implements Snippets {
         long destOffset = arrayBaseOffset + destPos * scale;
 
         GuardingNode anchor = SnippetAnchorNode.anchor();
+
+        Object[] srcArray = (Object[]) src;
+        Object[] destArray = (Object[]) dest;
+        boolean oneArrayIsFlat = isFlatArray(src) || isFlatArray(dest);
+
         if (probability(FREQUENT_PROBABILITY, src == dest) && probability(NOT_FREQUENT_PROBABILITY, srcPos < destPos)) {
             // bad aliased case so we need to copy the array from back to front
-            for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
-                Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
-                RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
+            if (oneArrayIsFlat) {
+                // can't directly copy the contents between the arrays, inline type plugin will
+                // handle it for us
+                for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
+                    destArray[destPos + position] = srcArray[srcPos + position];
+                }
+            } else {
+                for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
+                    Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
+                    RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
+                }
             }
+
         } else {
-            for (int position = 0; probability(FAST_PATH_PROBABILITY, position < length); position++) {
-                Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
-                RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
+            if (oneArrayIsFlat) {
+                for (int position = 0; probability(FAST_PATH_PROBABILITY, position < length); position++) {
+                    destArray[destPos + position] = srcArray[srcPos + position];
+                }
+            } else {
+                for (int position = 0; probability(FAST_PATH_PROBABILITY, position < length); position++) {
+                    Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
+                    RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
+                }
             }
+
         }
     }
 
@@ -616,7 +648,8 @@ public abstract class ArrayCopySnippets implements Snippets {
                     // there is a sufficient type match - we don't need any additional type checks
                     snippetInfo = arraycopyExactStubCallSnippet;
                     arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
-                } else if (srcComponentType == null && destComponentType == null) {
+                } else if (srcComponentType == null && destComponentType == null ||
+                                arraycopy.canBeInlineTypeCopy()) {
                     // we don't know anything about the types - use the generic copying
                     snippetInfo = delayedGenericArraycopySnippet;
                     // no need for additional type check to avoid duplicated work
