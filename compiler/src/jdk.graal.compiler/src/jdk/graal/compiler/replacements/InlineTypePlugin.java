@@ -293,6 +293,7 @@ public class InlineTypePlugin implements NodePlugin {
         return newInstance;
     }
 
+    @Override
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
         if (array.stamp(NodeView.DEFAULT).isInlineTypeArray()) {
             // array is known to consist of inline type objects

@@ -102,10 +102,10 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         if (isEmpty() || alwaysNull() || !isAlwaysArray())
             return false;
 
-        if (type() == null)
+        if (type() == null || type().getComponentType() == null)
             return true;
+
         ResolvedJavaType componentType = type().getComponentType();
-        assert componentType != null : "stamp is always array, so component type of resolved type can't be null";
 
         // multidimensional array is no inline type array as well as array of primitives
         if (componentType.isArray() || componentType.isPrimitive())
@@ -121,7 +121,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     @Override
     public boolean isInlineTypeArray() {
-        if (type() == null)
+        if (type() == null || type().getComponentType() == null)
             return false;
         ResolvedJavaType componentType = type().getComponentType();
         return isAlwaysArray() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
