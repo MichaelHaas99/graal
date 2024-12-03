@@ -157,7 +157,6 @@ public class BC_array_copy_with_oop extends JTTTest{
         c.executeVarargs(new Object[]{dst3});
         c =getCode(getResolvedJavaMethod("test4"), null, true, false, getInitialOptions());
         c.executeVarargs(new Object[]{dst4});
-
         c =getCode(getResolvedJavaMethod("test5"), null, true, false, getInitialOptions());
         Object[] dst5 = (Object[])c.executeVarargs();
         c =getCode(getResolvedJavaMethod("test6"), null, true, false, getInitialOptions());
@@ -189,6 +188,7 @@ public class BC_array_copy_with_oop extends JTTTest{
             Assert.assertEquals(dst3[i].hash(), expected);
             Assert.assertEquals(dst4[i].hash(), expected);
             Assert.assertEquals(((ManyOops)dst5[i]).hash(), expected);
+            Assert.assertEquals(((ManyOops)dst6[i]).hash(), expected);
             Assert.assertEquals(((ManyOops)dst7[i]).hash(), expected);
             Assert.assertEquals(((ManyOops)dst8[i]).hash(), expected);
             Assert.assertEquals(((ManyOops)dst8[i]).hash(), expected);
