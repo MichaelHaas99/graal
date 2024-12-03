@@ -499,8 +499,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         lowerStoreFieldNode(storeField, tool, null, true);
     }
 
-    protected void lowerStoreFieldNode(StoreFieldNode storeField, LoweringTool tool, AccessFieldNode addBeforeFixed, boolean replaceBeforeFixed) {
-        addBeforeFixed = addBeforeFixed == null ? storeField : addBeforeFixed;
+    protected void lowerStoreFieldNode(StoreFieldNode storeField, LoweringTool tool, StoreFlatFieldNode storeFlatField, boolean replaceBeforeFixed) {
+        AccessFieldNode addBeforeFixed = storeFlatField == null ? storeField : storeFlatField;
         StructuredGraph graph = addBeforeFixed.graph();
         ResolvedJavaField field = storeField.field();
         ValueNode object = storeField.isStatic() ? staticFieldBase(graph, field) : storeField.object();
@@ -513,16 +513,16 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         // memoryWrite.setStateAfter(storeField.stateAfter());
         // graph.replaceFixedWithFixed(storeField, memoryWrite);
         if (!replaceBeforeFixed) {
-            assert addBeforeFixed instanceof StoreFlatFieldNode : "fixed node must be of type StoreFlatFieldNode";
+            assert storeFlatField != null : "store flat field node needs to be defined";
             // only last store should have a valid frame state
             memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
             graph.addBeforeFixed(addBeforeFixed, memoryWrite);
         } else {
             FrameState state;
-            if (addBeforeFixed instanceof StoreFlatFieldNode node) {
-                state = node.stateAfter();
+            if (storeFlatField != null) {
+                state = storeFlatField.stateAfter();
             } else {
-                state = ((StoreFieldNode) addBeforeFixed).stateAfter();
+                state = storeField.stateAfter();
             }
             memoryWrite.setStateAfter(state);
             graph.replaceFixed(addBeforeFixed, memoryWrite);
@@ -649,9 +649,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset, null, true);
     }
 
-    public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool, int arrayBaseOffset, AccessIndexedNode addBeforeFixed, boolean replaceBeforeFixed) {
+    public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool, int arrayBaseOffset, StoreFlatIndexedNode storeFlatIndexed, boolean replaceBeforeFixed) {
         // check if we should insert new nodes before a wrapper node
-        addBeforeFixed = addBeforeFixed == null ? storeIndexed : addBeforeFixed;
+        AccessIndexedNode addBeforeFixed = storeFlatIndexed == null ? storeIndexed : storeFlatIndexed;
         StructuredGraph graph = addBeforeFixed.graph();
 
         ValueNode value = storeIndexed.value();
@@ -721,16 +721,16 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
 
         if (!replaceBeforeFixed) {
-            assert addBeforeFixed instanceof StoreFlatIndexedNode : "fixed node must be of type StoreFlatIndexedNode";
+            assert storeFlatIndexed != null : "store flat indexed node needs to be defined";
             // only last store should have a valid frame state
             memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
             graph.addBeforeFixed(addBeforeFixed, memoryWrite);
         } else {
             FrameState state;
-            if (addBeforeFixed instanceof StoreFlatIndexedNode node) {
-                state = node.stateAfter();
+            if (storeFlatIndexed != null) {
+                state = storeFlatIndexed.stateAfter();
             } else {
-                state = ((StoreIndexedNode) addBeforeFixed).stateAfter();
+                state = storeIndexed.stateAfter();
             }
             memoryWrite.setStateAfter(state);
             graph.replaceFixed(addBeforeFixed, memoryWrite);
