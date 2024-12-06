@@ -144,6 +144,23 @@ public class BC_array_copy_with_oop extends JTTTest{
         ManyOops[] dst4 = createValueClassArray();
         ManyOops[] dst13 = createValueClassArray();
 
+        // Warmup runs to trigger compilation
+        for (int i = 0; i < 50_000; ++i) {
+            test1(dst1);
+            test2(dst2);
+            test3(dst3);
+            test4(dst4);
+            test5();
+            test6();
+            test7();
+            test8();
+            test9();
+            test10();
+            test11();
+            test12();
+            test13(dst13);
+        }
+
 
         // Trigger GC to make sure dst arrays are moved to old gen
         produceGarbage();
