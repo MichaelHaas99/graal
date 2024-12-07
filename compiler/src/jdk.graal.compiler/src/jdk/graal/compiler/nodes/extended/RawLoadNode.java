@@ -36,7 +36,6 @@ import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.graph.Node;
-import jdk.graal.compiler.graph.Node.NodeIntrinsic;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.GraphState;
@@ -212,5 +211,26 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
     public static native Object load(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     @NodeIntrinsic
+    public static native boolean loadBoolean(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native byte loadByte(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native char loadChar(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native short loadShort(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
     public static native int loadInt(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native long loadLong(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native float loadFloat(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native double loadDouble(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
 }
