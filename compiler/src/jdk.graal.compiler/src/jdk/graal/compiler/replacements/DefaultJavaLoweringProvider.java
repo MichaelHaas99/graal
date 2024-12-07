@@ -509,7 +509,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         AddressNode address = createFieldAddress(graph, object, field);
 
         BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
-        WriteNode memoryWrite = graph.add(new WriteNode(address, overrideFieldLocationIdentity(addBeforeFixed.getLocationIdentity()), value, barrierType, storeField.getMemoryOrder()));
+        WriteNode memoryWrite = new WriteNode(address, overrideFieldLocationIdentity(addBeforeFixed.getLocationIdentity()), value, barrierType, storeField.getMemoryOrder());
+        if (!storeField.hasSideEffect())
+            memoryWrite.noSideEffect();
+        memoryWrite = graph.add(memoryWrite);
         // memoryWrite.setStateAfter(storeField.stateAfter());
         // graph.replaceFixedWithFixed(storeField, memoryWrite);
         if (!replaceBeforeFixed) {
