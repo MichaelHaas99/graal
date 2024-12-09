@@ -8,7 +8,7 @@ import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.api.replacements.Snippet.ConstantParameter;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.nodes.StructuredGraph;
-import jdk.graal.compiler.nodes.extended.DelayedRawComparison;
+import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.options.OptionValues;
@@ -43,7 +43,7 @@ public class DelayedRawComparisonSnippets implements Snippets {
             delayedRawObjectComparisonSnippet = snippet(providers, DelayedRawComparisonSnippets.class, "delayedRawObjectComparison");
         }
 
-        public void lower(DelayedRawComparison node, LoweringTool tool) {
+        public void lower(DelayedRawComparisonNode node, LoweringTool tool) {
             SnippetTemplate.Arguments args;
             StructuredGraph graph = node.graph();
             JavaKind kind = node.getConstantKind();
