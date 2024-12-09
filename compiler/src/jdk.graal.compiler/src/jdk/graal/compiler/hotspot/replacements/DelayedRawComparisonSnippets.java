@@ -71,71 +71,71 @@ public class DelayedRawComparisonSnippets implements Snippets {
             }
             args.add("x", node.getObject1());
             args.add("y", node.getObject2());
-            args.addConst("offset", node.getIntOffset()/* node.asJavaConstant().asInt() */);
-            args.addConst("locationIdentity", node.getKilledLocationIdentity());
+            args.addConst("offset", node.getLongOffset());
+            args.addConst("locationIdentity", node.getLocationIdentity());
             template(tool, node, args).instantiate(tool.getMetaAccess(), node, DEFAULT_REPLACER, args);
         }
 
     }
 
     @Snippet
-    public static boolean delayedRawBooleanComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawBooleanComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         boolean xLoad = RawLoadNode.loadBoolean(x, offset, JavaKind.Boolean, locationIdentity);
         boolean yLoad = RawLoadNode.loadBoolean(y, offset, JavaKind.Boolean, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawByteComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawByteComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         byte xLoad = RawLoadNode.loadByte(x, offset, JavaKind.Byte, locationIdentity);
         byte yLoad = RawLoadNode.loadByte(y, offset, JavaKind.Byte, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawCharComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawCharComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         char xLoad = RawLoadNode.loadChar(x, offset, JavaKind.Char, locationIdentity);
         char yLoad = RawLoadNode.loadChar(y, offset, JavaKind.Char, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawShortComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawShortComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         short xLoad = RawLoadNode.loadShort(x, offset, JavaKind.Short, locationIdentity);
         short yLoad = RawLoadNode.loadShort(y, offset, JavaKind.Short, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawIntComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawIntComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         int xLoad = RawLoadNode.loadInt(x, offset, JavaKind.Int, locationIdentity);
         int yLoad = RawLoadNode.loadInt(y, offset, JavaKind.Int, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawLongComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawLongComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         long xLoad = RawLoadNode.loadLong(x, offset, JavaKind.Long, locationIdentity);
         long yLoad = RawLoadNode.loadLong(y, offset, JavaKind.Long, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawFloatComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawFloatComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         float xLoad = RawLoadNode.loadFloat(x, offset, JavaKind.Float, locationIdentity);
         float yLoad = RawLoadNode.loadFloat(y, offset, JavaKind.Float, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawDoubleComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawDoubleComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         double xLoad = RawLoadNode.loadDouble(x, offset, JavaKind.Double, locationIdentity);
         double yLoad = RawLoadNode.loadDouble(y, offset, JavaKind.Double, locationIdentity);
         return xLoad == yLoad;
     }
 
     @Snippet
-    public static boolean delayedRawObjectComparison(Object x, Object y, @ConstantParameter int offset, @ConstantParameter LocationIdentity locationIdentity) {
+    public static boolean delayedRawObjectComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
         Object xLoad = RawLoadNode.load(x, offset, JavaKind.Object, locationIdentity);
         Object yLoad = RawLoadNode.load(y, offset, JavaKind.Object, locationIdentity);
         return xLoad == yLoad;
