@@ -82,7 +82,7 @@ public class ObjectEqualsSnippets implements Snippets {
                 }
                 ResolvedJavaType type = null;
                 boolean inlineComparison = true;
-                int[] offsets = new int[0];
+                long[] offsets = new long[0];
                 JavaKind[] kinds = new JavaKind[0];
                 if (x.stamp(NodeView.DEFAULT).isInlineType()) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) x.stamp(NodeView.DEFAULT);
@@ -95,7 +95,7 @@ public class ObjectEqualsSnippets implements Snippets {
                 }
                 if (type != null) {
                     ResolvedJavaField[] fields = type.getInstanceFields(true);
-                    offsets = new int[fields.length];
+                    offsets = new long[fields.length];
                     kinds = new JavaKind[fields.length];
 
                     for (int i = 0; i < fields.length; i++) {
@@ -121,7 +121,7 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("falseValue", replacer.falseValue);
                     args.addConst("trace", isTracingEnabledForMethod(node.graph()));
                     args.addConst("inlineComparison", inlineComparison);
-                    args.addVarargs("offsets", int.class, StampFactory.forKind(JavaKind.Int), offsets);
+                    args.addVarargs("offsets", long.class, StampFactory.forKind(JavaKind.Long), offsets);
                     args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                     SingleTypeEntry leftEntry = profile.getLeft();
                     SingleTypeEntry rightEntry = profile.getRight();
@@ -145,7 +145,7 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("falseValue", replacer.falseValue);
                     args.addConst("trace", isTracingEnabledForMethod(node.graph()));
                     args.addConst("inlineComparison", inlineComparison);
-                    args.addVarargs("offsets", int.class, StampFactory.forKind(JavaKind.Int), offsets);
+                    args.addVarargs("offsets", long.class, StampFactory.forKind(JavaKind.Long), offsets);
                     args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                 }
 
@@ -182,7 +182,7 @@ public class ObjectEqualsSnippets implements Snippets {
     @Snippet
     protected static Object objectEquals(Object x, Object y, Object trueValue, Object falseValue, @ConstantParameter boolean trace,
                     @ConstantParameter boolean inlineComparison,
-                    @VarargsParameter int[] offsets,
+                    @VarargsParameter long[] offsets,
                     @VarargsParameter JavaKind[] kinds) {
         Word xPointer = Word.objectToTrackedPointer(x);
         Word yPointer = Word.objectToTrackedPointer(y);
@@ -197,7 +197,7 @@ public class ObjectEqualsSnippets implements Snippets {
     @Snippet
     protected static Object objectEqualsWithProfile(Object x, Object y, Object trueValue, Object falseValue, @ConstantParameter boolean trace,
                     @ConstantParameter boolean inlineComparison,
-                    @VarargsParameter int[] offsets,
+                    @VarargsParameter long[] offsets,
                     @VarargsParameter JavaKind[] kinds,
                     @ConstantParameter boolean xAlwaysNull,
                     @ConstantParameter boolean xInlineType, @ConstantParameter boolean yAlwaysNull,
@@ -277,7 +277,7 @@ public class ObjectEqualsSnippets implements Snippets {
 
     private static Object commonPart(Object x, Object y, Object trueValue, Object falseValue, Word xPointer, Word yPointer, boolean trace,
                     boolean inlineComparison,
-                    int[] offsets,
+                    long[] offsets,
                     JavaKind[] kinds) {
         trace(trace, "check both operands against null");
         if (xPointer.isNull() || yPointer.isNull())

@@ -638,8 +638,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool, graph);
         } else if (n instanceof FlatArrayComponentSizeNode) {
             lowerFlatArrayComponentSize((FlatArrayComponentSizeNode) n, tool, graph);
-        } else if (n instanceof DelayedRawComparison comparison) {
-            if (comparison.isAccessKindConstant() && tool.getLoweringStage() == LoweringTool.StandardLoweringStage.LOW_TIER)
+        } else if (n instanceof DelayedRawComparison) {
                 lowerDelayRawComparison((DelayedRawComparison) n, tool, graph);
         } else {
             return false;
@@ -849,6 +848,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     protected void lowerDelayRawComparison(DelayedRawComparison node, LoweringTool tool, StructuredGraph graph) {
+        if (!node.isAccessKindConstant() || tool.getLoweringStage() != LoweringTool.StandardLoweringStage.LOW_TIER)
+            return;
         delayedRawcomparisonSnippets.lower(node, tool);
     }
 
