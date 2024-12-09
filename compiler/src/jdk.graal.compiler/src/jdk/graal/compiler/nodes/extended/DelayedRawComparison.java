@@ -9,6 +9,7 @@ import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -25,9 +26,9 @@ public class DelayedRawComparison extends FixedWithNextNode implements Canonical
     @Input ValueNode object2;
     @Input ValueNode offset;
     @Input ValueNode accessKind;
-    private final LocationIdentity locationIdentity;
+    @Input ValueNode locationIdentity;
 
-    public DelayedRawComparison(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, LocationIdentity locationIdentity) {
+    public DelayedRawComparison(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity) {
         super(TYPE, StampFactory.forKind(JavaKind.Boolean));
         this.object1 = object1;
         this.object2 = object2;
@@ -64,7 +65,8 @@ public class DelayedRawComparison extends FixedWithNextNode implements Canonical
     }
 
     public LocationIdentity getLocationIdentity() {
-        return locationIdentity;
+        assert locationIdentity.isJavaConstant() : "locationIdentity must be a constant";
+        return ((HotSpotObjectConstant) locationIdentity.asJavaConstant()).asObject(FieldLocationIdentity.class);
     }
 
     @Override
@@ -76,5 +78,5 @@ public class DelayedRawComparison extends FixedWithNextNode implements Canonical
     }
 
     @NodeIntrinsic
-    public static native boolean load(Object object1, Object object2, long offset, Object kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+    public static native boolean load(Object object1, Object object2, long offset, Object kind, Object locationIdentity);
 }
