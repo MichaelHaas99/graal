@@ -33,7 +33,7 @@ import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
-import jdk.graal.compiler.nodes.extended.DelayedRawComparison;
+import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
@@ -308,7 +308,7 @@ public class ObjectEqualsSnippets implements Snippets {
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];
-                if (!DelayedRawComparison.load(x, y, offsets[i], kind, identities[i]))
+                if (!DelayedRawComparisonNode.load(x, y, offsets[i], kind, identities[i]))
                     return falseValue;
             }
             return trueValue;

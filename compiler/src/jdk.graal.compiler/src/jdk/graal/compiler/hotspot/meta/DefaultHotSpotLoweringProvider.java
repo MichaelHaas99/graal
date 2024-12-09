@@ -149,7 +149,7 @@ import jdk.graal.compiler.nodes.debug.VerifyHeapNode;
 import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
-import jdk.graal.compiler.nodes.extended.DelayedRawComparison;
+import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
 import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
@@ -613,8 +613,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool, graph);
         } else if (n instanceof FlatArrayComponentSizeNode) {
             lowerFlatArrayComponentSize((FlatArrayComponentSizeNode) n, tool, graph);
-        } else if (n instanceof DelayedRawComparison) {
-                lowerDelayRawComparison((DelayedRawComparison) n, tool, graph);
+        } else if (n instanceof DelayedRawComparisonNode) {
+            lowerDelayRawComparison((DelayedRawComparisonNode) n, tool, graph);
         } else {
             return false;
         }
@@ -822,7 +822,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
     }
 
-    protected void lowerDelayRawComparison(DelayedRawComparison node, LoweringTool tool, StructuredGraph graph) {
+    protected void lowerDelayRawComparison(DelayedRawComparisonNode node, LoweringTool tool, StructuredGraph graph) {
         if (!node.isAccessKindConstant() || tool.getLoweringStage() != LoweringTool.StandardLoweringStage.LOW_TIER)
             return;
         delayedRawcomparisonSnippets.lower(node, tool);

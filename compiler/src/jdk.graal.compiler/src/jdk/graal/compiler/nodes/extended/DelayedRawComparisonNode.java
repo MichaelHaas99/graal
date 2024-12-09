@@ -19,8 +19,8 @@ import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public class DelayedRawComparison extends FixedWithNextNode implements Canonicalizable, Lowerable {
-    public static final NodeClass<DelayedRawComparison> TYPE = NodeClass.create(DelayedRawComparison.class);
+public class DelayedRawComparisonNode extends FixedWithNextNode implements Canonicalizable, Lowerable {
+    public static final NodeClass<DelayedRawComparisonNode> TYPE = NodeClass.create(DelayedRawComparisonNode.class);
 
     @Input ValueNode object1;
     @Input ValueNode object2;
@@ -28,7 +28,7 @@ public class DelayedRawComparison extends FixedWithNextNode implements Canonical
     @Input ValueNode accessKind;
     @Input ValueNode locationIdentity;
 
-    public DelayedRawComparison(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity) {
+    public DelayedRawComparisonNode(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity) {
         super(TYPE, StampFactory.forKind(JavaKind.Boolean));
         this.object1 = object1;
         this.object2 = object2;
