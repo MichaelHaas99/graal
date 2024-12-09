@@ -32,10 +32,10 @@ import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
+import jdk.graal.compiler.nodes.extended.DelayedRawComparison;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
-import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
@@ -305,55 +305,57 @@ public class ObjectEqualsSnippets implements Snippets {
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];
-                if (kind == JavaKind.Boolean) {
-                    boolean xLoad = RawLoadNode.loadBoolean(x, offsets[i], JavaKind.Boolean, LocationIdentity.any());
-                    boolean yLoad = RawLoadNode.loadBoolean(y, offsets[i], JavaKind.Boolean, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Byte) {
-                    byte xLoad = RawLoadNode.loadByte(x, offsets[i], JavaKind.Byte, LocationIdentity.any());
-                    byte yLoad = RawLoadNode.loadByte(y, offsets[i], JavaKind.Byte, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Char) {
-                    char xLoad = RawLoadNode.loadChar(x, offsets[i], JavaKind.Char, LocationIdentity.any());
-                    char yLoad = RawLoadNode.loadChar(y, offsets[i], JavaKind.Char, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Short) {
-                    short xLoad = RawLoadNode.loadShort(x, offsets[i], JavaKind.Short, LocationIdentity.any());
-                    short yLoad = RawLoadNode.loadShort(y, offsets[i], JavaKind.Short, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Int) {
-                    int xLoad = RawLoadNode.loadInt(x, offsets[i], JavaKind.Int, LocationIdentity.any());
-                    int yLoad = RawLoadNode.loadInt(y, offsets[i], JavaKind.Int, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Long) {
-                    long xLoad = RawLoadNode.loadLong(x, offsets[i], JavaKind.Long, LocationIdentity.any());
-                    long yLoad = RawLoadNode.loadLong(y, offsets[i], JavaKind.Long, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Float) {
-                    float xLoad = RawLoadNode.loadFloat(x, offsets[i], JavaKind.Float, LocationIdentity.any());
-                    float yLoad = RawLoadNode.loadFloat(y, offsets[i], JavaKind.Float, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Double) {
-                    double xLoad = RawLoadNode.loadDouble(x, offsets[i], JavaKind.Double, LocationIdentity.any());
-                    double yLoad = RawLoadNode.loadDouble(y, offsets[i], JavaKind.Double, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else if (kind == JavaKind.Object) {
-                    Object xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Object, LocationIdentity.any());
-                    Object yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Object, LocationIdentity.any());
-                    if (xLoad != yLoad)
-                        return falseValue;
-                } else {
-                    // should not be reachable
-                    break;
-                }
+                if (!DelayedRawComparison.load(x, y, offsets[i], kind, LocationIdentity.any()))
+                    return falseValue;
+// if (kind == JavaKind.Boolean) {
+// boolean xLoad = RawLoadNode.loadBoolean(x, offsets[i], JavaKind.Boolean, LocationIdentity.any());
+// boolean yLoad = RawLoadNode.loadBoolean(y, offsets[i], JavaKind.Boolean, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Byte) {
+// byte xLoad = RawLoadNode.loadByte(x, offsets[i], JavaKind.Byte, LocationIdentity.any());
+// byte yLoad = RawLoadNode.loadByte(y, offsets[i], JavaKind.Byte, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Char) {
+// char xLoad = RawLoadNode.loadChar(x, offsets[i], JavaKind.Char, LocationIdentity.any());
+// char yLoad = RawLoadNode.loadChar(y, offsets[i], JavaKind.Char, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Short) {
+// short xLoad = RawLoadNode.loadShort(x, offsets[i], JavaKind.Short, LocationIdentity.any());
+// short yLoad = RawLoadNode.loadShort(y, offsets[i], JavaKind.Short, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Int) {
+// int xLoad = RawLoadNode.loadInt(x, offsets[i], JavaKind.Int, LocationIdentity.any());
+// int yLoad = RawLoadNode.loadInt(y, offsets[i], JavaKind.Int, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Long) {
+// long xLoad = RawLoadNode.loadLong(x, offsets[i], JavaKind.Long, LocationIdentity.any());
+// long yLoad = RawLoadNode.loadLong(y, offsets[i], JavaKind.Long, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Float) {
+// float xLoad = RawLoadNode.loadFloat(x, offsets[i], JavaKind.Float, LocationIdentity.any());
+// float yLoad = RawLoadNode.loadFloat(y, offsets[i], JavaKind.Float, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Double) {
+// double xLoad = RawLoadNode.loadDouble(x, offsets[i], JavaKind.Double, LocationIdentity.any());
+// double yLoad = RawLoadNode.loadDouble(y, offsets[i], JavaKind.Double, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else if (kind == JavaKind.Object) {
+// Object xLoad = RawLoadNode.load(x, offsets[i], JavaKind.Object, LocationIdentity.any());
+// Object yLoad = RawLoadNode.load(y, offsets[i], JavaKind.Object, LocationIdentity.any());
+// if (xLoad != yLoad)
+// return falseValue;
+// } else {
+// // should not be reachable
+// break;
+// }
             }
             return trueValue;
         }

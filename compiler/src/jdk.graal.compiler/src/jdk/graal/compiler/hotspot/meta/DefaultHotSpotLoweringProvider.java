@@ -83,6 +83,7 @@ import jdk.graal.compiler.hotspot.nodes.type.KlassPointerStamp;
 import jdk.graal.compiler.hotspot.nodes.type.MethodPointerStamp;
 import jdk.graal.compiler.hotspot.replacements.AssertionSnippets;
 import jdk.graal.compiler.hotspot.replacements.ClassGetHubNode;
+import jdk.graal.compiler.hotspot.replacements.DelayedRawComparisonSnippets;
 import jdk.graal.compiler.hotspot.replacements.DigestBaseSnippets;
 import jdk.graal.compiler.hotspot.replacements.FastNotifyNode;
 import jdk.graal.compiler.hotspot.replacements.FlatArrayComponentSizeSnippets;
@@ -157,6 +158,7 @@ import jdk.graal.compiler.nodes.debug.VerifyHeapNode;
 import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
+import jdk.graal.compiler.nodes.extended.DelayedRawComparison;
 import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
@@ -289,6 +291,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected IsFlatArraySnippets.Templates isFlatArraySnippets;
     protected IsNullFreeArraySnippets.Templates isNullFreeArraySnippets;
     protected FlatArrayComponentSizeSnippets.Templates flatArrayComponentSizeSnippets;
+    protected DelayedRawComparisonSnippets.Templates delayedRawcomparisonSnippets;
     protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
     protected HotSpotG1WriteBarrierSnippets.Templates g1WriteBarrierSnippets;
     protected LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
@@ -345,6 +348,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         isFlatArraySnippets = new IsFlatArraySnippets.Templates(options, providers, target);
         isNullFreeArraySnippets = new IsNullFreeArraySnippets.Templates(options, providers, target);
         flatArrayComponentSizeSnippets = new FlatArrayComponentSizeSnippets.Templates(options, providers);
+        delayedRawcomparisonSnippets = new DelayedRawComparisonSnippets.Templates(options, providers);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, runtime, providers, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, runtime, providers);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers);
@@ -634,6 +638,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool, graph);
         } else if (n instanceof FlatArrayComponentSizeNode) {
             lowerFlatArrayComponentSize((FlatArrayComponentSizeNode) n, tool, graph);
+        } else if (n instanceof DelayedRawComparison comparison) {
+            if (comparison.isAccessKindConstant() && tool.getLoweringStage() == LoweringTool.StandardLoweringStage.LOW_TIER)
+                lowerDelayRawComparison((DelayedRawComparison) n, tool, graph);
         } else {
             return false;
         }
@@ -839,6 +846,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         node.setValue(ensureRuntimeHubUsageNode);
         flatArrayComponentSizeSnippets.lower(node, tool);
 
+    }
+
+    protected void lowerDelayRawComparison(DelayedRawComparison node, LoweringTool tool, StructuredGraph graph) {
+        delayedRawcomparisonSnippets.lower(node, tool);
     }
 
     private void lowerKlassLayoutHelperNode(KlassLayoutHelperNode n, LoweringTool tool) {
