@@ -234,31 +234,4 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
     @NodeIntrinsic
     public static native double loadDouble(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
-    @NodeIntrinsic
-    public static native Object load(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native boolean loadBoolean(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native byte loadByte(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native char loadChar(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native short loadShort(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native int loadInt(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native long loadLong(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native float loadFloat(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic
-    public static native double loadDouble(Object object, ValueNode offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
 }

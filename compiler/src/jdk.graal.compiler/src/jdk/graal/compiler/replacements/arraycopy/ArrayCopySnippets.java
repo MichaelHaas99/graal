@@ -329,6 +329,7 @@ public abstract class ArrayCopySnippets implements Snippets {
             if (oneArrayIsFlat) {
                 // can't directly copy the contents between the arrays, inline type plugin will
                 // handle it for us
+                // TODO: replace with runtime call if both arrays are flat
                 for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
                     destArray[destPos + position] = srcArray[srcPos + position];
                 }
