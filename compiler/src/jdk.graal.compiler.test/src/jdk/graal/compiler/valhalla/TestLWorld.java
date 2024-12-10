@@ -316,6 +316,58 @@ public class TestLWorld extends JTTTest {
         return vals[0].oa[0];
     }
 
+    static class InlineBox {
+        @NullRestricted
+        LongWrapper content;
+
+        InlineBox(long val) {
+            this.content = LongWrapper.wrap(val);
+        }
+
+        static InlineBox box(long val) {
+            return new InlineBox(val);
+        }
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class LongWrapper implements WrapperInterface {
+        @NullRestricted
+        final static LongWrapper ZERO = new LongWrapper(0);
+        private long val;
+
+        LongWrapper(long val) {
+            this.val = val;
+        }
+
+        static LongWrapper wrap(long val) {
+            return (val == 0L) ? ZERO : new LongWrapper(val);
+        }
+
+        public long value() {
+            return val;
+        }
+    }
+
+    static interface WrapperInterface {
+        long value();
+
+        final static WrapperInterface ZERO = new LongWrapper(0);
+
+        static WrapperInterface wrap(long val) {
+            return (val == 0L) ? ZERO : new LongWrapper(val);
+        }
+    }
+    long[] lArr = {0L, rL, 0L, rL, 0L, rL, 0L, rL, 0L, rL};
+
+    public long test112() {
+        long res = 0;
+        for (int i = 0; i < lArr.length; i++) {
+            res += InlineBox.box(lArr[i]).content.value();
+        }
+        return res;
+    }
+
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test6");
 
     @Test
@@ -354,5 +406,17 @@ public class TestLWorld extends JTTTest {
     public void run5() throws Throwable {
         resetCache();
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test41");
+    }
+
+    @Test
+    public void run6() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test112");
+    }
+
+    @Test
+    public void run7() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test112");
     }
 }
