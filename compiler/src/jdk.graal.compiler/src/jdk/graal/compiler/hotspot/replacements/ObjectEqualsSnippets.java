@@ -22,6 +22,7 @@ import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.graph.Graph;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
@@ -32,6 +33,7 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
@@ -64,6 +66,18 @@ public class ObjectEqualsSnippets implements Snippets {
             super(options, providers);
             objectEqualsSnippet = snippet(providers, ObjectEqualsSnippets.class, "objectEquals");
             objectEqualsSnippetWithProfile = snippet(providers, ObjectEqualsSnippets.class, "objectEqualsWithProfile");
+        }
+
+        @Override
+        public void lower(FloatingNode objectEquals, LoweringTool tool) {
+            StructuredGraph graph = objectEquals.graph();
+            Graph.Mark newNodes = graph.getMark();
+            super.lower(objectEquals, tool);
+            for (Node n : graph.getNewNodes(newNodes)) {
+                if (n instanceof DelayedRawComparisonNode delayedRawComparison) {
+                    delayedRawComparison.lower(tool);
+                }
+            }
         }
 
         @Override
