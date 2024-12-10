@@ -273,12 +273,14 @@ public class InlineTypePlugin implements NodePlugin {
             // returned fields include a header offset of their holder
             int off = innerField.getOffset() - componentType.firstFieldOffset();
 
-            ValueNode load = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, innerField.getJavaKind(), b.getMetaAccess(), b.getConstantReflection()));
+            ValueNode load = LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, innerField.getJavaKind(), b.getMetaAccess(), b.getConstantReflection());
             if (load instanceof LoadIndexedNode loadIndexed) {
                 // holder has no header so remove the header offset
                 loadIndexed.setAdditionalOffset(off);
                 loadIndexed.setShift(shift);
+                loadIndexed.setLocation(innerField);
             }
+            b.add(load);
 
             // new holder has a header
             StoreFieldNode storeFieldNode = new StoreFieldNode(newInstance, innerField, b.maskSubWordValue(load, innerField.getJavaKind()));
