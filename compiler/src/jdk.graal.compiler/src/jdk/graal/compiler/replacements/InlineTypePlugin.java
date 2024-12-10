@@ -377,10 +377,6 @@ public class InlineTypePlugin implements NodePlugin {
                 returnValue = load;
 
             // new holder has a header
-            StoreIndexedNode storeIndexedNode = new StoreIndexedNode(array, index, boundsCheck, storeCheck, innerField.getJavaKind(), load);
-            storeIndexedNode.setAdditionalOffset(off);
-            storeIndexedNode.setShift(shift);
-
             writeOperations.add(new StoreFlatIndexedNode.StoreIndexedWrapper(i, innerField.getJavaKind(), off, shift));
 
         }
