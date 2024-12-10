@@ -10,13 +10,13 @@ import org.junit.Test;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.jtt.JTTTest;
-import jdk.graal.compiler.jtt.bytecode.BC_putfield_flattened;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.test.AddExports;
 import jdk.internal.vm.annotation.NullRestricted;
 import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.internal.value.ValueClass;
 
-@AddExports("java.base/jdk.internal.vm.annotation")
+@AddExports({"java.base/jdk.internal.vm.annotation","java.base/jdk.internal.value"})
 public class TestLWorld extends JTTTest {
 
     public interface MyInterface {
@@ -305,6 +305,17 @@ public class TestLWorld extends JTTTest {
         return false;
     }
 
+
+    public MyValue1 myTest(MyValue1[] vals) {
+        return vals[0];
+    }
+
+    public int test41() {
+        MyValue1[] vals = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        vals[0] = testValue1;
+        return vals[0].oa[0];
+    }
+
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test6");
 
     @Test
@@ -315,5 +326,33 @@ public class TestLWorld extends JTTTest {
     @Test
     public void run1() throws Throwable {
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test6", new Object[]{null});
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        resetCache();
+        MyValue1[] vals = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 2);
+        vals[0] = testValue1;
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "myTest", new Object[]{vals});
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        resetCache();
+        MyValue1[] vals = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 2);
+        vals[0] = testValue1;
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "myTest", new Object[]{vals});
+    }
+
+    @Test
+    public void run4() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test41");
+    }
+
+    @Test
+    public void run5() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test41");
     }
 }
