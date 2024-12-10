@@ -25,6 +25,8 @@
 package jdk.graal.compiler.nodes;
 
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -32,6 +34,7 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaKind.FormatWithToString;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
  * A {@link LocationIdentity} with a name.
@@ -148,4 +151,20 @@ public class NamedLocationIdentity extends LocationIdentity implements FormatWit
     public static boolean isArrayLocation(LocationIdentity l) {
         return ARRAY_LOCATIONS.containsValue(l);
     }
+
+    /**
+     * Returns the named location identity for a flat array. Accesses to these inlined fields of an
+     * array element need to be distinct
+     */
+    public static LocationIdentity getFlatArrayLocation(ResolvedJavaField field) {
+        String name = "Array: " + JavaKind.Object.getJavaName() + " " + field.getOffset();
+        if (FLAT_ARRAY_LOCATIONS.containsKey(name))
+            return FLAT_ARRAY_LOCATIONS.get(name);
+        LocationIdentity result = NamedLocationIdentity.mutable(name);
+        FLAT_ARRAY_LOCATIONS.put(name, result);
+        return result;
+    }
+
+    private static final Map<String, LocationIdentity> FLAT_ARRAY_LOCATIONS = new HashMap<>();
+
 }
