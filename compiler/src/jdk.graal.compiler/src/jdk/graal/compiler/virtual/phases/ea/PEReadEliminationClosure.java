@@ -288,7 +288,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (load.index().isConstant()) {
             int index = ((JavaConstant) load.index().asConstant()).asInt();
             JavaKind elementKind = load.elementKind();
-            LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(elementKind);
+            LocationIdentity arrayLocation = load.getLocationIdentity();
             return processLoad(load, load.array(), arrayLocation, index, elementKind, state, effects);
         }
         return false;

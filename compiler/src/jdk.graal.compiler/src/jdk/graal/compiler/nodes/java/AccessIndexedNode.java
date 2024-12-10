@@ -24,6 +24,8 @@
  */
 package jdk.graal.compiler.nodes.java;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.InputType;
@@ -33,8 +35,6 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.spi.Lowerable;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.meta.JavaKind;
 
 /**
@@ -48,7 +48,7 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements Lower
     @Input protected ValueNode index;
     @OptionalInput(InputType.Guard) private GuardingNode boundsCheck;
     protected final JavaKind elementKind;
-    protected final LocationIdentity location;
+    protected LocationIdentity location;
 
     public ValueNode index() {
         return index;
