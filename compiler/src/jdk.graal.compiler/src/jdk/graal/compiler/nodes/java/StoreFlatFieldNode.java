@@ -126,11 +126,11 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode) {
-            for (ValueNode value : values) {
+            for (int i = 0; i < wrappers.size(); i++) {
                 VirtualInstanceNode virtual = (VirtualInstanceNode) alias;
-                int fieldIndex = virtual.fieldIndex(field());
+                int fieldIndex = virtual.fieldIndex(wrappers.get(i).field);
                 if (fieldIndex != -1) {
-                    tool.setVirtualEntry(virtual, fieldIndex, value);
+                    tool.setVirtualEntry(virtual, fieldIndex, values.get(i));
                 } else {
                     return;
                 }
