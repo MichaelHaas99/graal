@@ -128,6 +128,8 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                 tool.createVirtualObject(newVirtual, state, Collections.emptyList(), sourcePosition, false);
                 tool.replaceWithVirtual(newVirtual);
             } else {
+                if (getObject().stamp(NodeView.DEFAULT).canBeInlineTypeArray())
+                    return;
                 ValueNode length = findLength(FindLengthMode.SEARCH_ONLY, tool.getConstantReflection());
                 if (length == null) {
                     return;

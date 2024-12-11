@@ -244,7 +244,7 @@ public class InlineTypePlugin implements NodePlugin {
                 merge.addForwardEnd(falseEnd);
 
             } else {
-                b.push(elementKind, b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, elementKind, b.getMetaAccess(), b.getConstantReflection())));
+                return false;
             }
             return true;
 
@@ -338,7 +338,7 @@ public class InlineTypePlugin implements NodePlugin {
                 merge.addForwardEnd(falseEnd);
 
             } else {
-                b.push(elementKind, b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, elementKind, b.getMetaAccess(), b.getConstantReflection())));
+                return false;
             }
             return true;
 
