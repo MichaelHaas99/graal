@@ -4993,6 +4993,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             }
         }
         LogicNode instanceOfNode = null;
+        LogicNode flatArrayTypeCheck = null;
         if (profile != null) {
             if (profile.getNullSeen().isFalse()) {
                 object = addNonNullCast(object, InvalidateReprofile);
@@ -5000,6 +5001,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 ResolvedJavaType singleType = profile.asSingleType();
                 if (singleType != null) {
                     LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
+                    if (singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                        // also check against the flat array class
+                        flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+                    }
                     if (!typeCheck.isTautology()) {
                         SpeculationLog.Speculation speculation = mayUseTypeProfile();
                         if (speculation == null) {
@@ -5017,8 +5022,15 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
         if (instanceOfNode == null) {
             instanceOfNode = createInstanceOf(checkedType, object, null);
+            if (checkedType.getType() instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                // also check against the flat array class
+                flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+            }
         }
         LogicNode logicNode = genUnique(instanceOfNode);
+        if (flatArrayTypeCheck != null) {
+            logicNode = append(LogicNode.or(logicNode, flatArrayTypeCheck, BranchProbabilityData.unknown()));
+        }
 
         int next = getStream().nextBCI();
         int value = getStream().readUByte(next);

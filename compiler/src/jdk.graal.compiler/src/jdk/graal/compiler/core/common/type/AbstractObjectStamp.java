@@ -99,8 +99,14 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     @Override
     public boolean canBeInlineTypeArray() {
         // empty type, null, no array can't be inline type arrays
-        if (isEmpty() || alwaysNull() || !isAlwaysArray())
+        if (isEmpty() || alwaysNull())
             return false;
+
+        if (!isAlwaysArray()) {
+            if (type() == null && !exactType)
+                return true;
+            return false;
+        }
 
         if (type() == null || type().getComponentType() == null)
             return true;
