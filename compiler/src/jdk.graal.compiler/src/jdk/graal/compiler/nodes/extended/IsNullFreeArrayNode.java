@@ -41,4 +41,7 @@ public class IsNullFreeArrayNode extends FixedWithNextNode implements Lowerable,
         }
         return this;
     }
+
+    @NodeIntrinsic
+    public static native boolean isNullFreeArray(Object node);
 }
