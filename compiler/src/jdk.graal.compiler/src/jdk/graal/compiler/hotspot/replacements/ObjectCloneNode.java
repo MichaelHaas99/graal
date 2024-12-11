@@ -94,6 +94,9 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
 
         StructuredGraph replacementGraph = getLoweredSnippetGraph(tool);
 
+        // go slow path if the array can be flat or null-restricted
+        if (getObject().stamp(NodeView.DEFAULT).canBeInlineTypeArray())
+            replacementGraph = null;
         if (replacementGraph != null) {
             /*
              * Replace this node with an invoke for inlining. Verify the stamp, it must be in sync
