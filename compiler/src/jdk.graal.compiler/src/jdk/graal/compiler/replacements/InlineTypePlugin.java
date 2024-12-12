@@ -3,9 +3,7 @@ package jdk.graal.compiler.replacements;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
-import static jdk.vm.ci.meta.DeoptimizationAction.None;
 import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.ArrayList;
@@ -16,7 +14,6 @@ import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -41,7 +38,6 @@ import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -241,7 +237,6 @@ public class InlineTypePlugin implements NodePlugin {
                 // we don't know the type at compile time, produce a runtime call
                 LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index, boundsCheck, elementKind);
                 load.doForeignCall();
-                load.setAdditionalOffset(0);
                 instanceFlatArray = b.add(load);
                 trueBegin.setNext(instanceFlatArray);
             }
@@ -309,57 +304,58 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
-        if (array.stamp(NodeView.DEFAULT).isInlineTypeArray()) {
-            // array is known to consist of inline type objects
+        boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
+        boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
+        if (canBeInlineTypeArray) {
+            // array can consist of inline objects
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
-            if (resolvedType.isFlatArray()) {
-                // array known to be flat
-
+            if (isInlineTypeArray && resolvedType.isFlatArray()) {
+                // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
                 genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 value, shift);
+                return true;
+            }
 
-            } else if (resolvedType.convertToFlatArray().isFlatArray()) {
-                // runtime check necessary
+            // runtime check necessary
 
-                BeginNode trueBegin = b.getGraph().add(new BeginNode());
-                BeginNode falseBegin = b.getGraph().add(new BeginNode());
-                genFlatArrayCheck(b, array, trueBegin, falseBegin);
+            BeginNode trueBegin = b.getGraph().add(new BeginNode());
+            BeginNode falseBegin = b.getGraph().add(new BeginNode());
+            genFlatArrayCheck(b, array, trueBegin, falseBegin);
 
-                int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
+            int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
 
-                // true branch - flat array
+            // true branch - flat array
+            EndNode trueEnd;
+            if (isInlineTypeArray) {
+                // produce code that loads the flat inline type
                 ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 value, shift);
-                EndNode trueEnd = b.add(new EndNode());
+                trueEnd = b.add(new EndNode());
                 if (firstFixedNode instanceof FixedNode fixedNode) {
                     trueBegin.setNext(fixedNode);
                 } else {
                     trueBegin.setNext(trueEnd);
                 }
-
-                // false branch - no flat array
-                StoreIndexedNode storeIndexed = b.add(new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, b.maskSubWordValue(value, elementKind)));
-                falseBegin.setNext(storeIndexed);
-                EndNode falseEnd = b.add(new EndNode());
-
-                // merge
-                MergeNode merge = b.add(new MergeNode());
-                merge.addForwardEnd(trueEnd);
-                merge.addForwardEnd(falseEnd);
-
             } else {
-                return false;
+                // we don't know the type at compile time, produce a runtime call
+                StoreIndexedNode store = new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, value);
+                store.doForeignCall();
+                b.add(store);
+                trueBegin.setNext(store);
+                trueEnd = b.add(new EndNode());
             }
-            return true;
 
-        } else if (array.stamp(NodeView.DEFAULT).canBeInlineTypeArray()) {
-            /*
-             * TODO: array is maybe flat, go back to interpreter for the moment, will be replaced
-             * with a runtime call
-             */
-            b.add(new DeoptimizeNode(None, DeoptimizationReason.TransferToInterpreter));
+            // false branch - no flat array
+            StoreIndexedNode storeIndexed = b.add(new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, b.maskSubWordValue(value, elementKind)));
+            falseBegin.setNext(storeIndexed);
+            EndNode falseEnd = b.add(new EndNode());
+
+            // merge
+            MergeNode merge = b.add(new MergeNode());
+            merge.addForwardEnd(trueEnd);
+            merge.addForwardEnd(falseEnd);
             return true;
         }
         return false;
@@ -410,7 +406,7 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, NO_LOCATIONS, "loadUnknownInline", Object.class, Object.class,
+    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "loadUnknownInline", Object.class, Object.class,
                     int.class);
 
     public static final HotSpotForeignCallDescriptor STOREUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, any(), "storeUnknownInline", void.class, Object.class, Object.class,
