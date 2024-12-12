@@ -30,6 +30,7 @@ import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATI
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMax;
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMin;
 import static jdk.graal.compiler.nodes.java.ArrayLengthNode.readArrayLength;
+import static jdk.graal.compiler.replacements.InlineTypePlugin.LOADUNKNOWNINLINE;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.BoundsCheckException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
@@ -612,16 +613,27 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (SpectrePHTIndexMasking.getValue(graph.getOptions())) {
             index = graph.addOrUniqueWithInputs(proxyIndex(loadIndexed, index, array, tool));
         }
-        ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
-        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex, loadIndexed.getShift());
 
-        LocationIdentity arrayLocation = loadIndexed.getLocationIdentity();
-        ReadNode memoryRead = graph.add(new ReadNode(address, arrayLocation, loadStamp, barrierSet.readBarrierType(arrayLocation, address, loadStamp), MemoryOrderMode.PLAIN));
-        memoryRead.setGuard(boundsCheck);
-        ValueNode readValue = implicitLoadConvert(graph, elementKind, memoryRead);
+        ValueNode read;
+        ValueNode readValue;
+        if (loadIndexed.doesForeignCall()) {
+            ForeignCallNode foreignCallResult = graph.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, index));
+            graph.addBeforeFixed(loadIndexed, foreignCallResult);
+            read = foreignCallResult;
+            readValue = read;
+        } else {
+            ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
+            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex, loadIndexed.getShift());
+
+            LocationIdentity arrayLocation = loadIndexed.getLocationIdentity();
+            ReadNode memoryRead = graph.add(new ReadNode(address, arrayLocation, loadStamp, barrierSet.readBarrierType(arrayLocation, address, loadStamp), MemoryOrderMode.PLAIN));
+            memoryRead.setGuard(boundsCheck);
+            read = memoryRead;
+            readValue = implicitLoadConvert(graph, elementKind, read);
+        }
 
         loadIndexed.replaceAtUsages(readValue);
-        graph.replaceFixed(loadIndexed, memoryRead);
+        graph.replaceFixed(loadIndexed, read);
     }
 
     public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool) {

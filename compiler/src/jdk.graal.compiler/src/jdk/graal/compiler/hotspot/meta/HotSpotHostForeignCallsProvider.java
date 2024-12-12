@@ -90,6 +90,8 @@ import static jdk.graal.compiler.hotspot.stubs.StubUtil.VM_MESSAGE_C;
 import static jdk.graal.compiler.hotspot.stubs.UnwindExceptionToCallerStub.EXCEPTION_HANDLER_FOR_RETURN_ADDRESS;
 import static jdk.graal.compiler.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
 import static jdk.graal.compiler.replacements.IdentityHashCodeSnippets.VALUEOBJECTHASHCODE;
+import static jdk.graal.compiler.replacements.InlineTypePlugin.LOADUNKNOWNINLINE;
+import static jdk.graal.compiler.replacements.InlineTypePlugin.STOREUNKNOWNINLINE;
 import static jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates.findMethod;
 import static jdk.graal.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation.POW;
 import static jdk.graal.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
@@ -562,6 +564,8 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         linkForeignCall(options, providers, MONITOREXIT, c.monitorexitAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, SUBSTITUTABILITYCHECK, c.substitutabilityCheckAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, VALUEOBJECTHASHCODE, c.valueObjectHashCodeAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, LOADUNKNOWNINLINE, c.loadUnknownInlineAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, STOREUNKNOWNINLINE, c.storeUnknownInlineAddress, PREPEND_THREAD);
         registerForeignCall(NOTIFY, c.notifyAddress, NativeCall);
         registerForeignCall(NOTIFY_ALL, c.notifyAllAddress, NativeCall);
 

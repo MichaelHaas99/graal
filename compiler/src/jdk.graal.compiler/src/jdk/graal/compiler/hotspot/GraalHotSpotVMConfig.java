@@ -565,6 +565,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final long notifyAllAddress = getAddress("JVMCIRuntime::object_notifyAll");
     public final long substitutabilityCheckAddress = getAddress("JVMCIRuntime::substitutability_check");
     public final long valueObjectHashCodeAddress = getAddress("JVMCIRuntime::value_object_hashCode");
+    public final long loadUnknownInlineAddress = getAddress("JVMCIRuntime::load_unknown_inline");
+    public final long storeUnknownInlineAddress = getAddress("JVMCIRuntime::store_unknown_inline");
 
     // This flag indicates that support for loom is enabled.
     public final boolean continuationsEnabled = getFieldValue("CompilerToVM::Data::continuations_enabled", Boolean.class, "bool");
