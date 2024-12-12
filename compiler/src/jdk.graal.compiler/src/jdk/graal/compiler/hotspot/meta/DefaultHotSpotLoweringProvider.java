@@ -539,17 +539,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (objectEqualsNode.substituabilityCheck() && graph.getGuardsStage().areDeoptsFixed()) {
                 objectEqualsSnippets.lower(objectEqualsNode, tool);
             }
-        } else if (n instanceof ArrayCopyNode arraycopy) {
-            if (arraycopy.canBeInlineTypeCopy()) {
-                // for flat arrays this will cause the compiler to inline the copy process if
-                // possible
-                arraycopySnippets.lower((ArrayCopyNode) n, true, tool);
-            } else {
-                // for flat arrays GenericArrayCopy will return an error and execute
-                // System.arraycopy
-                arraycopySnippets.lower((ArrayCopyNode) n, tool);
-            }
-
+        } else if (n instanceof ArrayCopyNode) {
+            arraycopySnippets.lower((ArrayCopyNode) n, tool);
         } else if (n instanceof GenericArrayCopyCallNode arraycopy) {
             lowerGenericArrayCopyCallNode(arraycopy);
         } else if (n instanceof CheckcastArrayCopyCallNode) {
