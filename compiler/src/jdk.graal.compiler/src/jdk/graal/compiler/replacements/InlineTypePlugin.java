@@ -3,8 +3,8 @@ package jdk.graal.compiler.replacements;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
-import static org.graalvm.word.LocationIdentity.any;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
+import static jdk.graal.compiler.nodes.NamedLocationIdentity.OBJECT_ARRAY_LOCATION;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -205,6 +205,8 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
+        if (!elementKind.isObject())
+            return false;
         boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
         boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
@@ -225,6 +227,8 @@ public class InlineTypePlugin implements NodePlugin {
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
             genFlatArrayCheck(b, array, trueBegin, falseBegin);
 
+            Stamp resultStamp = null;
+
             // true branch - flat array
             FixedWithNextNode instanceFlatArray;
             if (isInlineTypeArray) {
@@ -232,11 +236,13 @@ public class InlineTypePlugin implements NodePlugin {
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
                 instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
                                 shift);
+                resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
                 trueBegin.setNext(instanceFlatArray);
             } else {
                 // we don't know the type at compile time, produce a runtime call
                 LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index, boundsCheck, elementKind);
                 load.doForeignCall();
+                resultStamp = load.stamp(NodeView.DEFAULT);
                 instanceFlatArray = b.add(load);
                 trueBegin.setNext(instanceFlatArray);
             }
@@ -245,6 +251,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // false branch - no flat array
             ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, elementKind, b.getMetaAccess(), b.getConstantReflection()));
+            resultStamp = resultStamp.meet(instanceNonFlatArray.stamp(NodeView.DEFAULT));
             EndNode falseEnd = b.add(new EndNode());
             if (instanceNonFlatArray instanceof FixedNode fixedNode) {
                 falseBegin.setNext(fixedNode);
@@ -252,8 +259,10 @@ public class InlineTypePlugin implements NodePlugin {
                 falseBegin.setNext(falseEnd);
             }
 
-            Stamp stamp = !isInlineTypeArray ? StampFactory.object() : StampFactory.forDeclaredType(b.getAssumptions(), resolvedType.getComponentType(), false).getTrustedStamp();
-            ValuePhiNode phiNode = b.add(new ValuePhiNode(stamp, null,
+            // Stamp stamp = resolvedType.getComponentType() == null ? StampFactory.object() :
+            // StampFactory.forDeclaredType(b.getAssumptions(), resolvedType.getComponentType(),
+            // false).getTrustedStamp();
+            ValuePhiNode phiNode = b.add(new ValuePhiNode(resultStamp, null,
                             instanceFlatArray, instanceNonFlatArray));
             b.push(elementKind, phiNode);
             // merge, wait for frame state creation until phi is on stack
@@ -304,6 +313,9 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
+        if (!elementKind.isObject())
+            return false;
+
         boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
         boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
@@ -406,9 +418,11 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "loadUnknownInline", Object.class, Object.class,
+    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
+                    Object.class,
                     int.class);
 
-    public static final HotSpotForeignCallDescriptor STOREUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, any(), "storeUnknownInline", void.class, Object.class, Object.class,
-                    int.class);
+    public static final HotSpotForeignCallDescriptor STOREUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "storeUnknownInline", void.class,
+                    Object.class,
+                    int.class, Object.class);
 }
