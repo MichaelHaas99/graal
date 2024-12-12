@@ -1,16 +1,25 @@
 package jdk.graal.compiler.replacements;
 
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
 import static jdk.vm.ci.meta.DeoptimizationAction.None;
+import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
+import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
@@ -200,60 +209,63 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
-        if (array.stamp(NodeView.DEFAULT).isInlineTypeArray()) {
-            // array is known to consist of inline type objects
+        boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
+        boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
+        if (canBeInlineTypeArray) {
+            // array can consist of inline objects
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
-            if (resolvedType.isFlatArray()) {
-                // array not known to be flat
-
+            if (isInlineTypeArray && resolvedType.isFlatArray()) {
+                // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
                 b.push(elementKind,
                                 genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType, shift));
+                return true;
+            }
 
-            } else if (resolvedType.convertToFlatArray().isFlatArray()) {
-                // runtime check necessary
+            // check at runtime if we have a flat array
 
-                BeginNode trueBegin = b.getGraph().add(new BeginNode());
-                BeginNode falseBegin = b.getGraph().add(new BeginNode());
-                genFlatArrayCheck(b, array, trueBegin, falseBegin);
+            BeginNode trueBegin = b.getGraph().add(new BeginNode());
+            BeginNode falseBegin = b.getGraph().add(new BeginNode());
+            genFlatArrayCheck(b, array, trueBegin, falseBegin);
 
+            // true branch - flat array
+            FixedWithNextNode instanceFlatArray;
+            if (isInlineTypeArray) {
+                // produce code that loads the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
-                // true branch - flat array
-                NewInstanceNode instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
+                instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
                                 shift);
                 trueBegin.setNext(instanceFlatArray);
-                EndNode trueEnd = b.add(new EndNode());
-
-                // false branch - no flat array
-                ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, elementKind, b.getMetaAccess(), b.getConstantReflection()));
-                EndNode falseEnd = b.add(new EndNode());
-                if (instanceNonFlatArray instanceof FixedNode fixedNode) {
-                    falseBegin.setNext(fixedNode);
-                } else {
-                    falseBegin.setNext(falseEnd);
-                }
-
-                ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), resolvedType.getComponentType(), false).getTrustedStamp(), null,
-                                instanceFlatArray, instanceNonFlatArray));
-                b.push(elementKind, phiNode);
-                // merge, wait for frame state creation until phi is on stack
-                MergeNode merge = b.add(new MergeNode());
-                phiNode.setMerge(merge);
-                merge.addForwardEnd(trueEnd);
-                merge.addForwardEnd(falseEnd);
-
             } else {
-                return false;
+                // we don't know the type at compile time, produce a runtime call
+                LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index, boundsCheck, elementKind);
+                load.doForeignCall();
+                load.setAdditionalOffset(0);
+                instanceFlatArray = b.add(load);
+                trueBegin.setNext(instanceFlatArray);
             }
-            return true;
 
-        } else if (array.stamp(NodeView.DEFAULT).canBeInlineTypeArray()) {
-            /*
-             * TODO: array is maybe flat, go back to interpreter for the moment, will be replaced
-             * with a runtime call
-             */
-            b.add(new DeoptimizeNode(None, DeoptimizationReason.TransferToInterpreter));
+            EndNode trueEnd = b.add(new EndNode());
+
+            // false branch - no flat array
+            ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, elementKind, b.getMetaAccess(), b.getConstantReflection()));
+            EndNode falseEnd = b.add(new EndNode());
+            if (instanceNonFlatArray instanceof FixedNode fixedNode) {
+                falseBegin.setNext(fixedNode);
+            } else {
+                falseBegin.setNext(falseEnd);
+            }
+
+            Stamp stamp = !isInlineTypeArray ? StampFactory.object() : StampFactory.forDeclaredType(b.getAssumptions(), resolvedType.getComponentType(), false).getTrustedStamp();
+            ValuePhiNode phiNode = b.add(new ValuePhiNode(stamp, null,
+                            instanceFlatArray, instanceNonFlatArray));
+            b.push(elementKind, phiNode);
+            // merge, wait for frame state creation until phi is on stack
+            MergeNode merge = b.add(new MergeNode());
+            phiNode.setMerge(merge);
+            merge.addForwardEnd(trueEnd);
+            merge.addForwardEnd(falseEnd);
             return true;
         }
         return false;
@@ -397,4 +409,10 @@ public class InlineTypePlugin implements NodePlugin {
         // TODO: insert profiling data
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
+
+    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, NO_LOCATIONS, "loadUnknownInline", Object.class, Object.class,
+                    int.class);
+
+    public static final HotSpotForeignCallDescriptor STOREUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, any(), "storeUnknownInline", void.class, Object.class, Object.class,
+                    int.class);
 }
