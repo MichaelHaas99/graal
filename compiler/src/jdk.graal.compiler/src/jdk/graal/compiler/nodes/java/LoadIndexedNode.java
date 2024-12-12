@@ -101,6 +101,16 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         this.location = NamedLocationIdentity.getFlatArrayLocation(field);
     }
 
+    private boolean foreignCall = false;
+
+    public void doForeignCall() {
+        foreignCall = true;
+    }
+
+    public boolean doesForeignCall() {
+        return foreignCall;
+    }
+
     /**
      * Creates a new LoadIndexedNode.
      *
