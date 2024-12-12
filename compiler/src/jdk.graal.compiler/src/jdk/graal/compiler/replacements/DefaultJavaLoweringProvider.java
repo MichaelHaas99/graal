@@ -27,6 +27,8 @@ package jdk.graal.compiler.replacements;
 import static jdk.graal.compiler.core.common.GraalOptions.EmitStringSubstitutions;
 import static jdk.graal.compiler.core.common.GraalOptions.InlineGraalStubs;
 import static jdk.graal.compiler.core.common.SpectrePHTMitigations.Options.SpectrePHTIndexMasking;
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMax;
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMin;
@@ -58,6 +60,7 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ComputeObjectAddressNode;
@@ -619,15 +622,16 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             index = graph.addOrUniqueWithInputs(proxyIndex(loadIndexed, index, array, tool));
         }
 
+        ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
+
         ValueNode read;
         ValueNode readValue;
         if (loadIndexed.doesForeignCall()) {
-            ForeignCallNode foreignCallResult = graph.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, index));
+            ForeignCallNode foreignCallResult = graph.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, positiveIndex));
             graph.addBeforeFixed(loadIndexed, foreignCallResult);
             read = foreignCallResult;
             readValue = read;
         } else {
-            ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
             AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex, loadIndexed.getShift());
 
             LocationIdentity arrayLocation = loadIndexed.getLocationIdentity();
@@ -728,33 +732,45 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 condition = null;
             }
         }
-        BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
+
         ValueNode positiveIndex = createPositiveIndex(graph, storeIndexed.index(), boundsCheck);
-        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
-        LocationIdentity locationIdentity = addBeforeFixed instanceof StoreFlatIndexedNode ? ((StoreFlatIndexedNode) addBeforeFixed).getKilledLocationIdentity()
-                        : NamedLocationIdentity.getArrayLocation(storageKind);
-        WriteNode memoryWrite = graph.add(new WriteNode(address, locationIdentity, implicitStoreConvert(graph, storageKind, value),
-                        barrierType, MemoryOrderMode.PLAIN));
-        memoryWrite.setGuard(boundsCheck);
-        if (condition != null) {
-            tool.createGuard(addBeforeFixed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
+
+        if (storeIndexed.doesForeignCall()) {
+            HotSpotForeignCallDescriptor descriptor = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, NamedLocationIdentity.getArrayLocation(storageKind), "storeUnknownInline", void.class,
+                            Object.class, Object.class,
+                            int.class);
+            ForeignCallNode foreignCall = graph.add(new ForeignCallNode(descriptor, array, positiveIndex, value));
+            foreignCall.setStateAfter(storeIndexed.stateAfter());
+            graph.replaceFixed(addBeforeFixed, foreignCall);
+        } else {
+            BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
+            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
+            LocationIdentity locationIdentity = addBeforeFixed instanceof StoreFlatIndexedNode ? ((StoreFlatIndexedNode) addBeforeFixed).getKilledLocationIdentity()
+                            : NamedLocationIdentity.getArrayLocation(storageKind);
+            WriteNode memoryWrite = graph.add(new WriteNode(address, locationIdentity, implicitStoreConvert(graph, storageKind, value),
+                            barrierType, MemoryOrderMode.PLAIN));
+            memoryWrite.setGuard(boundsCheck);
+            if (condition != null) {
+                tool.createGuard(addBeforeFixed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
+            }
+
+            if (!replaceBeforeFixed) {
+                assert storeFlatIndexed != null : "store flat indexed node needs to be defined";
+                // only last store should have a valid frame state
+                memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                graph.addBeforeFixed(addBeforeFixed, memoryWrite);
+            } else {
+                FrameState state;
+                if (storeFlatIndexed != null) {
+                    state = storeFlatIndexed.stateAfter();
+                } else {
+                    state = storeIndexed.stateAfter();
+                }
+                memoryWrite.setStateAfter(state);
+                graph.replaceFixed(addBeforeFixed, memoryWrite);
+            }
         }
 
-        if (!replaceBeforeFixed) {
-            assert storeFlatIndexed != null : "store flat indexed node needs to be defined";
-            // only last store should have a valid frame state
-            memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
-            graph.addBeforeFixed(addBeforeFixed, memoryWrite);
-        } else {
-            FrameState state;
-            if (storeFlatIndexed != null) {
-                state = storeFlatIndexed.stateAfter();
-            } else {
-                state = storeIndexed.stateAfter();
-            }
-            memoryWrite.setStateAfter(state);
-            graph.replaceFixed(addBeforeFixed, memoryWrite);
-        }
     }
 
     protected void lowerArrayLengthNode(ArrayLengthNode arrayLengthNode, LoweringTool tool) {
