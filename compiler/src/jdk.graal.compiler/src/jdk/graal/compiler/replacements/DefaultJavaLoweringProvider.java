@@ -27,13 +27,12 @@ package jdk.graal.compiler.replacements;
 import static jdk.graal.compiler.core.common.GraalOptions.EmitStringSubstitutions;
 import static jdk.graal.compiler.core.common.GraalOptions.InlineGraalStubs;
 import static jdk.graal.compiler.core.common.SpectrePHTMitigations.Options.SpectrePHTIndexMasking;
-import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMax;
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMin;
 import static jdk.graal.compiler.nodes.java.ArrayLengthNode.readArrayLength;
 import static jdk.graal.compiler.replacements.InlineTypePlugin.LOADUNKNOWNINLINE;
+import static jdk.graal.compiler.replacements.InlineTypePlugin.STOREUNKNOWNINLINE;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.BoundsCheckException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
@@ -60,7 +59,6 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
-import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ComputeObjectAddressNode;
@@ -628,7 +626,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode readValue;
         if (loadIndexed.doesForeignCall()) {
             ForeignCallNode foreignCallResult = graph.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, positiveIndex));
-            graph.addBeforeFixed(loadIndexed, foreignCallResult);
             read = foreignCallResult;
             readValue = read;
         } else {
@@ -736,10 +733,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode positiveIndex = createPositiveIndex(graph, storeIndexed.index(), boundsCheck);
 
         if (storeIndexed.doesForeignCall()) {
-            HotSpotForeignCallDescriptor descriptor = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, NamedLocationIdentity.getArrayLocation(storageKind), "storeUnknownInline", void.class,
-                            Object.class, Object.class,
-                            int.class);
-            ForeignCallNode foreignCall = graph.add(new ForeignCallNode(descriptor, array, positiveIndex, value));
+            ForeignCallNode foreignCall = graph.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, positiveIndex, value));
             foreignCall.setStateAfter(storeIndexed.stateAfter());
             graph.replaceFixed(addBeforeFixed, foreignCall);
         } else {
