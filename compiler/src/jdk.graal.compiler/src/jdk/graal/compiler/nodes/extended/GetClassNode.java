@@ -32,7 +32,6 @@ import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -42,7 +41,7 @@ import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -71,10 +70,14 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
         if (metaAccess != null && object != null && object.stamp(view) instanceof ObjectStamp) {
             ObjectStamp objectStamp = (ObjectStamp) object.stamp(view);
             if (objectStamp.isExactType()) {
+                if (objectStamp.type().isArray())
+                    return null;
                 return ConstantNode.forConstant(constantReflection.asJavaClass(objectStamp.type()), metaAccess);
             }
             TypeReference maybeExactType = TypeReference.createTrusted(assumptions, objectStamp.type());
             if (maybeExactType != null && maybeExactType.isExact()) {
+                if (maybeExactType.getType().isArray())
+                    return null;
                 return ConstantNode.forConstant(constantReflection.asJavaClass(maybeExactType.getType()), metaAccess);
             }
         }
