@@ -3,7 +3,6 @@ package jdk.graal.compiler.replacements;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.OBJECT_ARRAY_LOCATION;
 
 import java.util.ArrayList;
@@ -418,7 +417,7 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
+    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
                     Object.class,
                     int.class);
 

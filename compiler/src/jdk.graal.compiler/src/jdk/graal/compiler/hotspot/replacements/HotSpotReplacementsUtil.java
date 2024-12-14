@@ -389,7 +389,7 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static int flatArrayKlassKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+    public static int flatArrayKlassKind(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.klassFlatArrayKlassKind;
     }
 
@@ -399,8 +399,18 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static int flatArrayMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.flatArrayMaskInPlace;
+    }
+
+    @Fold
     public static int nullFreeArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.nullFreeArrayPattern;
+    }
+
+    @Fold
+    public static int nullFreeArrayMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.nullFreeArrayMaskInPlace;
     }
 
     @Fold
