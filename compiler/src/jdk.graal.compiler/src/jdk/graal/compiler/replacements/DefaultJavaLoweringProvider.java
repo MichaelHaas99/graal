@@ -727,6 +727,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
         ValueNode positiveIndex = createPositiveIndex(graph, storeIndexed.index(), boundsCheck);
 
+        if (condition != null) {
+            tool.createGuard(addBeforeFixed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
+        }
+
         if (storeIndexed.doesForeignCall()) {
             ForeignCallNode foreignCall = graph.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, positiveIndex, value));
             foreignCall.setStateAfter(storeIndexed.stateAfter());
@@ -739,9 +743,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             WriteNode memoryWrite = graph.add(new WriteNode(address, locationIdentity, implicitStoreConvert(graph, storageKind, value),
                             barrierType, MemoryOrderMode.PLAIN));
             memoryWrite.setGuard(boundsCheck);
-            if (condition != null) {
-                tool.createGuard(addBeforeFixed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
-            }
+
 
             if (!replaceBeforeFixed) {
                 assert storeFlatIndexed != null : "store flat indexed node needs to be defined";
