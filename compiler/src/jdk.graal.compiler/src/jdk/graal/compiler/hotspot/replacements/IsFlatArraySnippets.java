@@ -2,7 +2,8 @@ package jdk.graal.compiler.hotspot.replacements;
 
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_ACCESS_FLAGS_LOCATION;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayKlassKindOffset;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayKlassKind;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayPattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.klassKindOffset;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
@@ -43,7 +44,7 @@ public class IsFlatArraySnippets implements Snippets {
             StructuredGraph graph = node.graph();
             assert ((ObjectStamp) node.getValue().stamp(NodeView.DEFAULT)).nonNull();
             if (target.wordSize > 4) {
-                args = new SnippetTemplate.Arguments(isFlatArrayFromMarkWordSnippet, graph.getGuardsStage(), tool.getLoweringStage());
+                args = new SnippetTemplate.Arguments(isFlatArrayFromKlassSnippet, graph.getGuardsStage(), tool.getLoweringStage());
                 args.add("object", node.getValue());
             } else {
                 args = new SnippetTemplate.Arguments(isFlatArrayFromKlassSnippet, graph.getGuardsStage(), tool.getLoweringStage());
@@ -54,12 +55,13 @@ public class IsFlatArraySnippets implements Snippets {
 
     }
 
+    // has an error
     @Snippet
     public static boolean isFlatArrayFromMarkWord(Object object) {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        return mark.and(flatArrayPattern(INJECTED_VMCONFIG)).equal(flatArrayPattern(INJECTED_VMCONFIG));
+        return mark.and(flatArrayMaskInPlace(INJECTED_VMCONFIG)).equal(flatArrayPattern(INJECTED_VMCONFIG));
 
     }
 
@@ -67,7 +69,7 @@ public class IsFlatArraySnippets implements Snippets {
     public static boolean isFlatArrayFromKlass(Object object) {
         HotSpotReplacementsUtil.verifyOop(object);
         KlassPointer hub = loadHub(object);
-        return hub.readInt(klassKindOffset(INJECTED_VMCONFIG), KLASS_ACCESS_FLAGS_LOCATION) == flatArrayKlassKindOffset(INJECTED_VMCONFIG);
+        return hub.readInt(klassKindOffset(INJECTED_VMCONFIG), KLASS_ACCESS_FLAGS_LOCATION) == flatArrayKlassKind(INJECTED_VMCONFIG);
 
     }
 

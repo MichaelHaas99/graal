@@ -6,6 +6,7 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.la
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayPattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
@@ -61,9 +62,10 @@ public class IsNullFreeArraySnippets implements Snippets {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        return mark.and(nullFreeArrayPattern(INJECTED_VMCONFIG)).equal(nullFreeArrayPattern(INJECTED_VMCONFIG));
+        return mark.and(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG)).equal(nullFreeArrayPattern(INJECTED_VMCONFIG));
     }
 
+    // error doesn't recognize null-restricted array, test with TestArrays.java
     @Snippet
     public static boolean isNullFreeArrayFromKlass(Object object) {
         HotSpotReplacementsUtil.verifyOop(object);
