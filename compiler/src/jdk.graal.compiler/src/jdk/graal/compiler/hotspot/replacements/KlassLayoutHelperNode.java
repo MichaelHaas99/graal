@@ -120,18 +120,14 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
             HotSpotResolvedObjectType javaType = (HotSpotResolvedObjectType) constantReflection.asJavaType(klass.asConstant());
             return ConstantNode.forInt(javaType.layoutHelper());
         }
-        if (klass instanceof LoadHubNode) {
-            LoadHubNode hub = (LoadHubNode) klass;
-            Stamp hubStamp = hub.getValue().stamp(NodeView.DEFAULT);
-            if (hubStamp instanceof ObjectStamp) {
-                ObjectStamp ostamp = (ObjectStamp) hubStamp;
-                HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) ostamp.type();
-                if (type != null && type.isArray() && !type.getComponentType().isPrimitive()) {
-                    // The layout for all object arrays is the same.
-                    return ConstantNode.forInt(type.layoutHelper());
-                }
-            }
-        }
+/*
+ * if (klass instanceof LoadHubNode) { LoadHubNode hub = (LoadHubNode) klass; Stamp hubStamp =
+ * hub.getValue().stamp(NodeView.DEFAULT); if (hubStamp instanceof ObjectStamp) { ObjectStamp ostamp
+ * = (ObjectStamp) hubStamp; HotSpotResolvedObjectType type = (HotSpotResolvedObjectType)
+ * ostamp.type(); // layout can be different for inline type arrays if (type != null &&
+ * type.isArray() && !type.getComponentType().isPrimitive()) { // The layout for all object arrays
+ * is the same. return ConstantNode.forInt(type.layoutHelper()); } } }
+ */
         if (self == null) {
             self = new KlassLayoutHelperNode(klass, klassLayoutHelperNeutralValue);
         }

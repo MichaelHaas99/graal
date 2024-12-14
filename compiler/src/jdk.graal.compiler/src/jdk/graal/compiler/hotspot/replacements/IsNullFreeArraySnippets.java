@@ -5,10 +5,12 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.la
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperNullFreeShift;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.lockMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayPattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.unlockedValue;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
 import org.graalvm.word.WordFactory;
@@ -57,22 +59,27 @@ public class IsNullFreeArraySnippets implements Snippets {
 
     }
 
+    // see oop.inline.hpp is_null_free_array()
     @Snippet
     public static boolean isNullFreeArrayFromMarkWord(Object object) {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        return mark.and(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG)).equal(nullFreeArrayPattern(INJECTED_VMCONFIG));
+        final Word lockBits = mark.and(lockMaskInPlace(INJECTED_VMCONFIG));
+        if (lockBits.equal(WordFactory.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
+            return mark.and(WordFactory.unsigned(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG))).equal(WordFactory.unsigned(nullFreeArrayPattern(INJECTED_VMCONFIG)));
+        }
+        return isNullFreeArrayFromKlass(object);
     }
 
-    // error doesn't recognize null-restricted array, test with TestArrays.java
     @Snippet
     public static boolean isNullFreeArrayFromKlass(Object object) {
         HotSpotReplacementsUtil.verifyOop(object);
 
         KlassPointer hub = loadHub(object);
         int layoutHelper = readLayoutHelper(hub);
-        return WordFactory.signed(layoutHelper).signedShiftRight(layoutHelperNullFreeShift(INJECTED_VMCONFIG)).and(layoutHelperNullFreeMask(INJECTED_VMCONFIG)).greaterThan(0);
+        return WordFactory.signed(layoutHelper).signedShiftRight(WordFactory.signed(layoutHelperNullFreeShift(INJECTED_VMCONFIG))).and(
+                        WordFactory.signed(layoutHelperNullFreeMask(INJECTED_VMCONFIG))).greaterThan(0);
 
     }
 
