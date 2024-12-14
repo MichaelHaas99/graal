@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.nodes.memory;
 
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
@@ -278,7 +279,7 @@ public class ReadNode extends FloatableAccessNode
                 }
             }
         }
-        if (locationIdentity instanceof CanonicalizableLocation && !object.stamp(view).canBeInlineTypeArray()) {
+        if (locationIdentity instanceof CanonicalizableLocation && !object.stamp(view).canBeInlineTypeArray() && locationIdentity != KLASS_LAYOUT_HELPER_LOCATION) {
             CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
             ValueNode result = canonicalize.canonicalizeRead(read, object, offset, view, tool);
             assert result != null;
