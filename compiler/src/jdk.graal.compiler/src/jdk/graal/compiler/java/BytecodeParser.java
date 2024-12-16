@@ -4946,6 +4946,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     if (singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                         // also check against the flat array class
                         flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+                        typeCheck = append(LogicNode.or(typeCheck, flatArrayTypeCheck, BranchProbabilityData.unknown()));
                     }
                     if (!typeCheck.isTautology()) {
                         SpeculationLog.Speculation speculation = mayUseTypeProfile();
@@ -4966,7 +4967,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             instanceOfNode = createInstanceOf(checkedType, object, null);
             if (checkedType.getType() instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                 // also check against the flat array class
-                flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+                flatArrayTypeCheck = append(createInstanceOf(TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray()), object, null));
             }
         }
         LogicNode logicNode = genUnique(instanceOfNode);
