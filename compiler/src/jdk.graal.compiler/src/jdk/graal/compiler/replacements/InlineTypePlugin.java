@@ -3,32 +3,39 @@ package jdk.graal.compiler.replacements;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.OBJECT_ARRAY_LOCATION;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.EndNode;
+import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
+import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
+import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
@@ -36,10 +43,13 @@ import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class InlineTypePlugin implements NodePlugin {
 
@@ -90,6 +100,9 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private NewInstanceNode genGetLoadFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
+
+        // make a null check for all load operations
+        object = genNullCheck(b, object);
 
         HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
 
@@ -165,6 +178,9 @@ public class InlineTypePlugin implements NodePlugin {
 
     private void genPutFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
 
+        // make a null check for all load operations
+        object = genNullCheck(b, object);
+
         HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
 
         int destOff = field.getOffset();
@@ -206,6 +222,7 @@ public class InlineTypePlugin implements NodePlugin {
     public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
         if (!elementKind.isObject())
             return false;
+
         boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
         boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
@@ -233,10 +250,14 @@ public class InlineTypePlugin implements NodePlugin {
             if (isInlineTypeArray) {
                 // produce code that loads the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
-                instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
+                ValueNode nullCheckedArray = genNullCheck(b, array, trueBegin);
+                boolean addedNext = trueBegin.next() != null;
+                instanceFlatArray = genArrayLoadFlatField(b, nullCheckedArray, index, boundsCheck, resolvedType,
                                 shift);
                 resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
-                trueBegin.setNext(instanceFlatArray);
+                if (!addedNext) {
+                    trueBegin.setNext(instanceFlatArray);
+                }
             } else {
                 // we don't know the type at compile time, produce a runtime call
                 LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index, boundsCheck, elementKind);
@@ -340,15 +361,35 @@ public class InlineTypePlugin implements NodePlugin {
             // true branch - flat array
             EndNode trueEnd;
             if (isInlineTypeArray) {
-                // produce code that loads the flat inline type
-                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
-                                value, shift);
-                trueEnd = b.add(new EndNode());
-                if (firstFixedNode instanceof FixedNode fixedNode) {
-                    trueBegin.setNext(fixedNode);
-                } else {
-                    trueBegin.setNext(trueEnd);
+
+                boolean addedNext = false;
+
+                // we store the value in an flat array so do a null check before loading the fields
+                ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
+                addedNext = trueBegin.next() != null;
+
+                // before loading the field values check if the value type is what we expect
+                GuardingNode flattenedStoreCheck = storeCheck;
+                if (storeCheck == null) {
+                    flattenedStoreCheck = genStoreCheck(b, array, nullCheckedValue);
+                    if (!addedNext) {
+                        trueBegin.setNext((FixedNode) flattenedStoreCheck);
+                        addedNext = true;
+                    }
                 }
+
+                // produce code that stores the flat inline type
+                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, flattenedStoreCheck, resolvedType,
+                                nullCheckedValue, shift);
+                trueEnd = b.add(new EndNode());
+                if (!addedNext) {
+                    if (firstFixedNode instanceof FixedNode fixedNode) {
+                        trueBegin.setNext(fixedNode);
+                    } else {
+                        trueBegin.setNext(trueEnd);
+                    }
+                }
+
             } else {
                 // we don't know the type at compile time, produce a runtime call
                 StoreIndexedNode store = new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, value);
@@ -376,7 +417,6 @@ public class InlineTypePlugin implements NodePlugin {
                     ValueNode value, int shift) {
         HotSpotResolvedObjectType elementType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
         ResolvedJavaField[] innerFields = elementType.getInstanceFields(true);
-
 
         List<ValueNode> readOperations = new ArrayList<>();
         List<StoreFlatIndexedNode.StoreIndexedWrapper> writeOperations = new ArrayList<>();
@@ -417,7 +457,30 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
+    private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value) {
+        return genNullCheck(b, value, null);
+    }
+
+    private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value, BeginNode trueBegin) {
+        if (!StampTool.isPointerNonNull(value)) {
+            LogicNode condition = b.add(IsNullNode.create(value));
+            FixedNode guardingNode = b.add(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, InvalidateReprofile, true));
+            if (trueBegin != null)
+                trueBegin.setNext(guardingNode);
+            return b.add(PiNode.create(value, StampFactory.objectNonNull(), guardingNode));
+        }
+        return value;
+    }
+
+    private GuardingNode genStoreCheck(GraphBuilderContext b, ValueNode array, ValueNode value) {
+        TypeReference arrayType = StampTool.typeReferenceOrNull(array);
+        ResolvedJavaType elementType = arrayType.getType().getComponentType();
+        TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(), elementType);
+        LogicNode condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value));
+        return b.add(new FixedGuardNode(condition, DeoptimizationReason.ArrayStoreException, InvalidateReprofile));
+    }
+
+    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
                     Object.class,
                     int.class);
 
