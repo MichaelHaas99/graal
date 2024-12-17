@@ -33,10 +33,13 @@ import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
+import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
+import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
 import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
+import jdk.graal.compiler.nodes.java.InstanceOfDynamicNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
@@ -476,14 +479,45 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value, BeginNode begin) {
+        if (storeCheck != null)
+            return storeCheck;
+// TypeReference arrayType = StampTool.typeReferenceOrNull(array);
+// if (arrayType != null && arrayType.isExact()) {
+// ResolvedJavaType elementType = arrayType.getType().getComponentType();
+// TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(),
+// elementType);
+// condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.createAllowNull(typeReference,
+// value, null, null));
+// }else{
+// ValueNode arrayClass = createReadHub(graph, array, tool);
+// boolean isKnownObjectArray = arrayType != null &&
+// !arrayType.getType().getComponentType().isPrimitive();
+// ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, isKnownObjectArray,
+// addBeforeFixed);
+// LogicNode typeTest = graph.unique(InstanceOfDynamicNode.create(graph.getAssumptions(),
+// tool.getConstantReflection(), componentHub, value, false));
+// condition = LogicNode.or(graph.unique(IsNullNode.create(value)), typeTest,
+// BranchProbabilityNode.NOT_LIKELY_PROFILE);
+// }
+
+        LogicNode condition;
         TypeReference arrayType = StampTool.typeReferenceOrNull(array);
-        ResolvedJavaType elementType = arrayType.getType().getComponentType();
-        TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(), elementType);
-        LogicNode condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.createAllowNull(typeReference, value, null, null));
+        if (arrayType != null && arrayType.isExact()) {
+            ResolvedJavaType elementType = arrayType.getType().getComponentType();
+            TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(),
+                            elementType);
+            condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.createAllowNull(typeReference,
+                            value, null, null));
+        } else {
+            ValueNode arrayClass = b.add(LoadHubNode.create(array, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection()));
+            ValueNode componentHub = b.add(LoadArrayComponentHubNode.create(arrayClass, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection()));
+            condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), componentHub, value, true));
+        }
         FixedGuardNode guard = b.add(new FixedGuardNode(condition, DeoptimizationReason.ArrayStoreException, InvalidateReprofile));
         if (hasNoNext(begin)) {
             begin.setNext(guard);
         }
+
         return guard;
     }
 
@@ -492,6 +526,8 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index, BeginNode begin) {
+        if (boundsCheck != null)
+            return boundsCheck;
         ValueNode length = b.add(ArrayLengthNode.create(array, b.getConstantReflection()));
         if (length instanceof FixedNode fixed && hasNoNext(begin)) {
             begin.setNext(fixed);
