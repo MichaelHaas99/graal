@@ -28,12 +28,14 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
+import jdk.graal.compiler.nodes.calc.IntegerBelowNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
+import jdk.graal.compiler.nodes.java.ArrayLengthNode;
 import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
@@ -251,11 +253,17 @@ public class InlineTypePlugin implements NodePlugin {
                 // produce code that loads the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
                 ValueNode nullCheckedArray = genNullCheck(b, array, trueBegin);
-                boolean addedNext = trueBegin.next() != null;
-                instanceFlatArray = genArrayLoadFlatField(b, nullCheckedArray, index, boundsCheck, resolvedType,
+
+                // before loading the field values check if the specified index is within bounds
+                GuardingNode flatBoundsCheck = boundsCheck;
+                if (boundsCheck == null) {
+                    flatBoundsCheck = genBoundsCheck(b, nullCheckedArray, index, trueBegin);
+                }
+
+                instanceFlatArray = genArrayLoadFlatField(b, nullCheckedArray, index, flatBoundsCheck, resolvedType,
                                 shift);
                 resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
-                if (!addedNext) {
+                if (hasNoNext(trueBegin)) {
                     trueBegin.setNext(instanceFlatArray);
                 }
             } else {
@@ -362,27 +370,29 @@ public class InlineTypePlugin implements NodePlugin {
             EndNode trueEnd;
             if (isInlineTypeArray) {
 
-                boolean addedNext = false;
-
                 // we store the value in an flat array so do a null check before loading the fields
                 ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
-                addedNext = trueBegin.next() != null;
 
-                // before loading the field values check if the value type is what we expect
-                GuardingNode flattenedStoreCheck = storeCheck;
-                if (storeCheck == null) {
-                    flattenedStoreCheck = genStoreCheck(b, array, nullCheckedValue);
-                    if (!addedNext) {
-                        trueBegin.setNext((FixedNode) flattenedStoreCheck);
-                        addedNext = true;
-                    }
+                // before loading the field values check if the specified index is within bounds
+                GuardingNode flatBoundsCheck = boundsCheck;
+                ValueNode nullCheckedArray = array;
+                if (boundsCheck == null) {
+                    nullCheckedArray = genNullCheck(b, array, trueBegin);
+                    flatBoundsCheck = genBoundsCheck(b, nullCheckedArray, index, trueBegin);
                 }
 
+                // before loading the field values check if the value type is what we expect
+                GuardingNode flatStoreCheck = storeCheck;
+                if (storeCheck == null) {
+                    flatStoreCheck = genStoreCheck(b, nullCheckedArray, nullCheckedValue, trueBegin);
+                }
+
+
                 // produce code that stores the flat inline type
-                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, flattenedStoreCheck, resolvedType,
+                ValueNode firstFixedNode = genArrayStoreFlatField(b, nullCheckedArray, index, flatBoundsCheck, flatStoreCheck, resolvedType,
                                 nullCheckedValue, shift);
                 trueEnd = b.add(new EndNode());
-                if (!addedNext) {
+                if (hasNoNext(trueBegin)) {
                     if (firstFixedNode instanceof FixedNode fixedNode) {
                         trueBegin.setNext(fixedNode);
                     } else {
@@ -461,23 +471,44 @@ public class InlineTypePlugin implements NodePlugin {
         return genNullCheck(b, value, null);
     }
 
-    private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value, BeginNode trueBegin) {
+    private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value, BeginNode begin) {
         if (!StampTool.isPointerNonNull(value)) {
             LogicNode condition = b.add(IsNullNode.create(value));
             FixedNode guardingNode = b.add(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, InvalidateReprofile, true));
-            if (trueBegin != null)
-                trueBegin.setNext(guardingNode);
+            if (hasNoNext(begin))
+                begin.setNext(guardingNode);
             return b.add(PiNode.create(value, StampFactory.objectNonNull(), guardingNode));
         }
         return value;
     }
 
-    private GuardingNode genStoreCheck(GraphBuilderContext b, ValueNode array, ValueNode value) {
+    private GuardingNode genStoreCheck(GraphBuilderContext b, ValueNode array, ValueNode value, BeginNode begin) {
         TypeReference arrayType = StampTool.typeReferenceOrNull(array);
         ResolvedJavaType elementType = arrayType.getType().getComponentType();
         TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(), elementType);
         LogicNode condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value));
-        return b.add(new FixedGuardNode(condition, DeoptimizationReason.ArrayStoreException, InvalidateReprofile));
+        FixedGuardNode guard = b.add(new FixedGuardNode(condition, DeoptimizationReason.ArrayStoreException, InvalidateReprofile));
+        if (hasNoNext(begin)) {
+            begin.setNext(guard);
+        }
+        return guard;
+    }
+
+    private GuardingNode genBoundsCheck(GraphBuilderContext b, ValueNode array, ValueNode index, BeginNode begin) {
+        ValueNode length = b.add(ArrayLengthNode.create(array, b.getConstantReflection()));
+        if (length instanceof FixedNode fixed && hasNoNext(begin)) {
+            begin.setNext(fixed);
+        }
+        LogicNode condition = b.add(IntegerBelowNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, index, length, NodeView.DEFAULT));
+        FixedGuardNode guard = b.add(new FixedGuardNode(condition, DeoptimizationReason.BoundsCheckException, InvalidateReprofile));
+        if (hasNoNext(begin)) {
+            begin.setNext(guard);
+        }
+        return guard;
+    }
+
+    public static boolean hasNoNext(BeginNode begin) {
+        return begin != null && begin.next() == null;
     }
 
     public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
