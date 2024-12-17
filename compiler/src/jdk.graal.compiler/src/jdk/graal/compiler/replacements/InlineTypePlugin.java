@@ -231,6 +231,10 @@ public class InlineTypePlugin implements NodePlugin {
         if (canBeInlineTypeArray) {
             // array can consist of inline objects
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
+
+            array = genNullCheck(b, array);
+            boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
+
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
@@ -252,15 +256,8 @@ public class InlineTypePlugin implements NodePlugin {
             if (isInlineTypeArray) {
                 // produce code that loads the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
-                ValueNode nullCheckedArray = genNullCheck(b, array, trueBegin);
 
-                // before loading the field values check if the specified index is within bounds
-                GuardingNode flatBoundsCheck = boundsCheck;
-                if (boundsCheck == null) {
-                    flatBoundsCheck = genBoundsCheck(b, nullCheckedArray, index, trueBegin);
-                }
-
-                instanceFlatArray = genArrayLoadFlatField(b, nullCheckedArray, index, flatBoundsCheck, resolvedType,
+                instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
                                 shift);
                 resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
                 if (hasNoNext(trueBegin)) {
@@ -350,6 +347,12 @@ public class InlineTypePlugin implements NodePlugin {
         if (canBeInlineTypeArray) {
             // array can consist of inline objects
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
+
+            // produce checks for all store indexed nodes
+            array = genNullCheck(b, array);
+            boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
+            storeCheck = genStoreCheck(b, storeCheck, array, value);
+
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
@@ -370,26 +373,12 @@ public class InlineTypePlugin implements NodePlugin {
             EndNode trueEnd;
             if (isInlineTypeArray) {
 
+
                 // we store the value in an flat array so do a null check before loading the fields
                 ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
 
-                // before loading the field values check if the specified index is within bounds
-                GuardingNode flatBoundsCheck = boundsCheck;
-                ValueNode nullCheckedArray = array;
-                if (boundsCheck == null) {
-                    nullCheckedArray = genNullCheck(b, array, trueBegin);
-                    flatBoundsCheck = genBoundsCheck(b, nullCheckedArray, index, trueBegin);
-                }
-
-                // before loading the field values check if the value type is what we expect
-                GuardingNode flatStoreCheck = storeCheck;
-                if (storeCheck == null) {
-                    flatStoreCheck = genStoreCheck(b, nullCheckedArray, nullCheckedValue, trueBegin);
-                }
-
-
                 // produce code that stores the flat inline type
-                ValueNode firstFixedNode = genArrayStoreFlatField(b, nullCheckedArray, index, flatBoundsCheck, flatStoreCheck, resolvedType,
+                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 nullCheckedValue, shift);
                 trueEnd = b.add(new EndNode());
                 if (hasNoNext(trueBegin)) {
@@ -482,11 +471,15 @@ public class InlineTypePlugin implements NodePlugin {
         return value;
     }
 
-    private GuardingNode genStoreCheck(GraphBuilderContext b, ValueNode array, ValueNode value, BeginNode begin) {
+    private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value) {
+        return genStoreCheck(b, storeCheck, array, value, null);
+    }
+
+    private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value, BeginNode begin) {
         TypeReference arrayType = StampTool.typeReferenceOrNull(array);
         ResolvedJavaType elementType = arrayType.getType().getComponentType();
         TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(), elementType);
-        LogicNode condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value));
+        LogicNode condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.createAllowNull(typeReference, value, null, null));
         FixedGuardNode guard = b.add(new FixedGuardNode(condition, DeoptimizationReason.ArrayStoreException, InvalidateReprofile));
         if (hasNoNext(begin)) {
             begin.setNext(guard);
@@ -494,7 +487,11 @@ public class InlineTypePlugin implements NodePlugin {
         return guard;
     }
 
-    private GuardingNode genBoundsCheck(GraphBuilderContext b, ValueNode array, ValueNode index, BeginNode begin) {
+    private GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index) {
+        return genBoundsCheck(b, boundsCheck, array, index, null);
+    }
+
+    private GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index, BeginNode begin) {
         ValueNode length = b.add(ArrayLengthNode.create(array, b.getConstantReflection()));
         if (length instanceof FixedNode fixed && hasNoNext(begin)) {
             begin.setNext(fixed);
