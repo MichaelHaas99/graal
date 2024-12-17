@@ -681,6 +681,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         array = this.createNullCheckedValue(array, addBeforeFixed, tool);
 
         // create a guard for store operations into null free arrays
+        // for flat arrays we already created a guard
         if (!StampTool.isPointerNonNull(value) && storeIndexed.elementKind().isObject() && !storeIndexed.isFlatAccess()) {
             LogicNode storeIsNull = graph.unique(IsNullNode.create(value));
             IsNullFreeArrayNode arrayIsNullFreeRead = new IsNullFreeArrayNode(array);
@@ -702,7 +703,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         JavaKind storageKind = storeIndexed.elementKind();
 
         LogicNode condition = null;
-        // for flat access, stores are known to be correct
+
+        // flat arrays known at compile time already have an explicit store check before the load
+        // operations
         if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value) && !storeIndexed.isFlatAccess()) {
             /* Array store check. */
             TypeReference arrayType = StampTool.typeReferenceOrNull(array);
