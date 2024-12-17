@@ -25,8 +25,7 @@
 package jdk.graal.compiler.nodes;
 
 import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -158,13 +157,10 @@ public class NamedLocationIdentity extends LocationIdentity implements FormatWit
      */
     public static LocationIdentity getFlatArrayLocation(ResolvedJavaField field) {
         String name = "Array: " + JavaKind.Object.getJavaName() + " " + field.getOffset();
-        if (FLAT_ARRAY_LOCATIONS.containsKey(name))
-            return FLAT_ARRAY_LOCATIONS.get(name);
-        LocationIdentity result = NamedLocationIdentity.mutable(name);
-        FLAT_ARRAY_LOCATIONS.put(name, result);
-        return result;
+        return FLAT_ARRAY_LOCATIONS.computeIfAbsent(name, NamedLocationIdentity::mutable);
+
     }
 
-    private static final Map<String, LocationIdentity> FLAT_ARRAY_LOCATIONS = new HashMap<>();
+    private static final ConcurrentHashMap<String, LocationIdentity> FLAT_ARRAY_LOCATIONS = new ConcurrentHashMap<>();
 
 }
