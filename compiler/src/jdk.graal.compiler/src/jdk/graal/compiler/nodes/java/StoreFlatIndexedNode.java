@@ -84,7 +84,7 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
 
     public List<StoreIndexedNode> getWriteOperations() {
         return wrappers.stream().map(w -> {
-            StoreIndexedNode node = new StoreIndexedNode(array, index, getBoundsCheck(), storeCheck, w.elementKind, values.get(w.index));
+            StoreIndexedNode node = new StoreIndexedNode(array, index, getBoundsCheck(), getStoreCheck(), w.elementKind, values.get(w.index));
             node.setAdditionalOffset(w.additionalOffset);
             node.setShift(w.shift);
             return node;
