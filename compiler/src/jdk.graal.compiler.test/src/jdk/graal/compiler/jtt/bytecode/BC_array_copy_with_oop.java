@@ -217,4 +217,20 @@ public class BC_array_copy_with_oop extends JTTTest{
         }
     }
 
+    public static ManyOops testObject = new ManyOops();
+
+    public static Object testRuntimeCall(Object[] array){
+        //array[1] = testObject;
+        return array[1];
+    }
+
+    @Test
+    public void run1() throws Throwable {
+        Object[] array = (ManyOops[])ValueClass.newNullRestrictedArray(ManyOops.class, 2);
+        array[1] = testObject;
+        InstalledCode c =getCode(getResolvedJavaMethod("testRuntimeCall"), null, true, false, getInitialOptions());
+        Object result = c.executeVarargs(new Object[]{array});
+        Assert.assertEquals(result, testObject);
+    }
+
 }

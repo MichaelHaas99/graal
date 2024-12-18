@@ -1,11 +1,14 @@
 package jdk.graal.compiler.valhalla;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.EnumSet;
 
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
+import jdk.vm.ci.code.InstalledCode;
+import org.junit.Assert;
 import org.junit.Test;
 
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -368,7 +371,141 @@ public class TestLWorld extends JTTTest {
         return res;
     }
 
-    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test6");
+    public MyValue2 test28() {
+        MyValue2[] src = (MyValue2[])ValueClass.newNullRestrictedArray(MyValue2.class, 10);
+        src[0] = MyValue2.createWithFieldsInline(rI, rD);
+        MyValue2[] dst = (MyValue2[])src.clone();
+        return dst[0];
+    }
+
+    static final MyValue2[] val_src = (MyValue2[])ValueClass.newNullRestrictedArray(MyValue2.class, 8);
+
+    public Object[] test126() {
+        return val_src.clone();
+    }
+
+    public NotFlattenable[] test86(NotFlattenable[] array, NotFlattenable o, boolean b) {
+        if (b) {
+            array[0] = null;
+        } else {
+            array[1] = null;
+        }
+        array[1] = o;
+        return array;
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class NotFlattenable {
+        private final Object o1 = null;
+        private final Object o2 = null;
+        private final Object o3 = null;
+        private final Object o4 = null;
+        private final Object o5 = null;
+        private final Object o6 = null;
+    }
+
+    static class NonValueClass {
+        public final int x;
+
+        public NonValueClass(int x) {
+            this.x = x;
+        }
+    }
+
+    // stamp is type == null and exact type == false but why?
+    public Object test141() {
+        Object[]  array = null;
+        Object[] oarray = new NonValueClass[1];
+        Object[] varray = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        for (int i = 0; i < 10; i++) {
+            array = oarray;
+            oarray = varray;
+        }
+        return array[0];
+    }
+
+    public Object[] test63_helper(int i, MyValue1[] va, NonValueClass[] oa) {
+        Object[] arr = null;
+        if (i == 10) {
+            arr = va;
+        } else {
+            arr = oa;
+        }
+        return arr;
+    }
+
+    public Object[] test63() {
+        int len = Math.abs(rI) % 10;
+        MyValue1[] va = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, len);
+        MyValue1[] verif = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, len + 1);
+        for (int i = 0; i < len; ++i) {
+            va[i] = MyValue1.createWithFieldsInline(rI, rL);
+            verif[i] = va[i];
+        }
+        NonValueClass[] oa = new NonValueClass[len];
+        test63_helper(42, va, oa);
+        int i = 0;
+        for (; i < 10; i++);
+
+        Object[] arr = test63_helper(i, va, oa);
+
+        return Arrays.copyOf(arr, arr.length+1, arr.getClass());
+    }
+
+    public boolean test101(Object[] array) {
+        return array instanceof MyValue1[];
+    }
+
+    public static Object[] test59(MyValue1[] va) {
+        return Arrays.copyOf(va, va.length+1, va.getClass());
+    }
+
+    public static Object[] testStoreCheck(){
+        MyValue1[] nullFreeArray = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        Object[] dummy = nullFreeArray;
+        dummy[0]=new Object();
+        return dummy;
+    }
+
+
+    static final MyValue1[] nullFreeArray = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+
+    // Test propagation of not null-free/flat information
+    public MyValue1[] test95(Object[] array) {
+        array[0] = null;
+        // Always throws a ClassCastException because we just successfully
+        // stored null and therefore the array can't be a null-free value class array.
+        return nullFreeArray.getClass().cast(array);
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class MyValueEmpty extends MyAbstract {
+        public long hash() { return 0; }
+
+        public MyValueEmpty copy(MyValueEmpty other) { return other; }
+    }
+
+    @NullRestricted
+    static MyValueEmpty fEmpty1;
+    static MyValueEmpty fEmpty2 = new MyValueEmpty();
+    @NullRestricted
+    MyValueEmpty fEmpty3;
+    MyValueEmpty fEmpty4 = new MyValueEmpty();
+
+    public boolean test121() {
+        return fEmpty1.equals(fEmpty3);
+        // fEmpty2 and fEmpty4 could be null, load can't be removed
+    }
+
+    public void test34(Object[] oa, Object o, int index) {
+        oa[index] = o;
+    }
+
+    private static final MyValue1[] testValue1Array = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 3);
+
+    private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
 
     @Test
     public void run0() throws Throwable {
@@ -418,5 +555,213 @@ public class TestLWorld extends JTTTest {
     public void run7() throws Throwable {
         resetCache();
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test112");
+    }
+
+    @Test
+    public void run8() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test28");
+    }
+
+    @Test
+    public void run9() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test28");
+    }
+
+    @Test
+    public void run10() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test126");
+    }
+
+    @Test
+    public void run11() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test126");
+    }
+
+    @Test
+    public void run12() throws Throwable {
+        resetCache();
+        NotFlattenable vt = new NotFlattenable();
+        NotFlattenable[] array1 = new NotFlattenable[2];
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test86", new Object[]{array1, vt, true});
+        runTest("test86", new Object[]{array1, null, false});
+        NotFlattenable[] array2 = (NotFlattenable[])ValueClass.newNullRestrictedArray(NotFlattenable.class, 2);
+        runTest("test86", new Object[]{array2, null, true});
+    }
+
+    @Test
+    public void run13() throws Throwable {
+        resetCache();
+        NotFlattenable vt = new NotFlattenable();
+        NotFlattenable[] array1 = new NotFlattenable[2];
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test86", new Object[]{array1, vt, true});
+        runTest(WITHOUT_PEA, "test86", new Object[]{array1, null, false});
+        NotFlattenable[] array2 = (NotFlattenable[])ValueClass.newNullRestrictedArray(NotFlattenable.class, 2);
+        runTest(WITHOUT_PEA, "test86", new Object[]{array2, null, true});
+    }
+
+    @Test
+    public void run14() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test141");
+    }
+
+    @Test
+    public void run15() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test141");
+    }
+
+    @Test
+    public void run16() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test63");
+    }
+
+    @Test
+    public void run17() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test63");
+    }
+
+    @Test
+    public void run18() throws Throwable {
+        resetCache();
+        MyValue1[] array1 = new MyValue1[1];
+        NotFlattenable[] array2 = (NotFlattenable[])ValueClass.newNullRestrictedArray(NotFlattenable.class, 1);
+        MyValue1[] array3 = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test101", new Object[]{array3});
+    }
+
+    @Test
+    public void run19() throws Throwable {
+        resetCache();
+        MyValue1[] array1 = new MyValue1[1];
+        NotFlattenable[] array2 = (NotFlattenable[])ValueClass.newNullRestrictedArray(NotFlattenable.class, 1);
+        MyValue1[] array3 = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test101", new Object[]{array3});
+    }
+
+    @Test
+    public void run20() throws Throwable {
+        resetCache();
+        int len = Math.abs(rI) % 10;
+        MyValue1[] va = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, len);
+        MyValue1[] verif = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, len + 1);
+        for (int i = 0; i < len; ++i) {
+            va[i] = MyValue1.createWithFieldsInline(rI, rL);
+            verif[i] = va[i];
+        }
+        InstalledCode c =getCode(getResolvedJavaMethod("test59"), null, true, false, getInitialOptions());
+        Object[] result = (Object[])c.executeVarargs(new Object[]{va});
+        Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
+        result[len] = MyValue1.createDefaultInline();
+        for (int i = 0; i < verif.length; ++i) {
+            Assert.assertEquals(verif[i].hash(), ((MyInterface)result[i]).hash());
+        }
+
+        //runTest(EnumSet.allOf(DeoptimizationReason.class), "test59", new Object[]{va});
+    }
+
+    @Test
+    public void run21() throws Throwable {
+        resetCache();
+        int len = Math.abs(rI) % 10;
+        MyValue1[] va = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, len);
+        MyValue1[] verif = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, len + 1);
+        for (int i = 0; i < len; ++i) {
+            va[i] = MyValue1.createWithFieldsInline(rI, rL);
+            verif[i] = va[i];
+        }
+        InstalledCode c =getCode(getResolvedJavaMethod("test59"), null, true, false, WITHOUT_PEA);
+        Object[] result = (Object[])c.executeVarargs(new Object[]{va});
+        Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
+        result[len] = MyValue1.createDefaultInline();
+        for (int i = 0; i < verif.length; ++i) {
+            Assert.assertEquals(verif[i].hash(), ((MyInterface)result[i]).hash());
+        }
+        //runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test59", new Object[]{va});
+    }
+
+    @Test
+    public void run22() throws Throwable {
+        resetCache();
+        MyValue1[] array1 = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        NonValueClass[] array2 = new NonValueClass[1];
+
+//        InstalledCode c =getCode(getResolvedJavaMethod("test95"), null, true, false, WITHOUT_PEA);
+//        Object[] result = (Object[])c.executeVarargs(new Object[]{va});
+//        Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
+        runTest(WITHOUT_PEA, "test95", new Object[]{array1});
+        resetCache();
+        runTest(WITHOUT_PEA, "test95", new Object[]{array2});
+        //runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test59", new Object[]{va});
+    }
+
+    @Test
+    public void run23() throws Throwable {
+        resetCache();
+        MyValue1[] array1 = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        NonValueClass[] array2 = new NonValueClass[1];
+
+//        InstalledCode c =getCode(getResolvedJavaMethod("test95"), null, true, false, WITHOUT_PEA);
+//        Object[] result = (Object[])c.executeVarargs(new Object[]{va});
+//        Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
+        runTest("test95", new Object[]{array1});
+        resetCache();
+        runTest("test95", new Object[]{array2});
+        //runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test59", new Object[]{va});
+    }
+
+    @Test
+    public void run24() throws Throwable {
+        resetCache();
+        runTest(EnumSet.allOf(DeoptimizationReason.class), "test121");
+    }
+
+    @Test
+    public void run25() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test121");
+    }
+
+    @Test
+    public void run26() throws Throwable {
+        resetCache();
+
+        try{
+            InstalledCode c =getCode(getResolvedJavaMethod("testStoreCheck"), null, true, false, getInitialOptions());
+            c.executeVarargs();
+            throw new Exception("expected store exception");
+        }catch (Exception e){
+            // true
+        }
+
+    }
+
+    @Test
+    public void run27() throws Throwable {
+        resetCache();
+        try{
+            InstalledCode c =getCode(getResolvedJavaMethod("testStoreCheck"), null, true, false, WITHOUT_PEA);
+            c.executeVarargs();
+            throw new Exception("expected store exception");
+        }catch (Exception e){
+            // true
+        }
+        //runTest(WITHOUT_PEA, "testStoreCheck");
+    }
+
+    @Test
+    public void run28() throws Throwable {
+        runTest( "test34", new Object[]{testValue1Array, null, Math.abs(rI) % 3});
+    }
+
+    @Test
+    public void run29() throws Throwable {
+        runTest(WITHOUT_PEA, "test34", new Object[]{testValue1Array, null, Math.abs(rI) % 3});
     }
 }
