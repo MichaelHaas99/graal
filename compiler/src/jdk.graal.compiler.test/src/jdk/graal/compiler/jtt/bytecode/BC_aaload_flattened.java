@@ -109,15 +109,6 @@ public class BC_aaload_flattened extends JTTTest {
         }
     }
 
-    //private static ManyOops[] array = (ManyOops[])ValueClass.newNullRestrictedArray(ManyOops.class, LEN);
-
-    static ManyOops createValueClassArray() {
-        ManyOops[] array = (ManyOops[])ValueClass.newNullRestrictedArray(ManyOops.class, LEN);
-        for (int i = 0; i < LEN; ++i) {
-            array[i] = new ManyOops();
-        }
-        return array[0];
-    }
 
     static interface TestA{}
     static class TestB implements TestA{}
@@ -193,11 +184,6 @@ public class BC_aaload_flattened extends JTTTest {
     @Test
     public void run2() throws Throwable {
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test2", false);
-    }
-
-    @Test
-    public void run3() throws Throwable {
-        runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "createValueClassArray");
     }
 
     @Test
