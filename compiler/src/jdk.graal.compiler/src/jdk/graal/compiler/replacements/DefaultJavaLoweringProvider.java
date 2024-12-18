@@ -701,13 +701,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
         // flat arrays known at compile time already have an explicit store check before the load
         // operations
-        if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value) && !storeIndexed.isFlatAccess()) {
+        if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value)) {
             /* Array store check. */
             TypeReference arrayType = StampTool.typeReferenceOrNull(array);
             if (arrayType != null && arrayType.isExact()) {
                 ResolvedJavaType elementType = arrayType.getType().getComponentType();
                 if (!elementType.isJavaLangObject()) {
-                    TypeReference typeReference = TypeReference.createTrusted(storeIndexed.graph().getAssumptions(), elementType);
+                    TypeReference typeReference = TypeReference.createTrusted(graph.getAssumptions(), elementType);
                     LogicNode typeTest = graph.addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value));
                     condition = LogicNode.or(graph.unique(IsNullNode.create(value)), typeTest, BranchProbabilityNode.NOT_LIKELY_PROFILE);
                 }
