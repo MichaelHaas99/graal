@@ -31,8 +31,6 @@ import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATI
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMax;
 import static jdk.graal.compiler.nodes.calc.BinaryArithmeticNode.branchlessMin;
 import static jdk.graal.compiler.nodes.java.ArrayLengthNode.readArrayLength;
-import static jdk.graal.compiler.replacements.InlineTypePlugin.LOADUNKNOWNINLINE;
-import static jdk.graal.compiler.replacements.InlineTypePlugin.STOREUNKNOWNINLINE;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.BoundsCheckException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
@@ -65,12 +63,12 @@ import jdk.graal.compiler.nodes.ComputeObjectAddressNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
-import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GetObjectAddressNode;
 import jdk.graal.compiler.nodes.IfNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
@@ -124,7 +122,6 @@ import jdk.graal.compiler.nodes.extended.UnsafeMemoryLoadNode;
 import jdk.graal.compiler.nodes.extended.UnsafeMemoryStoreNode;
 import jdk.graal.compiler.nodes.gc.BarrierSet;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
-import jdk.graal.compiler.nodes.java.AccessFieldNode;
 import jdk.graal.compiler.nodes.java.AccessIndexedNode;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
 import jdk.graal.compiler.nodes.java.AtomicReadAndAddNode;
@@ -503,54 +500,45 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     protected void lowerStoreFieldNode(StoreFieldNode storeField, LoweringTool tool) {
-        lowerStoreFieldNode(storeField, tool, null, true);
-    }
-
-    protected void lowerStoreFieldNode(StoreFieldNode storeField, LoweringTool tool, StoreFlatFieldNode storeFlatField, boolean replaceBeforeFixed) {
-        AccessFieldNode addBeforeFixed = storeFlatField == null ? storeField : storeFlatField;
-        StructuredGraph graph = addBeforeFixed.graph();
+        StructuredGraph graph = storeField.graph();
         ResolvedJavaField field = storeField.field();
         ValueNode object = storeField.isStatic() ? staticFieldBase(graph, field) : storeField.object();
-        object = createNullCheckedValue(object, addBeforeFixed, tool);
+        object = createNullCheckedValue(object, storeField, tool);
         ValueNode value = implicitStoreConvert(graph, getStorageKind(storeField.field()), storeField.value());
         AddressNode address = createFieldAddress(graph, object, field);
 
         BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
-        WriteNode memoryWrite = new WriteNode(address, overrideFieldLocationIdentity(addBeforeFixed.getLocationIdentity()), value, barrierType, storeField.getMemoryOrder());
+        WriteNode memoryWrite = graph.add(new WriteNode(address, overrideFieldLocationIdentity(storeField.getLocationIdentity()), value, barrierType, storeField.getMemoryOrder()));
         if (!storeField.hasSideEffect())
             memoryWrite.noSideEffect();
-        memoryWrite = graph.add(memoryWrite);
-        // memoryWrite.setStateAfter(storeField.stateAfter());
-        // graph.replaceFixedWithFixed(storeField, memoryWrite);
-        if (!replaceBeforeFixed) {
-            assert storeFlatField != null : "store flat field node needs to be defined";
-            // only last store should have a valid frame state
-            memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
-            graph.addBeforeFixed(addBeforeFixed, memoryWrite);
-        } else {
-            FrameState state;
-            if (storeFlatField != null) {
-                state = storeFlatField.stateAfter();
-            } else {
-                state = storeField.stateAfter();
-            }
-            memoryWrite.setStateAfter(state);
-            graph.replaceFixed(addBeforeFixed, memoryWrite);
-        }
+        memoryWrite.setStateAfter(storeField.stateAfter());
+        graph.replaceFixedWithFixed(storeField, memoryWrite);
     }
 
     protected void lowerStoreFlatFieldNode(StoreFlatFieldNode storeFlatField, LoweringTool tool) {
         List<StoreFieldNode> nodes = storeFlatField.getWriteOperations();
+        StructuredGraph graph = storeFlatField.graph();
         for (int i = 0; i < nodes.size(); i++) {
 
             StoreFieldNode storeField = nodes.get(i);
+            ResolvedJavaField field = storeField.field();
+            ValueNode object = storeField.object();
+            assert StampTool.isPointerNonNull(object) : "store to null-restricted flat field should include null check";
 
-            // new nodes need to be stored before the wrapper node
-            StoreFlatFieldNode addBeforeFixed = storeFlatField;
+            ValueNode value = implicitStoreConvert(graph, getStorageKind(storeField.field()), storeField.value());
+
+            AddressNode address = createFieldAddress(graph, object, field);
+            BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
+            WriteNode memoryWrite = new WriteNode(address, overrideFieldLocationIdentity(storeFlatField.getLocationIdentity()), value, barrierType, storeField.getMemoryOrder());
+
+            memoryWrite = graph.add(memoryWrite);
+
             if (i != nodes.size() - 1) {
-                lowerStoreFieldNode(storeField, tool, addBeforeFixed, false);
+                memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                graph.addBeforeFixed(storeFlatField, memoryWrite);
             } else {
-                lowerStoreFieldNode(storeField, tool, addBeforeFixed, true);
+                memoryWrite.setStateAfter(storeFlatField.stateAfter());
+                graph.replaceFixed(storeFlatField, memoryWrite);
             }
 
         }
@@ -619,100 +607,80 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (SpectrePHTIndexMasking.getValue(graph.getOptions())) {
             index = graph.addOrUniqueWithInputs(proxyIndex(loadIndexed, index, array, tool));
         }
-
         ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
+        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind,
+                        positiveIndex, loadIndexed.getShift());
 
-        ValueNode read;
-        ValueNode readValue;
-        if (loadIndexed.doesForeignCall()) {
-            ForeignCallNode foreignCallResult = graph.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, positiveIndex));
-            read = foreignCallResult;
-            readValue = read;
-        } else {
-            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex, loadIndexed.getShift());
-
-            LocationIdentity arrayLocation = loadIndexed.getLocationIdentity();
-            ReadNode memoryRead = graph.add(new ReadNode(address, arrayLocation, loadStamp, barrierSet.readBarrierType(arrayLocation, address, loadStamp), MemoryOrderMode.PLAIN));
-            memoryRead.setGuard(boundsCheck);
-            read = memoryRead;
-            readValue = implicitLoadConvert(graph, elementKind, read);
-        }
+        LocationIdentity arrayLocation = loadIndexed.getLocationIdentity();
+        ReadNode memoryRead = graph.add(new ReadNode(address, arrayLocation, loadStamp, barrierSet.readBarrierType(arrayLocation, address, loadStamp), MemoryOrderMode.PLAIN));
+        memoryRead.setGuard(boundsCheck);
+        ValueNode readValue = implicitLoadConvert(graph, elementKind, memoryRead);
 
         loadIndexed.replaceAtUsages(readValue);
-        graph.replaceFixed(loadIndexed, read);
+        graph.replaceFixed(loadIndexed, memoryRead);
     }
 
+
     public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool) {
-        int arrayBaseOffset = storeIndexed.isFlatAccess() ? metaAccess.getFlatArrayBaseOffset() + storeIndexed.getAdditionalOffset() : metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
+        int arrayBaseOffset = metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
         lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset);
     }
 
     public void lowerStoreFlatIndexedNode(StoreFlatIndexedNode storeFlatIndexed, LoweringTool tool) {
         List<StoreIndexedNode> nodes = storeFlatIndexed.getWriteOperations();
+        StructuredGraph graph = storeFlatIndexed.graph();
+        ValueNode array = storeFlatIndexed.array();
+        assert StampTool.isPointerNonNull(array) : "store to flat array should include null check on array";
+        ValueNode positiveIndex = storeFlatIndexed.index();
+        GuardingNode boundsCheck = storeFlatIndexed.getBoundsCheck();
+        LocationIdentity locationIdentity = storeFlatIndexed.getKilledLocationIdentity();
         for (int i = 0; i < nodes.size(); i++) {
 
             StoreIndexedNode storeIndexed = nodes.get(i);
+            JavaKind storageKind = storeIndexed.elementKind();
+            ValueNode value = storeIndexed.value();
 
-            // new nodes need to be stored before the wrapper node
-            StoreFlatIndexedNode addBeforeFixed = storeFlatIndexed;
-            int arrayBaseOffset = storeIndexed.isFlatAccess() ? metaAccess.getFlatArrayBaseOffset() + storeIndexed.getAdditionalOffset() : metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
+            int arrayBaseOffset = metaAccess.getFlatArrayBaseOffset() + storeIndexed.getAdditionalOffset();
+
+            BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
+            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
+            WriteNode memoryWrite = graph.add(new WriteNode(address, locationIdentity, implicitStoreConvert(graph, storageKind, value),
+                            barrierType, MemoryOrderMode.PLAIN));
+            memoryWrite.setGuard(boundsCheck);
 
             if (i != nodes.size() - 1) {
-                lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset, addBeforeFixed, false);
+                memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                graph.addBeforeFixed(storeFlatIndexed, memoryWrite);
             } else {
-                lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset, addBeforeFixed, true);
+                memoryWrite.setStateAfter(storeFlatIndexed.stateAfter());
+                graph.replaceFixed(storeFlatIndexed, memoryWrite);
             }
 
         }
+
     }
+
 
     public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool, int arrayBaseOffset) {
-        lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset, null, true);
-    }
-
-    public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool, int arrayBaseOffset, StoreFlatIndexedNode storeFlatIndexed, boolean replaceBeforeFixed) {
-        // check if we should insert new nodes before a wrapper node
-        AccessIndexedNode addBeforeFixed = storeFlatIndexed == null ? storeIndexed : storeFlatIndexed;
-        StructuredGraph graph = addBeforeFixed.graph();
+        StructuredGraph graph = storeIndexed.graph();
 
         ValueNode value = storeIndexed.value();
         ValueNode array = storeIndexed.array();
 
-        array = this.createNullCheckedValue(array, addBeforeFixed, tool);
+        array = this.createNullCheckedValue(array, storeIndexed, tool);
 
-        // create a guard for store operations into null free arrays
-        // for flat arrays we already created a guard
-        if (!StampTool.isPointerNonNull(value) && storeIndexed.elementKind().isObject() && !storeIndexed.isFlatAccess()) {
-            LogicNode storeIsNull = graph.unique(IsNullNode.create(value));
-            IsNullFreeArrayNode arrayIsNullFreeRead = new IsNullFreeArrayNode(array);
-            arrayIsNullFreeRead = graph.addOrUnique(arrayIsNullFreeRead);
-            graph.addBeforeFixed(addBeforeFixed, arrayIsNullFreeRead);
-            LogicNode arrayIsNullFree = graph.addOrUnique(new IntegerEqualsNode(arrayIsNullFreeRead, ConstantNode.forInt(1, graph)));
-
-            arrayIsNullFree = graph.addOrUnique(arrayIsNullFree);
-
-            FixedGuardNode guardNode = graph.addOrUnique(
-                            new FixedGuardNode(graph.addOrUnique(LogicNode.and(storeIsNull, arrayIsNullFree, BranchProbabilityData.unknown())), NullCheckException, DeoptimizationAction.None, true));
-
-            graph.addBeforeFixed(addBeforeFixed, guardNode);
-
-        }
-
-        GuardingNode boundsCheck = getBoundsCheck(addBeforeFixed, array, tool);
+        GuardingNode boundsCheck = getBoundsCheck(storeIndexed, array, tool);
 
         JavaKind storageKind = storeIndexed.elementKind();
 
         LogicNode condition = null;
-
-        // flat arrays known at compile time already have an explicit store check before the load
-        // operations
         if (storeIndexed.getStoreCheck() == null && storageKind == JavaKind.Object && !StampTool.isPointerAlwaysNull(value)) {
             /* Array store check. */
             TypeReference arrayType = StampTool.typeReferenceOrNull(array);
             if (arrayType != null && arrayType.isExact()) {
                 ResolvedJavaType elementType = arrayType.getType().getComponentType();
                 if (!elementType.isJavaLangObject()) {
-                    TypeReference typeReference = TypeReference.createTrusted(graph.getAssumptions(), elementType);
+                    TypeReference typeReference = TypeReference.createTrusted(storeIndexed.graph().getAssumptions(), elementType);
                     LogicNode typeTest = graph.addOrUniqueWithInputs(InstanceOfNode.create(typeReference, value));
                     condition = LogicNode.or(graph.unique(IsNullNode.create(value)), typeTest, BranchProbabilityNode.NOT_LIKELY_PROFILE);
                 }
@@ -723,7 +691,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                  */
                 ValueNode arrayClass = createReadHub(graph, array, tool);
                 boolean isKnownObjectArray = arrayType != null && !arrayType.getType().getComponentType().isPrimitive();
-                ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, isKnownObjectArray, addBeforeFixed);
+                ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, isKnownObjectArray, storeIndexed);
                 LogicNode typeTest = graph.unique(InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), componentHub, value, false));
                 condition = LogicNode.or(graph.unique(IsNullNode.create(value)), typeTest, BranchProbabilityNode.NOT_LIKELY_PROFILE);
             }
@@ -732,44 +700,21 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 condition = null;
             }
         }
-
+        BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
         ValueNode positiveIndex = createPositiveIndex(graph, storeIndexed.index(), boundsCheck);
-
+        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex);
+        WriteNode memoryWrite = graph.add(new WriteNode(address, NamedLocationIdentity.getArrayLocation(storageKind), implicitStoreConvert(graph, storageKind, value),
+                        barrierType, MemoryOrderMode.PLAIN));
+        memoryWrite.setGuard(boundsCheck);
         if (condition != null) {
-            tool.createGuard(addBeforeFixed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
+            tool.createGuard(storeIndexed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
         }
 
-        if (storeIndexed.doesForeignCall()) {
-            ForeignCallNode foreignCall = graph.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, positiveIndex, value));
-            foreignCall.setStateAfter(storeIndexed.stateAfter());
-            graph.replaceFixed(addBeforeFixed, foreignCall);
-        } else {
-            BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
-            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
-            LocationIdentity locationIdentity = addBeforeFixed instanceof StoreFlatIndexedNode ? ((StoreFlatIndexedNode) addBeforeFixed).getKilledLocationIdentity()
-                            : NamedLocationIdentity.getArrayLocation(storageKind);
-            WriteNode memoryWrite = graph.add(new WriteNode(address, locationIdentity, implicitStoreConvert(graph, storageKind, value),
-                            barrierType, MemoryOrderMode.PLAIN));
-            memoryWrite.setGuard(boundsCheck);
+        // create a guard for store operations into null free arrays
+        genNullFreeArrayCheck(storeIndexed, array, tool);
 
-
-            if (!replaceBeforeFixed) {
-                assert storeFlatIndexed != null : "store flat indexed node needs to be defined";
-                // only last store should have a valid frame state
-                memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
-                graph.addBeforeFixed(addBeforeFixed, memoryWrite);
-            } else {
-                FrameState state;
-                if (storeFlatIndexed != null) {
-                    state = storeFlatIndexed.stateAfter();
-                } else {
-                    state = storeIndexed.stateAfter();
-                }
-                memoryWrite.setStateAfter(state);
-                graph.replaceFixed(addBeforeFixed, memoryWrite);
-            }
-        }
-
+        memoryWrite.setStateAfter(storeIndexed.stateAfter());
+        graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
     }
 
     protected void lowerArrayLengthNode(ArrayLengthNode arrayLengthNode, LoweringTool tool) {
@@ -1487,6 +1432,28 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             return null;
         }
         return tool.createGuard(n, graph.addOrUniqueWithInputs(boundsCheck), BoundsCheckException, InvalidateReprofile);
+    }
+
+    protected void genNullFreeArrayCheck(StoreIndexedNode n, ValueNode array, LoweringTool tool) {
+        if (!StampTool.isPointerNonNull(n.value()) && n.elementKind().isObject()) {
+            StructuredGraph graph = n.graph();
+
+            LogicNode storeIsNull = graph.addOrUnique(IsNullNode.create(n.value()));
+            IsNullFreeArrayNode arrayIsNullFree = graph.addOrUnique(new IsNullFreeArrayNode(array));
+            graph.addBeforeFixed(n, arrayIsNullFree);
+
+            LogicNode arrayIsNullFreeCondition = graph.addOrUnique(new IntegerEqualsNode(arrayIsNullFree, ConstantNode.forInt(1, graph)));
+
+            // deoptimize if array is null-free and the store value is null
+            LogicNode negatedCondition = graph.addOrUnique(LogicNode.and(storeIsNull, arrayIsNullFreeCondition, BranchProbabilityData.unknown()));
+
+            LogicNode condition = graph.addOrUnique(LogicNegationNode.create(negatedCondition));
+            if (condition.isTautology()) {
+                return;
+            }
+            tool.createGuard(n, condition, NullCheckException, DeoptimizationAction.None);
+
+        }
     }
 
     private ValueNode readOrCreateArrayLength(AccessIndexedNode n, ValueNode array, LoweringTool tool, StructuredGraph graph) {

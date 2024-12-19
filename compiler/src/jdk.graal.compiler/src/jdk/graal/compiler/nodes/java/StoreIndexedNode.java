@@ -87,16 +87,6 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
         this.shift = shift;
     }
 
-    private boolean foreignCall = false;
-
-    public void doForeignCall() {
-        foreignCall = true;
-    }
-
-    public boolean doesForeignCall() {
-        return foreignCall;
-    }
-
     @OptionalInput(InputType.Guard) private GuardingNode storeCheck;
     @Input ValueNode value;
     @OptionalInput(State) FrameState stateAfter;
