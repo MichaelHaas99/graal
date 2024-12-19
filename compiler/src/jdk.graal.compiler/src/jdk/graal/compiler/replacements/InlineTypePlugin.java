@@ -5,6 +5,7 @@ import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideE
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.OBJECT_ARRAY_LOCATION;
+import static jdk.graal.compiler.replacements.DefaultJavaLoweringProvider.POSITIVE_ARRAY_INDEX_STAMP;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 
 import java.util.ArrayList;
@@ -26,11 +27,13 @@ import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerBelowNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
@@ -237,6 +240,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             array = genNullCheck(b, array);
             boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
+            index = createPositiveIndex(b.getGraph(), index, boundsCheck);
 
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
@@ -268,11 +272,10 @@ public class InlineTypePlugin implements NodePlugin {
                 }
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index, boundsCheck, elementKind);
-                load.doForeignCall();
+                ForeignCallNode load = b.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, index));
                 resultStamp = load.stamp(NodeView.DEFAULT);
-                instanceFlatArray = b.add(load);
-                trueBegin.setNext(instanceFlatArray);
+                instanceFlatArray = load;
+                trueBegin.setNext(load);
             }
 
             EndNode trueEnd = b.add(new EndNode());
@@ -355,12 +358,16 @@ public class InlineTypePlugin implements NodePlugin {
             array = genNullCheck(b, array);
             boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
             storeCheck = genStoreCheck(b, storeCheck, array, value);
+            index = createPositiveIndex(b.getGraph(), index, boundsCheck);
 
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
+                // we store the value in a flat array we need to do a null check before loading the
+                // fields
+                ValueNode nullCheckedValue = genNullCheck(b, value);
                 genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
-                                value, shift);
+                                nullCheckedValue, shift);
                 return true;
             }
 
@@ -372,13 +379,13 @@ public class InlineTypePlugin implements NodePlugin {
 
             int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
 
+
             // true branch - flat array
             EndNode trueEnd;
+            // we store the value in a flat array we need to do a null check before loading the
+            // fields
+            ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
             if (isInlineTypeArray) {
-
-
-                // we store the value in an flat array so do a null check before loading the fields
-                ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
 
                 // produce code that stores the flat inline type
                 ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
@@ -394,10 +401,9 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                StoreIndexedNode store = new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, value);
-                store.doForeignCall();
-                b.add(store);
-                trueBegin.setNext(store);
+                ForeignCallNode store = b.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, index, value));
+                if (hasNoNext(trueBegin))
+                    trueBegin.setNext(store);
                 trueEnd = b.add(new EndNode());
             }
 
@@ -481,24 +487,6 @@ public class InlineTypePlugin implements NodePlugin {
     private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value, BeginNode begin) {
         if (storeCheck != null)
             return storeCheck;
-// TypeReference arrayType = StampTool.typeReferenceOrNull(array);
-// if (arrayType != null && arrayType.isExact()) {
-// ResolvedJavaType elementType = arrayType.getType().getComponentType();
-// TypeReference typeReference = TypeReference.createTrusted(b.getGraph().getAssumptions(),
-// elementType);
-// condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.createAllowNull(typeReference,
-// value, null, null));
-// }else{
-// ValueNode arrayClass = createReadHub(graph, array, tool);
-// boolean isKnownObjectArray = arrayType != null &&
-// !arrayType.getType().getComponentType().isPrimitive();
-// ValueNode componentHub = createReadArrayComponentHub(graph, arrayClass, isKnownObjectArray,
-// addBeforeFixed);
-// LogicNode typeTest = graph.unique(InstanceOfDynamicNode.create(graph.getAssumptions(),
-// tool.getConstantReflection(), componentHub, value, false));
-// condition = LogicNode.or(graph.unique(IsNullNode.create(value)), typeTest,
-// BranchProbabilityNode.NOT_LIKELY_PROFILE);
-// }
 
         LogicNode condition;
         TypeReference arrayType = StampTool.typeReferenceOrNull(array);
@@ -512,6 +500,10 @@ public class InlineTypePlugin implements NodePlugin {
             ValueNode arrayClass = b.add(LoadHubNode.create(array, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection()));
             ValueNode componentHub = b.add(LoadArrayComponentHubNode.create(arrayClass, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection()));
             condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), componentHub, value, true));
+        }
+        if (condition.isTautology()) {
+            // Skip unnecessary guards
+            return null;
         }
         FixedGuardNode guard = b.add(new FixedGuardNode(condition, DeoptimizationReason.ArrayStoreException, InvalidateReprofile));
         if (hasNoNext(begin)) {
@@ -533,11 +525,19 @@ public class InlineTypePlugin implements NodePlugin {
             begin.setNext(fixed);
         }
         LogicNode condition = b.add(IntegerBelowNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, index, length, NodeView.DEFAULT));
+        if (condition.isTautology()) {
+            // Skip unnecessary guards
+            return null;
+        }
         FixedGuardNode guard = b.add(new FixedGuardNode(condition, DeoptimizationReason.BoundsCheckException, InvalidateReprofile));
         if (hasNoNext(begin)) {
             begin.setNext(guard);
         }
         return guard;
+    }
+
+    private ValueNode createPositiveIndex(StructuredGraph graph, ValueNode index, GuardingNode boundsCheck) {
+        return graph.addOrUnique(PiNode.create(index, POSITIVE_ARRAY_INDEX_STAMP, boundsCheck != null ? boundsCheck.asNode() : null));
     }
 
     public static boolean hasNoNext(BeginNode begin) {
