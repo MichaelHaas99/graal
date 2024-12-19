@@ -78,7 +78,7 @@ public class InlineTypePlugin implements NodePlugin {
                 trueBegin.setNext(trueEnd);
 
                 // false branch - flat field is non-null
-                NewInstanceNode instance = genGetLoadFlatField(b, object, field);
+                NewInstanceNode instance = genGetFlatField(b, object, field);
                 EndNode falseEnd = b.add(new EndNode());
                 falseBegin.setNext(instance);
 
@@ -100,14 +100,37 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // field is flat and null-restricted
-                b.push(JavaKind.Object, genGetLoadFlatField(b, object, field));
+                b.push(JavaKind.Object, genGetFlatField(b, object, field));
             }
+            return true;
+
+        } else if (field.isNullFreeInlineType()) {
+            // field is null-free but not flat
+
+            // for null free inline type fields it is the responsibility of the reader to return the
+            // default instance if the field is null
+            object = genNullCheck(b, object);
+            HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
+            LoadFieldNode fieldValue = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
+            genGetNullFreeInlineTypeField(b, fieldValue, field);
+            return true;
+
+        }
+        return false;
+    }
+
+    @Override
+    public boolean handleLoadStaticField(GraphBuilderContext b, ResolvedJavaField field) {
+        if (field.isNullFreeInlineType() && !field.isInitialized()) {
+            // field is a static null-free inline type, do a null check
+            LoadFieldNode fieldValue = b.add(LoadFieldNode.create(b.getAssumptions(), null, field));
+            genGetNullFreeInlineTypeField(b, fieldValue, field);
             return true;
         }
         return false;
     }
 
-    private NewInstanceNode genGetLoadFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
+    private NewInstanceNode genGetFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
 
         // make a null check for all load operations
         object = genNullCheck(b, object);
@@ -141,6 +164,35 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new FinalFieldBarrierNode(newInstance));
         b.pop(JavaKind.Object);
         return newInstance;
+    }
+
+    private void genGetNullFreeInlineTypeField(GraphBuilderContext b, ValueNode fieldValue, ResolvedJavaField field) {
+        HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
+        BeginNode trueBegin = b.getGraph().add(new BeginNode());
+        BeginNode falseBegin = b.getGraph().add(new BeginNode());
+
+        genFieldNullCheck(b, fieldValue, trueBegin, falseBegin);
+
+        // true branch - field is null use default instance
+        EndNode trueEnd = b.add(new EndNode());
+        ConstantNode defaultValue = b.add(ConstantNode.forConstant(fieldType.getDefaultInlineTypeInstance(), b.getMetaAccess(), b.getGraph()));
+        trueBegin.setNext(trueEnd);
+
+        // false branch - field is non-null
+        EndNode falseEnd = b.add(new EndNode());
+        falseBegin.setNext(falseEnd);
+
+        // return the default instance if the field was null otherwise the value
+        ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), true).getTrustedStamp(), null,
+                        defaultValue, fieldValue));
+        b.push(JavaKind.Object, phiNode);
+
+        // merge
+        MergeNode merge = b.add(new MergeNode());
+        phiNode.setMerge(merge);
+
+        merge.addForwardEnd(trueEnd);
+        merge.addForwardEnd(falseEnd);
     }
 
     @Override
@@ -221,6 +273,13 @@ public class InlineTypePlugin implements NodePlugin {
         ConstantNode x = ConstantNode.forConstant(JavaConstant.INT_0, b.getMetaAccess(), b.getGraph());
 
         LogicNode condition = IntegerEqualsNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, x, y, NodeView.DEFAULT);
+        b.add(condition);
+
+        b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+    }
+
+    private void genFieldNullCheck(GraphBuilderContext b, ValueNode fieldValue, BeginNode trueBegin, BeginNode falseBegin) {
+        LogicNode condition = b.add(IsNullNode.create(fieldValue));
         b.add(condition);
 
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
