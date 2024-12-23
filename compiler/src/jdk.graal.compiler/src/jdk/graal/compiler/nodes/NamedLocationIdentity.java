@@ -152,8 +152,8 @@ public class NamedLocationIdentity extends LocationIdentity implements FormatWit
     }
 
     /**
-     * Returns the named location identity for a flat array. Accesses to these inlined fields of an
-     * array element need to be distinct
+     * Returns the named location identity for a flat array. Accesses to fields of an inlined array
+     * element need to be distinct. This is achieved by also considering the offset of the field.
      */
     public static LocationIdentity getFlatArrayLocation(ResolvedJavaField field) {
         String name = "Array: " + JavaKind.Object.getJavaName() + " " + field.getOffset();

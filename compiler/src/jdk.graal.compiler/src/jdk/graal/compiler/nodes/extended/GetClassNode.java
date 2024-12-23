@@ -71,12 +71,22 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
             ObjectStamp objectStamp = (ObjectStamp) object.stamp(view);
             if (objectStamp.isExactType()) {
                 if (objectStamp.type().isArray())
+                    /*
+                     * Regular, null-restricted and flat arrays have different class objects. Avoid
+                     * folding. TODO check if the array cannot be null-restricted or flat, and if so
+                     * allow folding.
+                     */
                     return null;
                 return ConstantNode.forConstant(constantReflection.asJavaClass(objectStamp.type()), metaAccess);
             }
             TypeReference maybeExactType = TypeReference.createTrusted(assumptions, objectStamp.type());
             if (maybeExactType != null && maybeExactType.isExact()) {
                 if (maybeExactType.getType().isArray())
+                    /*
+                     * Regular, null-restricted and flat arrays have different class objects. Avoid
+                     * folding. TODO check if the array cannot be null-restricted or flat, and if so
+                     * allow folding.
+                     */
                     return null;
                 return ConstantNode.forConstant(constantReflection.asJavaClass(maybeExactType.getType()), metaAccess);
             }

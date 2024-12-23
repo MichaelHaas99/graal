@@ -55,7 +55,7 @@ import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
- * The {@code StoreFieldNode} represents a write to a flat instance field.
+ * The {@code StoreFlatFieldNode} represents a write to a flat instance field.
  */
 @NodeInfo(nameTemplate = "StoreFlatField")
 public final class StoreFlatFieldNode extends AccessFieldNode implements StateSplit, Virtualizable, Canonicalizable, SingleMemoryKill {

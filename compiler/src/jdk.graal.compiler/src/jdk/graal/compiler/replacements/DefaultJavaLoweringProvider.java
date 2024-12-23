@@ -534,9 +534,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             memoryWrite = graph.add(memoryWrite);
 
             if (i != nodes.size() - 1) {
+                // assign invalid framestate because writes don't exist in bytecode
                 memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
                 graph.addBeforeFixed(storeFlatField, memoryWrite);
             } else {
+                // only last write operation gets a vaild framestate
                 memoryWrite.setStateAfter(storeFlatField.stateAfter());
                 graph.replaceFixed(storeFlatField, memoryWrite);
             }
