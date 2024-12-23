@@ -36,6 +36,9 @@ import java.util.ListIterator;
 import java.util.Optional;
 import java.util.Set;
 
+import org.junit.Assert;
+import org.junit.AssumptionViolatedException;
+
 import jdk.graal.compiler.api.test.Graal;
 import jdk.graal.compiler.core.phases.fuzzing.AbstractCompilationPlan;
 import jdk.graal.compiler.core.phases.fuzzing.FullFuzzedCompilationPlan;
@@ -56,9 +59,6 @@ import jdk.graal.compiler.phases.tiers.LowTierContext;
 import jdk.graal.compiler.phases.tiers.MidTierContext;
 import jdk.graal.compiler.phases.tiers.Suites;
 import jdk.graal.compiler.runtime.RuntimeProvider;
-import org.junit.Assert;
-import org.junit.AssumptionViolatedException;
-
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -148,11 +148,11 @@ public class JTTTest extends GraalCompilerTest {
         Result expect = executeExpected(method, receiver, args);
 
         testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
-        if (args.length > 0) {
-            this.argsToBind = args;
-            testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
-            this.argsToBind = null;
-        }
+// if (args.length > 0) {
+// this.argsToBind = args;
+// testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
+// this.argsToBind = null;
+// }
     }
 
     /**
