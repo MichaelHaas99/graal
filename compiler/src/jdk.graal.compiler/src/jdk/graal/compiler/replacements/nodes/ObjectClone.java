@@ -128,6 +128,11 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                 tool.createVirtualObject(newVirtual, state, Collections.emptyList(), sourcePosition, false);
                 tool.replaceWithVirtual(newVirtual);
             } else {
+                /*
+                 * PEA does not know about null-restricted and flat arrays yet. Therefore avoid
+                 * virtualization of the cloned array. TODO make PEA also support null-restricted
+                 * and flat arrays.
+                 */
                 if (getObject().stamp(NodeView.DEFAULT).canBeInlineTypeArray())
                     return;
                 ValueNode length = findLength(FindLengthMode.SEARCH_ONLY, tool.getConstantReflection());
