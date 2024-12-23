@@ -340,6 +340,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             int before;
             if (config.icSpeculatedKlassOffset == Integer.MAX_VALUE) {
                 crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+                /*
+                 * Just set the new entry point to the same position for the moment. TODO produce a
+                 * correct code prefix for the new entry points
+                 */
+                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 // c1_LIRAssembler_x86.cpp: const Register IC_Klass = rax;
                 Register inlineCacheKlass = rax;
 
@@ -388,6 +393,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
                 int startICCheck = asm.position();
                 crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+                /*
+                 * Just set the new entry point to the same position for the moment. TODO produce a
+                 * correct code prefix for the new entry points
+                 */
+                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 AMD64Address icSpeculatedKlass = new AMD64Address(data, config.icSpeculatedKlassOffset);
 
                 AMD64BaseAssembler.OperandSize size;
@@ -416,6 +426,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         asm.align(config.codeEntryAlignment);
         crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_ENTRY);
+        /*
+         * Just set the new entry points to the same position for the moment. TODO produce a correct
+         * code prefix for the new entry points
+         */
+        crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+        crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
     }
 
     public void emitCodeSuffix(CompilationResultBuilder crb, AMD64MacroAssembler asm) {
