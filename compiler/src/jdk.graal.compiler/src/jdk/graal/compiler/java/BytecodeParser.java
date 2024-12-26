@@ -2941,7 +2941,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         frameState.clearStack();
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
-            append(new ReturnNode(realReturnVal));
+            if (method.hasScalarizedReturn()) {
+                ReturnNode.returnScalarized(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
+            } else {
+                append(new ReturnNode(realReturnVal));
+            }
         } else {
             if (returnDataList == null) {
                 returnDataList = new ArrayList<>();
