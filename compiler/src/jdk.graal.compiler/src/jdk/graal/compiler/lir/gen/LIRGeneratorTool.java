@@ -182,6 +182,14 @@ public interface LIRGeneratorTool extends CoreProviders, DiagnosticLIRGeneratorT
     void emitReturn(JavaKind javaKind, Value input);
 
     /**
+     * Emits a return instruction. Implementations need to insert moves if the inputs are not in the
+     * correct location.
+     */
+    default void emitScalarizedReturn(JavaKind kind, Value input, JavaKind[] scalarizedKinds, Value[] scalarizedInputs) {
+        throw new UnsupportedOperationException("Scalarized return not implemented yet");
+    }
+
+    /**
      * Returns an {@link AllocatableValue} holding the {@code value} by moving it if necessary. If
      * {@code value} is already an {@link AllocatableValue}, returns it unchanged.
      */
