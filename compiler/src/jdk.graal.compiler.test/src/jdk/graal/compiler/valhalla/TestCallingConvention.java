@@ -4,8 +4,11 @@ import java.util.Arrays;
 import java.util.EnumSet;
 
 import jdk.graal.compiler.core.common.GraalOptions;
+import jdk.graal.compiler.core.phases.HighTier;
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
+import jdk.graal.compiler.options.OptionKey;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
 import jdk.graal.compiler.test.AddExports;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
@@ -26,17 +29,20 @@ public class TestCallingConvention extends JTTTest {
         int a;
         int b;
         Object c;
+        double d;
 
         MyValue1(int a){
             this.a=a;
             b = 4;
             c = null;
+            d=3.0;
         }
 
         MyValue1(){
             this.a=3;
             b = 4;
             c = null;
+            d=4.0;
         }
 
         public MyValue1 test(MyValue1 value){
@@ -49,7 +55,32 @@ public class TestCallingConvention extends JTTTest {
     }
 
     public static MyValue1 test2(MyValue1 value){
-        return new MyValue1(4);
+        MyValue1 object = new MyValue1(4);
+        global = object;
+        return object;
+    }
+
+    public static MyValue1 test3(MyValue1 value){
+        MyValue1 object = new MyValue1(4);
+        return test2(object);
+    }
+
+    public static MyValue1 test4(MyValue1 value){
+        MyValue1 object = test2(value);
+        global = object;
+        return object;
+    }
+
+    public static MyValue1 testz(MyValue1 value){
+        MyValue1 object = new MyValue1(4);
+        global = object;
+        return object;
+    }
+
+    public static MyValue1 test5(MyValue1 value){
+        MyValue1 object = testz(value);
+        global = object;
+        return object;
     }
 
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
@@ -83,6 +114,8 @@ public class TestCallingConvention extends JTTTest {
 
     }
 
+    public static MyValue1 global;
+
     @Test
     public void run2() throws Throwable {
         runTest("test2", new MyValue1());
@@ -90,7 +123,47 @@ public class TestCallingConvention extends JTTTest {
 
     @Test
     public void run3() throws Throwable {
+        resetCache();
         runTest(WITHOUT_PEA, "test2", new MyValue1());
+    }
+
+    private static final OptionValues WITHOUT_PEA_INLINING = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
+    private static final OptionValues WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
+
+    @Test
+    public void run4() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA_INLINING, "test3", new MyValue1());
+    }
+
+    @Test
+    public void run5() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_INLINING, "test3", new MyValue1());
+    }
+
+    @Test
+    public void run6() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA_INLINING, "test4", new MyValue1());
+    }
+
+    @Test
+    public void run7() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_INLINING, "test4", new MyValue1());
+    }
+
+    @Test
+    public void run8() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_PEA_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test5", new MyValue1());
+    }
+
+    @Test
+    public void run9() throws Throwable {
+        resetCache();
+        runTest(WITHOUT_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test5", new MyValue1());
     }
 
     private static String getCallingConvention(ResolvedJavaMethod method){
