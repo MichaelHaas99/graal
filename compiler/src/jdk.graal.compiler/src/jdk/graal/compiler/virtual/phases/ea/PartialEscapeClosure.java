@@ -30,8 +30,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
-import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
-import jdk.vm.ci.meta.ResolvedJavaType;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -912,6 +910,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          */
         @Override
         protected void merge(List<BlockT> statesList) {
+            // merge
 
             PartialEscapeBlockState<?>[] states = new PartialEscapeBlockState<?>[statesList.size()];
             for (int i = 0; i < statesList.size(); i++) {

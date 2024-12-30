@@ -33,6 +33,7 @@ import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -109,34 +110,43 @@ import jdk.graal.compiler.hotspot.stubs.ForeignCallSnippets;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
 import jdk.graal.compiler.nodes.AbstractDeoptimizeNode;
+import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeadEndNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
+import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.EnsureRuntimeHubUsageNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GetObjectAddressNode;
 import jdk.graal.compiler.nodes.GraphState.GuardsStage;
+import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoweredCallTargetNode;
+import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
+import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.SafepointNode;
 import jdk.graal.compiler.nodes.StartNode;
+import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.UnwindNode;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.AddNode;
+import jdk.graal.compiler.nodes.calc.AndNode;
 import jdk.graal.compiler.nodes.calc.CompareNode;
 import jdk.graal.compiler.nodes.calc.FloatingIntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.calc.IntegerConvertNode;
 import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
@@ -154,6 +164,7 @@ import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -201,6 +212,10 @@ import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.StampProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
+import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.DefaultJavaLoweringProvider;
@@ -214,6 +229,7 @@ import jdk.graal.compiler.replacements.nodes.CStringConstant;
 import jdk.graal.compiler.replacements.nodes.LogNode;
 import jdk.graal.compiler.serviceprovider.GraalServices;
 import jdk.graal.compiler.serviceprovider.LibGraalService;
+import jdk.graal.compiler.word.WordCastNode;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -448,6 +464,11 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (graph.getGuardsStage().areDeoptsFixed()) {
                 instanceofSnippets.lower((ClassIsAssignableFromNode) n, tool);
             }
+        } else if (n instanceof InlineTypeNode) {
+// if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
+// lowerInlineTypeNode((InlineTypeNode) n, tool);
+// }
+            lowerInlineTypeNode((InlineTypeNode) n, tool);
         } else if (n instanceof NewInstanceNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 getAllocationSnippets().lower((NewInstanceNode) n, tool);
@@ -1204,6 +1225,119 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
         AddressNode address = createOffsetAddress(graph, object, runtime.getVMConfig().hubOffset);
         return graph.add(new WriteNode(address, HotSpotReplacementsUtil.HUB_WRITE_LOCATION, writeValue, BarrierType.NONE, MemoryOrderMode.PLAIN));
+    }
+
+    private void lowerInlineTypeNode(InlineTypeNode inlineTypeNode, LoweringTool tool) {
+        StructuredGraph graph = inlineTypeNode.graph();
+
+        FrameState framestate = null;
+
+        FixedNode frameStatePrevious = inlineTypeNode;
+        while (framestate == null) {
+            if (frameStatePrevious instanceof StateSplit stateSplit) {
+                if (stateSplit.stateAfter() != null) {
+                    framestate = stateSplit.stateAfter();
+                    break;
+                }
+            }
+            frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
+        }
+
+        FixedNode next = inlineTypeNode.next();
+        inlineTypeNode.setNext(null);
+
+        WordCastNode oopOrHub = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOop(), tool.getWordTypes().getWordKind()));
+        graph.addBeforeFixed(inlineTypeNode, oopOrHub);
+        // set bit 0 to 1, to indicate a scalarized return value
+        ValueNode result = graph.addOrUnique(new AndNode(oopOrHub, graph.addOrUnique(ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1))));
+        LogicNode isAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+        // graph.replaceFixed(this, taggedHub);
+
+        BeginNode trueBegin = graph.add(new BeginNode());
+        BeginNode falseBegin = graph.add(new BeginNode());
+
+        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        ((FixedWithNextNode) inlineTypeNode.predecessor()).setNext(ifNode);
+
+        // true branch - inline object is already buffered
+
+        EndNode trueEnd = graph.add(new EndNode());
+        trueBegin.setNext(trueEnd);
+
+        // false branch - inline object is not buffered
+
+        EndNode falseEnd = graph.add(new EndNode());
+
+        // Use a CommitAllocation node so that no FrameState is required when creating
+        // the new instance.
+        CommitAllocationNode commit = graph.add(new CommitAllocationNode());
+        falseBegin.setNext(commit);
+        VirtualObjectNode virtualObj = graph.add(new VirtualInstanceNode(inlineTypeNode.getType(), false));
+        virtualObj.setObjectId(0);
+
+        AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
+        commit.getVirtualObjects().add(virtualObj);
+        newObj.setCommit(commit);
+
+        /*
+         * The commit values follow the same ordering as the declared fields returned by JVMCI.
+         * Since the new object's fields are copies of the old one's, the values are given by a load
+         * of the corresponding field in the old object.
+         */
+        List<ValueNode> commitValues = commit.getValues();
+        commitValues.addAll(inlineTypeNode.getScalarizedInlineType());
+
+        commit.addLocks(Collections.emptyList());
+        commit.getEnsureVirtual().add(false);
+        assert commit.verify();
+        commit.setNext(falseEnd);
+
+// FixedWithNextNode previous = falseBegin;
+// ResolvedJavaField[] fields = inlineTypeNode.getType().getInstanceFields(true);
+// for (int i = 0; i < fields.length; i++) {
+//
+// ResolvedJavaField field = fields[i];
+// ValueNode value = inlineTypeNode.getField(i);
+//
+// StoreFieldNode storeFieldNode = new StoreFieldNode(inlineTypeNode, fields[i], value);
+//
+// value = implicitStoreConvert(graph, getStorageKind(fields[i]), value);
+//
+// AddressNode address = createFieldAddress(graph, inlineTypeNode, field);
+// BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
+// WriteNode memoryWrite = new WriteNode(address,
+// overrideFieldLocationIdentity(storeFieldNode.getLocationIdentity()), value, barrierType,
+// storeFieldNode.getMemoryOrder());
+// memoryWrite.noSideEffect();
+// memoryWrite = graph.add(memoryWrite);
+//
+// previous.setNext(memoryWrite);
+// previous = memoryWrite;
+//
+// }
+        if (falseBegin.next() == null)
+            falseBegin.setNext(falseEnd);
+// else
+// previous.setNext(falseEnd);
+
+        // falseBegin.setNext(falseEnd);
+
+        // merge
+        MergeNode merge = graph.add(new MergeNode());
+        merge.setStateAfter(framestate);
+
+        ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.objectNonNull(), merge, inlineTypeNode.getOop(), newObj));
+        inlineTypeNode.replaceAtUsages(phi);
+        inlineTypeNode.safeDelete();
+        // graph.replaceFixedWithFloating(inlineTypeNode, phi);
+
+        merge.addForwardEnd(trueEnd);
+        merge.addForwardEnd(falseEnd);
+        merge.setNext(next);
+
+        commit.lower(tool);
+
+        // inlineTypeNode.lowerSuper(tool);
     }
 
     @Override

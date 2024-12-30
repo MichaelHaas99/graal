@@ -69,7 +69,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
           sizeRationale = "We don't know statically how much code for which allocations has to be generated."
 )
 // @formatter:on
-public final class CommitAllocationNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Simplifiable, SingleMemoryKill, MemoryAccess {
+public class CommitAllocationNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Simplifiable, SingleMemoryKill, MemoryAccess {
 
     public static final NodeClass<CommitAllocationNode> TYPE = NodeClass.create(CommitAllocationNode.class);
 
@@ -81,6 +81,10 @@ public final class CommitAllocationNode extends FixedWithNextNode implements Vir
 
     public CommitAllocationNode() {
         super(TYPE, StampFactory.forVoid());
+    }
+
+    public CommitAllocationNode(NodeClass<? extends FixedWithNextNode> c) {
+        super(c, StampFactory.forVoid());
     }
 
     public List<VirtualObjectNode> getVirtualObjects() {

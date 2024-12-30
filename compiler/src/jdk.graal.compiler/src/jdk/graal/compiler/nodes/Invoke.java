@@ -30,7 +30,6 @@ import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.type.StampTool;
-
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -103,6 +102,9 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
     @Override
     default ResolvedJavaMethod getContextMethod() {
+// if (next().getNodeClass().equals(InlineTypeNode.TYPE)) {
+// return ((InlineTypeNode) next()).stateAfter().getMethod();
+// }
         FrameState state = stateAfter();
         if (state == null) {
             state = stateDuring();
