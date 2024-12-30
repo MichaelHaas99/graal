@@ -125,6 +125,7 @@ import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
@@ -664,6 +665,55 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         if (x instanceof InvokeWithExceptionNode) {
             gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
+        }
+    }
+
+    public void emitInvoke(Invoke x, Value[] temps) {
+        LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
+        FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
+        CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),
+                        callTarget.signature(), gen);
+        frameMapBuilder.callsMethod(invokeCc);
+
+        Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());
+
+        LabelRef exceptionEdge = null;
+        if (x instanceof InvokeWithExceptionNode) {
+            exceptionEdge = getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge());
+            exceptionEdge.getTargetBlock().setIndirectBranchTarget();
+        }
+        LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
+
+        Value result = invokeCc.getReturn();
+        emitInvoke(callTarget, parameters, callState, result, temps);
+
+        if (isLegal(result)) {
+            setResult(x.asNode(), gen.emitMove(result));
+        }
+
+        if (x instanceof InvokeWithExceptionNode) {
+            gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
+        }
+    }
+
+    @Override
+    public void emitScalarizedReturnMove(Invoke x, ValueNode[] values, JavaType[] types) {
+        FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
+        Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
+        emitInvoke(x, results);
+        for (int i = 0; i < types.length; i++) {
+            assert isLegal(results[i]) : "expected legal register for scalarized inline type";
+            setResult(values[i], gen.emitMove(results[i]));
+        }
+    }
+
+    protected void emitInvoke(LoweredCallTargetNode callTarget, Value[] parameters, LIRFrameState callState, Value result, Value[] temps) {
+        if (callTarget instanceof DirectCallTargetNode) {
+            emitDirectCall((DirectCallTargetNode) callTarget, result, parameters, temps, callState);
+        } else if (callTarget instanceof IndirectCallTargetNode) {
+            emitIndirectCall((IndirectCallTargetNode) callTarget, result, parameters, temps, callState);
+        } else {
+            throw GraalError.shouldNotReachHereUnexpectedValue(callTarget); // ExcludeFromJacocoGeneratedReport
         }
     }
 

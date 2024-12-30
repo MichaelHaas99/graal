@@ -46,10 +46,21 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         return values;
     }
 
+    @OptionalInput ValueNode oopOrHub;
+
+    public ValueNode getOopOrHub() {
+        return oopOrHub;
+    }
+
     public VirtualObjectState(VirtualObjectNode object, ValueNode[] values) {
         super(TYPE, object);
         assert object.entryCount() == values.length : Assertions.errorMessageContext("object", object, "values", values);
         this.values = new NodeInputList<>(this, values);
+    }
+
+    public VirtualObjectState(VirtualObjectNode object, ValueNode[] values, ValueNode oopOrHub) {
+        this(object, values);
+        this.oopOrHub = oopOrHub;
     }
 
     public VirtualObjectState(VirtualObjectNode object, List<ValueNode> values) {

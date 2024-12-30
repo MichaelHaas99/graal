@@ -102,6 +102,9 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
     @Override
     default ResolvedJavaMethod getContextMethod() {
+// if (next().getNodeClass().equals(InlineTypeNode.TYPE)) {
+// return ((InlineTypeNode) next()).stateAfter().getMethod();
+// }
         FrameState state = stateAfter();
         if (state == null) {
             state = stateDuring();

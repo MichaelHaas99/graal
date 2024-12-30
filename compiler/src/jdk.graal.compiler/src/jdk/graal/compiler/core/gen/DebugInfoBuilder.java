@@ -179,6 +179,11 @@ public class DebugInfoBuilder {
                 }
                 assert checkValues(vobjValue.getType(), values, slotKinds);
                 vobjValue.setValues(values, slotKinds);
+                ValueNode oopOrHub = ((VirtualObjectState) objectStates.get(vobjNode)).getOopOrHub();
+                if (oopOrHub != null) {
+
+                    vobjValue.setOopOrHub(new JavaValue[]{toJavaValue(oopOrHub)});
+                }
             }
 
             virtualObjectsArray = new VirtualObject[virtualObjects.size()];

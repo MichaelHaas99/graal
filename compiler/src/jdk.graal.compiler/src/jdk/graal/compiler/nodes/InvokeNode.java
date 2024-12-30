@@ -40,21 +40,26 @@ import static jdk.graal.compiler.nodes.Invoke.SIZE_UNKNOWN_RATIONALE;
 
 import java.util.Map;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.Stamp;
+import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.memory.AbstractMemoryCheckpoint;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
@@ -76,6 +81,17 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     protected InlineControl inlineControl;
     protected final LocationIdentity identity;
     private boolean isInOOMETry;
+
+    private boolean hasSideEffect = true;
+
+    @Override
+    public boolean hasSideEffect() {
+        return hasSideEffect;
+    }
+
+    public void noSideEffect() {
+        hasSideEffect = false;
+    }
 
     public InvokeNode(CallTargetNode callTarget, int bci) {
         this(callTarget, bci, callTarget.returnStamp().getTrustedStamp());
@@ -149,7 +165,27 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        gen.emitInvoke(this);
+        if (!callTarget().targetMethod.hasScalarizedReturn()) {
+            gen.emitInvoke(this);
+            return;
+        }
+        // gen.getLIRGeneratorTool().getRegisterConfig().getReturnRegister(JavaKind.Object);
+        ResolvedJavaField[] fields = this.callTarget().returnStamp().getTrustedStamp().javaType(gen.getLIRGeneratorTool().getMetaAccess()).getInstanceFields(true);
+        ResolvedJavaType[] types = new ResolvedJavaType[fields.length + 2];
+        types[0] = stamp(NodeView.DEFAULT).javaType(gen.getLIRGeneratorTool().getMetaAccess());
+        for (int i = 0; i < fields.length; i++) {
+            types[i + 1] = fields[i].getType().resolve(this.callTarget().targetMethod.getDeclaringClass());
+        }
+        types[types.length - 1] = StampFactory.forKind(JavaKind.Boolean).javaType(gen.getLIRGeneratorTool().getMetaAccess());
+        InlineTypeNode.ProjNode[] projs = new InlineTypeNode.ProjNode[types.length];
+        int i = 0;
+        for (Node usage : usages()) {
+            if (usage instanceof InlineTypeNode.ProjNode projNode) {
+                projs[i++] = projNode;
+            }
+        }
+        assert projs.length == fields.length + 2 : "expected same length";
+        gen.emitScalarizedReturnMove(this, projs, types);
     }
 
     @Override

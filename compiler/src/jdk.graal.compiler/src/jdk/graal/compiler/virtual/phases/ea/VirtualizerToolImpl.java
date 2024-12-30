@@ -339,6 +339,34 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized,
+                    ValueNode oopOrHub) {
+        VirtualUtil.trace(options, debug, "{{%s}} ", current);
+        if (!virtualObject.isAlive()) {
+            effects.addFloatingNode(virtualObject, "newVirtualObject");
+        }
+        for (int i = 0; i < entryState.length; i++) {
+            ValueNode entry = entryState[i];
+            entryState[i] = entry instanceof VirtualObjectNode ? entry : closure.getAliasAndResolve(state, entry);
+        }
+        int id = virtualObject.getObjectId();
+        if (id == -1) {
+            id = closure.virtualObjects.size();
+            closure.virtualObjects.add(virtualObject);
+            virtualObject.setObjectId(id);
+        }
+        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oopOrHub));
+        closure.addVirtualAlias(virtualObject, virtualObject);
+        PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment(debug);
+        effects.addVirtualizationDelta(1);
+        effects.addLog(closure.cfg.graph.getOptimizationLog(), optimizationLog -> optimizationLog.getPartialEscapeLog().allocationRemoved(virtualObject));
+        if (sourcePosition != null) {
+            assert virtualObject.getNodeSourcePosition() == null || virtualObject.getNodeSourcePosition() == sourcePosition : "unexpected source pos!";
+            virtualObject.setNodeSourcePosition(sourcePosition);
+        }
+    }
+
+    @Override
     public int getMaximumEntryCount() {
         return MaximumEscapeAnalysisArrayLength.getValue(current.getOptions());
     }
