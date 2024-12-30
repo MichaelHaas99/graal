@@ -24,11 +24,11 @@
  */
 package jdk.graal.compiler.lir;
 
+import static jdk.graal.compiler.lir.LIRValueUtil.isVirtualStackSlot;
 import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
 import static jdk.vm.ci.code.ValueUtil.isConstantJavaValue;
 import static jdk.vm.ci.code.ValueUtil.isIllegalJavaValue;
 import static jdk.vm.ci.code.ValueUtil.isVirtualObject;
-import static jdk.graal.compiler.lir.LIRValueUtil.isVirtualStackSlot;
 
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -36,7 +36,6 @@ import java.util.EnumSet;
 import jdk.graal.compiler.lir.LIRInstruction.OperandFlag;
 import jdk.graal.compiler.lir.LIRInstruction.OperandMode;
 import jdk.graal.compiler.lir.util.IndexedValueMap;
-
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.StackLockValue;
@@ -93,6 +92,7 @@ public class LIRFrameState {
         if (virtualObjects != null) {
             for (VirtualObject obj : virtualObjects) {
                 processValues(inst, obj.getValues(), proc);
+                processValues(inst, obj.getOopOrHub(), proc);
             }
         }
         if (liveBasePointers != null) {
@@ -112,6 +112,7 @@ public class LIRFrameState {
         if (virtualObjects != null) {
             for (VirtualObject obj : virtualObjects) {
                 visitValues(inst, obj.getValues(), proc);
+                visitValues(inst, obj.getOopOrHub(), proc);
             }
         }
         if (liveBasePointers != null) {

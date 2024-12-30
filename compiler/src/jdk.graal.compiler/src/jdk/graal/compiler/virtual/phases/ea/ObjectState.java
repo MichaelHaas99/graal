@@ -55,6 +55,8 @@ public class ObjectState {
     private LockState locks;
     private boolean ensureVirtualized;
 
+    private ValueNode oopOrHub;
+
     private EscapeObjectState cachedState;
 
     /**
@@ -68,6 +70,11 @@ public class ObjectState {
         for (int i = locks.size() - 1; i >= 0; i--) {
             this.locks = new LockState(locks.get(i), this.locks);
         }
+    }
+
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oopOrHub) {
+        this(entries, locks, ensureVirtualized);
+        this.oopOrHub = oopOrHub;
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
@@ -90,6 +97,7 @@ public class ObjectState {
         locks = other.locks;
         cachedState = other.cachedState;
         ensureVirtualized = other.ensureVirtualized;
+        oopOrHub = other.oopOrHub;
     }
 
     public ObjectState cloneState() {
@@ -220,6 +228,10 @@ public class ObjectState {
 
     public LockState getLocks() {
         return locks;
+    }
+
+    public ValueNode getOopOrHub() {
+        return oopOrHub;
     }
 
     public boolean hasLocks() {

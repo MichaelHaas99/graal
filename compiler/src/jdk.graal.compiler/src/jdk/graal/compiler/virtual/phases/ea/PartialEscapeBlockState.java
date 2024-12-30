@@ -45,6 +45,7 @@ import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
+import jdk.graal.compiler.nodes.virtual.CommitAllocationOrReuseOopNode;
 import jdk.graal.compiler.nodes.virtual.LockState;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
@@ -203,9 +204,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         List<AllocatedObjectNode> objects = new ArrayList<>(2);
         List<ValueNode> values = new ArrayList<>(8);
         List<List<MonitorIdNode>> locks = new ArrayList<>();
+        List<ValueNode> oopsOrHubs = new ArrayList<>(8);
         List<ValueNode> otherAllocations = new ArrayList<>(2);
         List<Boolean> ensureVirtual = new ArrayList<>(2);
-        materializeWithCommit(fixed, virtual, objects, locks, values, ensureVirtual, otherAllocations, materializeEffects);
+        materializeWithCommit(fixed, virtual, objects, locks, values, oopsOrHubs, ensureVirtual, otherAllocations, materializeEffects);
         /*
          * because all currently virtualized allocations will be materialized in 1 commit alloc node
          * with barriers, we ignore other allocations as we only process new instance and commit
@@ -226,11 +228,16 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 }
                 if (!objects.isEmpty()) {
                     CommitAllocationNode commit;
-                    if (fixed.predecessor() instanceof CommitAllocationNode) {
+                    if (fixed.predecessor() instanceof CommitAllocationNode && oopsOrHubs.isEmpty() || fixed.predecessor() instanceof CommitAllocationOrReuseOopNode) {
                         commit = (CommitAllocationNode) fixed.predecessor();
                     } else {
                         try (DebugCloseable context = graph.withNodeSourcePosition(NodeSourcePosition.placeholder(graph.method()))) {
-                            commit = graph.add(new CommitAllocationNode());
+                            if (oopsOrHubs.isEmpty()) {
+                                commit = graph.add(new CommitAllocationNode());
+                            } else {
+                                commit = graph.add(new CommitAllocationOrReuseOopNode());
+                            }
+
                             if (fixed.predecessor() != null && fixed.predecessor() instanceof FixedWithNextNode) {
                                 graph.addBeforeFixed(fixed, commit);
                             } else {
@@ -260,6 +267,9 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     }
                     for (List<MonitorIdNode> monitorIds : locks) {
                         commit.addLocks(monitorIds);
+                    }
+                    for (ValueNode oopOrHub : oopsOrHubs) {
+                        ((CommitAllocationOrReuseOopNode) commit).getOopsOrHubs().add(graph.addOrUniqueWithInputs(oopOrHub));
                     }
                     commit.getEnsureVirtual().addAll(ensureVirtual);
 
@@ -293,6 +303,49 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         if (representation instanceof AllocatedObjectNode) {
             objects.add((AllocatedObjectNode) representation);
             locks.add(LockState.asList(obj.getLocks()));
+            ensureVirtual.add(obj.getEnsureVirtualized());
+            int pos = values.size();
+            while (values.size() < pos + entries.length) {
+                values.add(null);
+            }
+            for (int i = 0; i < entries.length; i++) {
+                if (entries[i] instanceof VirtualObjectNode) {
+                    VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
+                    ObjectState entryObj = getObjectState(entryVirtual);
+                    if (entryObj.isVirtual()) {
+                        materializeWithCommit(fixed, entryVirtual, objects, locks, values, ensureVirtual, otherAllocations, materializeEffects);
+                        entryObj = getObjectState(entryVirtual);
+                    }
+                    values.set(pos + i, entryObj.getMaterializedValue());
+                } else {
+                    values.set(pos + i, entries[i]);
+                }
+            }
+            objectMaterialized(virtual, (AllocatedObjectNode) representation, values.subList(pos, pos + entries.length));
+        } else {
+            VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
+            otherAllocations.add(representation);
+            assert obj.getLocks() == null;
+        }
+        materializeEffects.addLog(fixed.graph().getOptimizationLog(),
+                        optimizationLog -> optimizationLog.getPartialEscapeLog().objectMaterialized(virtual));
+    }
+
+    private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<List<MonitorIdNode>> locks, List<ValueNode> values,
+                    List<ValueNode> oopsOrHubs,
+                    List<Boolean> ensureVirtual, List<ValueNode> otherAllocations, GraphEffectList materializeEffects) {
+        ObjectState obj = getObjectState(virtual);
+
+        ValueNode[] entries = obj.getEntries();
+        ValueNode representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
+        escape(virtual.getObjectId(), representation);
+        obj = getObjectState(virtual);
+        PartialEscapeClosure.updateStatesForMaterialized(this, virtual, obj.getMaterializedValue());
+        if (representation instanceof AllocatedObjectNode) {
+            objects.add((AllocatedObjectNode) representation);
+            locks.add(LockState.asList(obj.getLocks()));
+            if (obj.getOopOrHub() != null)
+                oopsOrHubs.add(obj.getOopOrHub());
             ensureVirtual.add(obj.getEnsureVirtualized());
             int pos = values.size();
             while (values.size() < pos + entries.length) {
