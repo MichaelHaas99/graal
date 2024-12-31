@@ -30,12 +30,15 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.spi.Canonicalizable;
+import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 
@@ -43,7 +46,7 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 don't canonicalizes on no usages, which is important for the return convention
  */
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0, allowedUsageTypes = {InputType.Anchor})
-public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerable {
+public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
     public static final NodeClass<FixedProjAnchorNode> TYPE = NodeClass.create(FixedProjAnchorNode.class);
 
     @OptionalInput NodeInputList<ValueNode> objects = new NodeInputList<>(this);
@@ -63,5 +66,13 @@ public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerab
     @Override
     public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (objects.isEmpty()) {
+            return null;
+        }
+        return this;
     }
 }
