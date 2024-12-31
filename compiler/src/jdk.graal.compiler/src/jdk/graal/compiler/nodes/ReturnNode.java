@@ -194,6 +194,9 @@ public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLow
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        // only virtualize if we have a scalarized return
+        if (scalarizedInlineType == null)
+            return;
         ValueNode alias = tool.getAlias(result);
         if (alias instanceof VirtualObjectNode) {
             // TODO tag the hub at bit position 0
