@@ -86,6 +86,8 @@ public class TestCallingConvention extends JTTTest {
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
 
 
+
+
     /*
     * Tests the JVMCI interface concerning the scalarized calling convention
     * */
@@ -154,6 +156,8 @@ public class TestCallingConvention extends JTTTest {
         runTest(WITHOUT_INLINING, "test4", new MyValue1());
     }
 
+
+
     @Test
     public void run8() throws Throwable {
         resetCache();
@@ -164,6 +168,74 @@ public class TestCallingConvention extends JTTTest {
     public void run9() throws Throwable {
         resetCache();
         runTest(WITHOUT_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test5", new MyValue1());
+    }
+
+
+    // demonstration purpose
+
+    public static value class MyValue{
+        int i=2;
+        float f=3.0f;
+    }
+
+    public static MyValue demonstrateReturnNonNull(){
+        return new MyValue();
+    }
+
+    public static MyValue demonstrateReturnNull(){
+        return null;
+    }
+
+    private static MyValue randomGlobal= null;
+
+    public static MyValue random(){
+        MyValue s = new MyValue();
+        randomGlobal = s;
+        return s;
+    }
+
+    public static MyValue demonstrateFramestate(){
+        return random();
+    }
+
+    public static MyValue demonstratePEA(){
+        MyValue m = random();
+        randomGlobal = m;
+        return m;
+    }
+
+    private static final OptionValues DEMO_OPTIONS_WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, GraalOptions.InlineVTableStubs, false, GraalOptions.LimitInlinedInvokes, 0.0,UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
+    private static final OptionValues DEMO_OPTIONS_WITH_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, true, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
+
+
+    @Test
+    public void runDemo0() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateReturnNonNull");
+    }
+
+    @Test
+    public void runDemo1() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateReturnNull");
+    }
+
+    @Test
+    public void runDemo2() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstrateFramestate");
+    }
+
+    @Test
+    public void runDemo3() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstratePEA");
+    }
+
+    @Test
+    public void runDemo4() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateFramestate");
     }
 
     private static String getCallingConvention(ResolvedJavaMethod method){

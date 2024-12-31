@@ -15,10 +15,12 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.EndNode;
+import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.IfNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.ProfileData;
@@ -28,8 +30,12 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.AndNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
+import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
+import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.word.WordCastNode;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 
 @NodeInfo(nameTemplate = "AllocOrReuse {i#virtualObjects}", allowedUsageTypes = {Extension,
                 Memory}, cycles = CYCLES_UNKNOWN, cyclesRationale = "We don't know statically how many, and which, allocations are done.", size = SIZE_UNKNOWN, sizeRationale = "We don't know statically how much code for which allocations has to be generated.")
@@ -211,5 +217,25 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
        * commit.lower(tool);
        */
         // super.lower(tool);
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        int pos = 0;
+        for (int i = 0; i < virtualObjects.size(); i++) {
+            VirtualObjectNode virtualObject = virtualObjects.get(i);
+            int entryCount = virtualObject.entryCount();
+            /*
+             * n.b. the node source position of virtualObject will have been set when it was
+             * created.
+             */
+            LogicNode isInit = LogicNegationNode.create(new IsNullNode(oopsOrHubs.get(i)));
+            tool.addNode(isInit);
+            tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
+            tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i),
+                            oopsOrHubs.get(i));
+            pos += entryCount;
+        }
+        tool.delete();
     }
 }
