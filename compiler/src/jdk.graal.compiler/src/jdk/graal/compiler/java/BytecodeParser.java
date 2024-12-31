@@ -395,7 +395,6 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -439,9 +438,6 @@ import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.spi.CoreProvidersDelegate;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
@@ -2293,8 +2289,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         } else {
             invoke = append(createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge));
         }
-        if (invoke.next() == null)
-            invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
+        invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
         return invoke;
     }
 
@@ -2901,50 +2896,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected InvokeNode createInvoke(int invokeBci, CallTargetNode callTarget, JavaKind resultType) {
         InvokeNode invoke = new InvokeNode(callTarget, invokeBci);
-        //
-        // invoke.noSideEffect();
-        if (callTarget.targetMethod().hasScalarizedReturn()) {
-            // TODO insert Proj Nodes
-            append(invoke);
-// frameState.pushReturn(resultType, invoke);
-// invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
-// frameState.pop(invoke.getStackKind());
-
-            InlineTypeNode result = InlineTypeNode.createFromInvoke(this, invoke);
-
-            /*
-             * frameState.pushReturn(resultType, result);
-             * result.setStateAfter(createFrameState(stream.nextBCI(), result));
-             */
-
-            VirtualObjectNode virtual = graph.add(new VirtualInstanceNode(result.getType(), false));
-            virtual.setObjectId(0);
-
-            ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineType().size()];
-
-            for (int i = 0; i < newEntries.length; i++) {
-                ValueNode entry = result.getScalarizedInlineType().get(i);
-                if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(getMetaAccessExtensionProvider(), i).getStackKind())) {
-                    newEntries[i] = null;
-                } else {
-                    newEntries[i] = entry;
-                }
-            }
-
-            frameState.pushReturn(resultType, virtual);
-            FrameState state = createFrameState(stream.nextBCI(), result);
-            state.addVirtualObjectMapping(graph.addOrUniqueWithInputs(new VirtualObjectState(virtual, newEntries, result.getOop())));
-            // result.setStateAfter(state);
-            invoke.setStateAfter(state);
-            result.noSideEffect();
-            frameState.pop(invoke.getStackKind());
-            frameState.pushReturn(resultType, result);
-            // result.setStateAfter(createFrameState(stream.nextBCI(), result));
-
-            // cachedState = new VirtualObjectState(virtual, newEntries);
-
-            return invoke;
-        }
         frameState.pushReturn(resultType, invoke);
         return invoke;
     }
