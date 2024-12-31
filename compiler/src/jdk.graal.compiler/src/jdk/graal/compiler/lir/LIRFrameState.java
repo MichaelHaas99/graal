@@ -92,7 +92,9 @@ public class LIRFrameState {
         if (virtualObjects != null) {
             for (VirtualObject obj : virtualObjects) {
                 processValues(inst, obj.getValues(), proc);
-                processValues(inst, obj.getOopOrHub(), proc);
+                if (obj.getOopOrHub() != null) {
+                    processValues(inst, obj.getOopOrHub(), proc);
+                }
             }
         }
         if (liveBasePointers != null) {
@@ -112,7 +114,9 @@ public class LIRFrameState {
         if (virtualObjects != null) {
             for (VirtualObject obj : virtualObjects) {
                 visitValues(inst, obj.getValues(), proc);
-                visitValues(inst, obj.getOopOrHub(), proc);
+                if (obj.getOopOrHub() != null) {
+                    visitValues(inst, obj.getOopOrHub(), proc);
+                }
             }
         }
         if (liveBasePointers != null) {
