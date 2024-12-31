@@ -96,9 +96,8 @@ public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLow
 
         b.add(new IfNode(b.add(init), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
 
-        // plus init
-        ValueNode[] loads = new ValueNode[fields.length + 1];
-        ValueNode[] consts = new ValueNode[fields.length + 1];
+        ValueNode[] loads = new ValueNode[fields.length];
+        ValueNode[] consts = new ValueNode[fields.length];
 
         // true branch - inline object is non-null
 
@@ -109,7 +108,6 @@ public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLow
             if (trueBegin.next() == null && load instanceof FixedNode)
                 trueBegin.setNext((FixedNode) load);
         }
-        loads[loads.length - 1] = ConstantNode.forByte((byte) 1, b.getGraph());
         EndNode trueEnd = b.add(new EndNode());
         if (trueBegin.next() == null)
             trueBegin.setNext(trueEnd);
@@ -120,7 +118,6 @@ public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLow
             ConstantNode load = b.add(ConstantNode.defaultForKind(fields[i].getJavaKind()));
             consts[i] = load;
         }
-        consts[consts.length - 1] = ConstantNode.forByte((byte) 0, b.getGraph());
         EndNode falseEnd = b.add(new EndNode());
         if (falseBegin.next() == null)
             falseBegin.setNext(falseEnd);
@@ -131,13 +128,11 @@ public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLow
         MergeNode merge = b.append(new MergeNode());
         merge.setStateAfter(b.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
 
-        ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
+        ValuePhiNode[] phis = new ValuePhiNode[fields.length];
         for (int i = 0; i < fields.length; i++) {
             // TODO look at inline type plugin, use merged stamp
             phis[i] = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
         }
-        phis[phis.length - 1] = b.add(new ValuePhiNode(StampFactory.forKind(JavaKind.Boolean), merge, loads[phis.length - 1], consts[phis.length - 1]));
-
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
         return phis;
