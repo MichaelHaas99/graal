@@ -36,7 +36,6 @@ import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -92,7 +91,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
     }
 
     public List<ValueNode> getScalarizedInlineType() {
-        return scalarizedInlineType.subList(0, scalarizedInlineType.size() - 1);
+        return scalarizedInlineType;
     }
 
     public ResolvedJavaType getType() {
@@ -108,13 +107,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
         ProjNode oop = b.add(new ProjNode(StampFactory.object(), invoke));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
-        ProjNode[] projs = new ProjNode[fields.length + 1];
+        ProjNode[] projs = new ProjNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
             projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke));
 
         }
-        projs[projs.length - 1] = b.add(new ProjNode(StampFactory.forKind(JavaKind.Boolean), invoke));
         // LogicNode isInit = b.add(new IntegerEqualsNode(projs[projs.length - 1],
         // ConstantNode.forByte((byte) 1, b.getGraph())));
         // LogicNode isInit = b.add(LogicNegationNode.create(b.add(new IsNullNode(oop))));
