@@ -9,6 +9,7 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.InputType;
@@ -24,6 +25,8 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
+import jdk.graal.compiler.nodes.spi.Canonicalizable;
+import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -42,7 +45,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * The {@code InlineTypeNode} represents possible the allocation of an inline object.
  */
 @NodeInfo(nameTemplate = "New InlineType")
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, StateSplit, SingleMemoryKill, VirtualizableAllocation {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, StateSplit, SingleMemoryKill, VirtualizableAllocation, Canonicalizable, Node.IndirectInputChangedCanonicalization {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
@@ -78,7 +81,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
     private final ResolvedJavaType type;
 
     public InlineTypeNode(ResolvedJavaType type, boolean fillContents, ValueNode oop, ValueNode[] scalarizedInlineType) {
-        super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(type)));
+        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type)));
         this.oop = oop;
         this.scalarizedInlineType = new NodeInputList<>(this, scalarizedInlineType);
         this.type = type;
@@ -114,7 +117,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
         projs[projs.length - 1] = b.add(new ProjNode(StampFactory.forKind(JavaKind.Boolean), invoke));
         // LogicNode isInit = b.add(new IntegerEqualsNode(projs[projs.length - 1],
         // ConstantNode.forByte((byte) 1, b.getGraph())));
-        LogicNode isInit = b.add(LogicNegationNode.create(b.add(new IsNullNode(oop))));
+        // LogicNode isInit = b.add(LogicNegationNode.create(b.add(new IsNullNode(oop))));
         // GuardingNode guard = b.add(new FixedGuardNode(isInit,
         // DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
 
@@ -123,7 +126,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, false, oop, projs));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
         // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
-        b.append(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
+        // b.append(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter,
+        // DeoptimizationAction.None));
         return newInstance;
     }
 
@@ -132,11 +136,19 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
         return LocationIdentity.init();
     }
 
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (!oop.getNodeClass().equals(ProjNode.TYPE)) {
+            return oop;
+        }
+        return this;
+    }
+
     @NodeInfo(nameTemplate = "ProjNode")
-    public static class ProjNode extends ValueNode implements LIRLowerable {
+    public static class ProjNode extends ValueNode implements LIRLowerable, Canonicalizable {
         public static final NodeClass<ProjNode> TYPE = NodeClass.create(ProjNode.class);
 
-        @Input InvokeNode src;
+        @Input ValueNode src;
 
         protected ProjNode(NodeClass<? extends ProjNode> c, Stamp stamp) {
             super(c, stamp);
@@ -153,7 +165,15 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
 
         @Override
         public void generate(NodeLIRBuilderTool generator) {
-            src.generate(generator);
+            ((InvokeNode) src).generate(generator);
+        }
+
+        @Override
+        public Node canonical(CanonicalizerTool tool) {
+            if (!src.getNodeClass().equals(InvokeNode.TYPE)) {
+                return src;
+            }
+            return this;
         }
     }
 
@@ -231,6 +251,13 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
          */
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(type) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
+// IsNullNode isNullNode = new IsNullNode(oop);
+// tool.addNode(isNullNode);
+// LogicNode isInit = LogicNegationNode.create(isNullNode);
+// tool.addNode(isInit);
+            LogicNode isInit = LogicNegationNode.create(new IsNullNode(oop));
+            tool.addNode(isInit);
+            tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false);
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
