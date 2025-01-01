@@ -955,7 +955,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 materialized = false;
 
                 if (!forceMaterialization && PartialEscapeBlockState.identicalObjectStates(states)) {
-                    // use the state with the maximum of oopOrHubs set
+                    // use the state with the maximum number of oopOrHubs set
                     Optional<PartialEscapeBlockState<?>> state = Arrays.stream(
                                     states).max((s1, s2) -> Long.compare(Arrays.stream(virtualObjTemp).filter(v -> s1.getObjectState(v).getOopOrHub() != null).count(),
                                                     Arrays.stream(virtualObjTemp).filter(v -> s2.getObjectState(v).getOopOrHub() != null).count()));
