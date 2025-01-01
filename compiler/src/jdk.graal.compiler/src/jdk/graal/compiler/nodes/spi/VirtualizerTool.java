@@ -66,6 +66,10 @@ public interface VirtualizerTool extends CoreProviders {
      */
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized);
 
+    /**
+     * same as {@link #createVirtualObject} but with the possibility to specify an already existing
+     * oop
+     */
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oopOrHub);
 
     /**
