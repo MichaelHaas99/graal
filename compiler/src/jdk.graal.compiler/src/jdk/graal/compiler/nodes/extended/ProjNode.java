@@ -15,9 +15,9 @@ import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaType;
 
 /**
- * The {@link ProjNode} represents one returned value from a MultiNode returning a nullable
- * scalarized inline object. E.g. an InvokeNode which has a scalarized return can return multiple
- * values in registers.
+ * The {@link ProjNode} represents one returned value from a MultiNode. A MultiNode in this context
+ * is a node which returns a nullable scalarized inline object. E.g. an InvokeNode which has a
+ * scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ProjNode")
 public class ProjNode extends ValueNode implements LIRLowerable, Canonicalizable {
@@ -25,18 +25,15 @@ public class ProjNode extends ValueNode implements LIRLowerable, Canonicalizable
 
     @Input ValueNode src;
 
-    int index;
+    private final int index;
 
     public boolean pointsToOopOrHub() {
         return index == 0;
     }
 
-    protected ProjNode(NodeClass<? extends ProjNode> c, Stamp stamp) {
-        super(c, stamp);
-    }
 
     public ProjNode(Stamp stamp, InvokeNode src, int index) {
-        this(TYPE, stamp);
+        super(TYPE, stamp);
         this.src = src;
         this.index = index;
     }
@@ -45,11 +42,14 @@ public class ProjNode extends ValueNode implements LIRLowerable, Canonicalizable
         this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), src, index);
     }
 
-    // TODO: Due to the cycle with the framestate, ProjNodes can be scheduled before the
-    // InvokeNode, therefore trigger InvokeNode code generation.
+    /**
+     * TODO: Due to the cycle InvokeNode -> Framestate -> ProjNode -> InvokeNode, ProjNodes can be
+     * scheduled before the InvokeNode, therefore trigger InvokeNode code generation.
+     */
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        ((InvokeNode) src).generate(generator);
+        assert src instanceof LIRLowerable : "source of ProjNode has to be LIRLowerable";
+        ((LIRLowerable) src).generate(generator);
     }
 
     @Override
