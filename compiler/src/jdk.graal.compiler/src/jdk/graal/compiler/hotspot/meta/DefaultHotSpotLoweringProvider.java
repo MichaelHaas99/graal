@@ -1287,7 +1287,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         FixedNode next = inlineTypeNode.next();
         inlineTypeNode.setNext(null);
 
-        WordCastNode oopOrHub = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOop(), tool.getWordTypes().getWordKind()));
+        WordCastNode oopOrHub = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOopOrHub(), tool.getWordTypes().getWordKind()));
         graph.addBeforeFixed(inlineTypeNode, oopOrHub);
         // set bit 0 to 1, to indicate a scalarized return value
         ValueNode result = graph.addOrUnique(new AndNode(oopOrHub, graph.addOrUnique(ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1))));
@@ -1327,7 +1327,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
          * of the corresponding field in the old object.
          */
         List<ValueNode> commitValues = commit.getValues();
-        commitValues.addAll(inlineTypeNode.getScalarizedInlineType());
+        commitValues.addAll(inlineTypeNode.getScalarizedInlineObject());
 
         commit.addLocks(Collections.emptyList());
         commit.getEnsureVirtual().add(false);
@@ -1368,7 +1368,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         MergeNode merge = graph.add(new MergeNode());
         merge.setStateAfter(framestate);
 
-        ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.objectNonNull(), merge, inlineTypeNode.getOop(), newObj));
+        ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.objectNonNull(), merge, inlineTypeNode.getOopOrHub(), newObj));
         inlineTypeNode.replaceAtUsages(phi);
         inlineTypeNode.safeDelete();
         // graph.replaceFixedWithFloating(inlineTypeNode, phi);
