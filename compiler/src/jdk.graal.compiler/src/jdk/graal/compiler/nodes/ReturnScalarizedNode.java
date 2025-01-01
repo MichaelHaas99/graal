@@ -52,7 +52,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         return b.add(new ReturnScalarizedNode(result, List.of(phis)));
     }
 
-    private static FrameState searchForFrameState(FixedNode start) {
+    public static FrameState searchForFrameState(FixedNode start) {
         FrameState framestate = null;
 
         FixedNode current = start;
