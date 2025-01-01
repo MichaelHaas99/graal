@@ -20,7 +20,6 @@ import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
-import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -44,7 +43,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * The {@code InlineTypeNode} represents possible the allocation of an inline object.
  */
 @NodeInfo(nameTemplate = "New InlineType")
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, StateSplit, SingleMemoryKill, VirtualizableAllocation, Canonicalizable, Node.IndirectInputChangedCanonicalization {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable, Node.IndirectInputChangedCanonicalization {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
@@ -53,29 +52,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Stat
     // @Input(InputType.Guard) GuardingNode nullCheck;
 
     @OptionalInput(InputType.State) FrameState stateAfter;
-
-    @Override
-    public FrameState stateAfter() {
-        return stateAfter;
-    }
-
-    @Override
-    public void setStateAfter(FrameState x) {
-        assert x == null || x.isAlive() : "frame state must be in a graph";
-        updateUsages(stateAfter, x);
-        stateAfter = x;
-    }
-
-    private boolean hasSideEffect = true;
-
-    @Override
-    public boolean hasSideEffect() {
-        return hasSideEffect;
-    }
-
-    public void noSideEffect() {
-        hasSideEffect = false;
-    }
 
     private final ResolvedJavaType type;
 

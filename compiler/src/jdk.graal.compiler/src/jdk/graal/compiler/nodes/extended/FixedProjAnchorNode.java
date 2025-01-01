@@ -70,7 +70,7 @@ public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerab
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (objects.isEmpty()) {
+        if (objects.stream().noneMatch(f -> f.getNodeClass().equals(InlineTypeNode.ProjNode.TYPE))) {
             return null;
         }
         return this;

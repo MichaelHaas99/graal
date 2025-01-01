@@ -60,6 +60,7 @@ import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.MaterializedObjectState;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
@@ -600,6 +601,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         // and final stack size after pushing
         int copyStackSize;
         int newStackSize = 0;
+        VirtualInstanceNode virtualObject = null;
         if (pushedValues != null) {
             assert pushedSlotKinds.length == pushedValues.length : Assertions.errorMessage(pushedSlotKinds, pushedValues);
             for (int i = 0; i < pushedValues.length; i++) {
@@ -617,6 +619,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     copyStackSize = stackSize - 1;
                 }
                 ValueNode lastSlot = stackAt(copyStackSize);
+                virtualObject = lastSlot instanceof VirtualInstanceNode ? (VirtualInstanceNode) lastSlot : null;
                 assert lastSlot.getStackKind() == popKind.getStackKind() : Assertions.errorMessage(lastSlot, popKind);
             } else {
                 copyStackSize = stackSize;
@@ -661,6 +664,19 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         assert newValues.size() == newValuesSize : newValues.size() + " != " + newValuesSize;
         assert !checkStackDepth || checkStackDepth(bci, stackSize, stackState, newBci, newStackSize, newStackState);
 
+        if (virtualObject != null) {
+            assert virtualObjectMappings != null : "virtual object mapping must exist";
+            List<EscapeObjectState> result = new ArrayList<>();
+            result.addAll(virtualObjectMappings);
+            for (int i = 0; i < virtualObjectMappings.size(); i++) {
+                EscapeObjectState existingEscapeObjectState = virtualObjectMappings.get(i);
+                if (existingEscapeObjectState.object() == virtualObject) {
+                    result.remove(i);
+                    copiedVirtualObjectMappings = result;
+                    break;
+                }
+            }
+        }
         return graph.add(new FrameState(outerFrameState(),
                         code,
                         newBci,

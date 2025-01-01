@@ -80,6 +80,8 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
             }
         }
 
+        List<AllocatedObjectNode> commitUsages = this.usages().filter(AllocatedObjectNode.class).stream().toList();
+
         for (int i = 0; i < oopsOrHubs.size(); i++) {
 
             ValueNode oopOrHub = oopsOrHubs.get(i);
@@ -116,8 +118,10 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
 
             VirtualObjectNode virtualObj = this.virtualObjects.get(i);
 
+            // commit.usages().filter(AllocatedObjectNode.class).count() == commit.getUsageCount()
+
             AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
-            AllocatedObjectNode oldObj = this.usages().filter(AllocatedObjectNode.class).stream().toList().get(i);
+            AllocatedObjectNode oldObj = commitUsages.get(i);
             oldObj.setCommit(null);
 
             commit.getVirtualObjects().add(virtualObj);
