@@ -133,6 +133,7 @@ import jdk.graal.compiler.nodes.GraphState.GuardsStage;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoweredCallTargetNode;
 import jdk.graal.compiler.nodes.MergeNode;
@@ -1275,10 +1276,12 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (frameStatePrevious instanceof StateSplit stateSplit) {
                 if (stateSplit.stateAfter() != null) {
                     framestate = stateSplit.stateAfter();
-                    break;
+                } else {
+                    frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
                 }
+            } else {
+                frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
             }
-            frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
         }
 
         FixedNode next = inlineTypeNode.next();
@@ -1288,7 +1291,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         graph.addBeforeFixed(inlineTypeNode, oopOrHub);
         // set bit 0 to 1, to indicate a scalarized return value
         ValueNode result = graph.addOrUnique(new AndNode(oopOrHub, graph.addOrUnique(ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1))));
-        LogicNode isAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+        LogicNode isNotAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+        LogicNode isAlreadyBuffered = graph.addOrUnique(LogicNegationNode.create(isNotAlreadyBuffered));
         // graph.replaceFixed(this, taggedHub);
 
         BeginNode trueBegin = graph.add(new BeginNode());

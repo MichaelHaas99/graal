@@ -74,6 +74,8 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
             if (frameStatePrevious instanceof StateSplit stateSplit) {
                 if (stateSplit.stateAfter() != null) {
                     framestate = stateSplit.stateAfter();
+                } else {
+                    frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
                 }
             } else {
                 frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
@@ -90,7 +92,8 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
             previous.setNext(oopOrHubWord);
             // set bit 0 to 1, to indicate a scalarized return value
             ValueNode result = graph.addOrUnique(new AndNode(oopOrHubWord, graph.addOrUnique(ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1))));
-            LogicNode isAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+            LogicNode isNotAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+            LogicNode isAlreadyBuffered = graph.addOrUnique(LogicNegationNode.create(isNotAlreadyBuffered));
             // graph.replaceFixed(this, taggedHub);
 
             BeginNode trueBegin = graph.add(new BeginNode());
