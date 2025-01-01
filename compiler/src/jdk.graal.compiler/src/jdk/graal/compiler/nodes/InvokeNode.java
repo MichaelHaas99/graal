@@ -49,7 +49,7 @@ import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
+import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.memory.AbstractMemoryCheckpoint;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
@@ -174,10 +174,10 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         for (int i = 0; i < fields.length; i++) {
             types[i + 1] = fields[i].getType().resolve(this.callTarget().targetMethod.getDeclaringClass());
         }
-        InlineTypeNode.ProjNode[] projs = new InlineTypeNode.ProjNode[types.length];
+        ProjNode[] projs = new ProjNode[types.length];
         int i = 0;
         for (Node usage : usages()) {
-            if (usage instanceof InlineTypeNode.ProjNode projNode) {
+            if (usage instanceof ProjNode projNode) {
                 projs[i++] = projNode;
             }
         }
