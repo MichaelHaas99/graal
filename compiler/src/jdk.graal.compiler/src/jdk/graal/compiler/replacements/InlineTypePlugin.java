@@ -82,10 +82,10 @@ public class InlineTypePlugin implements NodePlugin {
             VirtualObjectNode virtual = b.append(new VirtualInstanceNode(result.getType(), false));
             // virtual.setObjectId(0);
 
-            ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineType().size()];
+            ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineObject().size()];
 
             for (int i = 0; i < newEntries.length; i++) {
-                ValueNode entry = result.getScalarizedInlineType().get(i);
+                ValueNode entry = result.getScalarizedInlineObject().get(i);
                 if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(b.getMetaAccessExtensionProvider(), i).getStackKind())) {
                     newEntries[i] = null;
                 } else {
@@ -94,7 +94,7 @@ public class InlineTypePlugin implements NodePlugin {
             }
             b.push(b.getInvokeReturnType().getJavaKind(), virtual);
             b.setStateAfter(invoke);
-            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getOop())));
+            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getOopOrHub())));
             b.pop(b.getInvokeReturnType().getJavaKind());
             b.push(b.getInvokeReturnType().getJavaKind(), result);
 
