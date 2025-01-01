@@ -355,6 +355,7 @@ import jdk.graal.compiler.nodes.ProfileData.BranchProbabilityData;
 import jdk.graal.compiler.nodes.ProfileData.ProfileSource;
 import jdk.graal.compiler.nodes.ProfileData.SwitchProbabilityData;
 import jdk.graal.compiler.nodes.ReturnNode;
+import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.StartNode;
 import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -2964,7 +2965,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
             if (method.hasScalarizedReturn()) {
-                ReturnNode.returnScalarized(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
+                ReturnScalarizedNode.create(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
             } else {
                 append(new ReturnNode(realReturnVal));
             }
