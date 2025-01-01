@@ -179,9 +179,11 @@ public class DebugInfoBuilder {
                 }
                 assert checkValues(vobjValue.getType(), values, slotKinds);
                 vobjValue.setValues(values, slotKinds);
+
+                // Also add oopOrHub if exists. Produced for a framestate of an InvokeNode which
+                // has a nullable scalarized inline object as return.
                 ValueNode oopOrHub = ((VirtualObjectState) objectStates.get(vobjNode)).getOopOrHub();
                 if (oopOrHub != null) {
-
                     vobjValue.setOopOrHub(new JavaValue[]{toJavaValue(oopOrHub)});
                 }
             }

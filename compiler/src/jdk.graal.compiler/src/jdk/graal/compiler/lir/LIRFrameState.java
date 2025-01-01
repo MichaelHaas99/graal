@@ -92,6 +92,9 @@ public class LIRFrameState {
         if (virtualObjects != null) {
             for (VirtualObject obj : virtualObjects) {
                 processValues(inst, obj.getValues(), proc);
+
+                // Also process oopOrHub if exists. Produced for a framestate of an InvokeNode
+                // which has a nullable scalarized inline object as return.
                 if (obj.getOopOrHub() != null) {
                     processValues(inst, obj.getOopOrHub(), proc);
                 }
@@ -114,6 +117,9 @@ public class LIRFrameState {
         if (virtualObjects != null) {
             for (VirtualObject obj : virtualObjects) {
                 visitValues(inst, obj.getValues(), proc);
+
+                // Also visit oopOrHub if exists. Produced for a framestate of an InvokeNode which
+                // has a nullable scalarized inline object as return.
                 if (obj.getOopOrHub() != null) {
                     visitValues(inst, obj.getOopOrHub(), proc);
                 }
