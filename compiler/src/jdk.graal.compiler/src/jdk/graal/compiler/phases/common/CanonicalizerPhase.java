@@ -72,7 +72,7 @@ import jdk.graal.compiler.nodes.VirtualState;
 import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.cfg.ControlFlowGraph;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
+import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.loop.InductionVariable;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.Canonicalizable.BinaryCommutative;
@@ -658,7 +658,9 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
                                                 " : replacement should be floating or fixed and connected";
                 node.replaceAtUsages(canonical);
                 GraphUtil.killWithUnusedFloatingInputs(node, true);
-            } else if (node instanceof InlineTypeNode.ProjNode) {
+            } else if (node instanceof ProjNode) {
+                // ProjNode is no floating node to avoid global value numbering, therefore use this
+                // extra check
                 node.replaceAtUsages(canonical);
                 GraphUtil.killWithUnusedFloatingInputs(node, true);
             } else {

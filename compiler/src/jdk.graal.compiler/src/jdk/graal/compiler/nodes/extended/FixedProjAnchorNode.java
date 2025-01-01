@@ -43,8 +43,7 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 
 /**
- * Just used to anchor {@link InlineTypeNode.ProjNode} for a nicer graph structure. Can be removed
- * in the future.
+ * Just used to anchor {@link ProjNode} for a nicer graph structure. Can be removed in the future.
  */
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0, allowedUsageTypes = {InputType.Anchor})
 public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Node.IndirectInputChangedCanonicalization {
