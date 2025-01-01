@@ -685,6 +685,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
 
         Value result = invokeCc.getReturn();
+        // TODO: actually wrong to say the scalarized return values are temps
         emitInvoke(callTarget, parameters, callState, result, temps);
 
         if (isLegal(result)) {
@@ -697,7 +698,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitScalarizedReturnMove(Invoke x, ValueNode[] values, JavaType[] types) {
+    public void emitScalarizedInvokeAndMoves(Invoke x, ValueNode[] values, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         emitInvoke(x, results);
