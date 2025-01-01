@@ -70,26 +70,17 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-        //
-        // invoke.noSideEffect();
+
 
         if (method.hasScalarizedReturn()) {
-            // TODO insert Proj Nodes
             InvokeNode invoke = new InvokeNode(b.append(new MethodCallTargetNode(b.getInvokeKind(), method, args, b.getInvokeReturnStamp(b.getAssumptions()), null)), b.bci());
             b.append(invoke);
-// frameState.pushReturn(resultType, invoke);
-// invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
-// frameState.pop(invoke.getStackKind());
 
             InlineTypeNode result = InlineTypeNode.createFromInvoke(b, invoke);
 
-            /*
-             * frameState.pushReturn(resultType, result);
-             * result.setStateAfter(createFrameState(stream.nextBCI(), result));
-             */
 
             VirtualObjectNode virtual = b.append(new VirtualInstanceNode(result.getType(), false));
-            virtual.setObjectId(0);
+            // virtual.setObjectId(0);
 
             ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineType().size()];
 
@@ -104,7 +95,6 @@ public class InlineTypePlugin implements NodePlugin {
             b.push(b.getInvokeReturnType().getJavaKind(), virtual);
             b.setStateAfter(invoke);
             invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getOop())));
-            result.noSideEffect();
             b.pop(b.getInvokeReturnType().getJavaKind());
             b.push(b.getInvokeReturnType().getJavaKind(), result);
 
