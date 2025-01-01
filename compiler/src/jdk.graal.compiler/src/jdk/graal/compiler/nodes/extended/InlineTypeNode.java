@@ -134,6 +134,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             for (int i = 0; i < state.length; i++) {
                 state[i] = getField(i);
             }
+
+            // create virtual object and hand over oopOrHub
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oopOrHub);
             tool.replaceWithVirtual(virtualObject);
         }
