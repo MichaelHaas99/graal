@@ -25,9 +25,11 @@
 package jdk.graal.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.IntUnaryOperator;
 
 import org.graalvm.collections.EconomicMap;
@@ -910,7 +912,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          */
         @Override
         protected void merge(List<BlockT> statesList) {
-            // merge
+            // merge info
 
             PartialEscapeBlockState<?>[] states = new PartialEscapeBlockState<?>[statesList.size()];
             for (int i = 0; i < statesList.size(); i++) {
@@ -953,12 +955,24 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 materialized = false;
 
                 if (!forceMaterialization && PartialEscapeBlockState.identicalObjectStates(states)) {
-                    newState.adoptAddObjectStates(states[0]);
+                    // use the state with the maximum of oopOrHubs set
+                    Optional<PartialEscapeBlockState<?>> state = Arrays.stream(
+                                    states).max((s1, s2) -> Long.compare(Arrays.stream(virtualObjTemp).filter(v -> s1.getObjectState(v).getOopOrHub() != null).count(),
+                                                    Arrays.stream(virtualObjTemp).filter(v -> s2.getObjectState(v).getOopOrHub() != null).count()));
+                    newState.adoptAddObjectStates(state.get());
+                    // newState.adoptAddObjectStates(states[0]);
                 } else {
 
                     for (int object : virtualObjTemp) {
                         if (!forceMaterialization && PartialEscapeBlockState.identicalObjectStates(states, object)) {
-                            newState.addObject(object, states[0].getObjectState(object).share());
+                            // use the state with an oopOrHub if exists
+                            Optional<ObjectState> state = Arrays.stream(states).map(s -> s.getObjectState(object)).filter(s -> s.getOopOrHub() != null).findFirst();
+                            if (state.isPresent()) {
+                                newState.addObject(object, state.get().share());
+                            } else {
+                                newState.addObject(object, states[0].getObjectState(object).share());
+                            }
+                            // newState.addObject(object, states[0].getObjectState(object).share());
                             continue;
                         }
 
