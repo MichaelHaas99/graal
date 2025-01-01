@@ -619,7 +619,10 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     copyStackSize = stackSize - 1;
                 }
                 ValueNode lastSlot = stackAt(copyStackSize);
+
+                // check if we pop a virtual object
                 virtualObject = lastSlot instanceof VirtualInstanceNode ? (VirtualInstanceNode) lastSlot : null;
+
                 assert lastSlot.getStackKind() == popKind.getStackKind() : Assertions.errorMessage(lastSlot, popKind);
             } else {
                 copyStackSize = stackSize;
@@ -664,7 +667,12 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         assert newValues.size() == newValuesSize : newValues.size() + " != " + newValuesSize;
         assert !checkStackDepth || checkStackDepth(bci, stackSize, stackState, newBci, newStackSize, newStackState);
 
+
         if (virtualObject != null) {
+            // remove virtual object mapping created for a invoke node with a nullable scalarized
+            // inline object, when we pop the corresponding virtual object. E.g. caused by
+            // duplicateModifiedDuringCall.
+            // TODO: is there a way to remove it automatically?
             assert virtualObjectMappings != null : "virtual object mapping must exist";
             List<EscapeObjectState> result = new ArrayList<>();
             result.addAll(virtualObjectMappings);
