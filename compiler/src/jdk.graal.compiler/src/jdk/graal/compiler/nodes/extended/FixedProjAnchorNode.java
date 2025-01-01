@@ -42,11 +42,12 @@ import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 
-/*
-don't canonicalizes on no usages, which is important for the return convention
+/**
+ * Just used to anchor {@link InlineTypeNode.ProjNode} for a nicer graph structure. Can be removed
+ * in the future.
  */
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0, allowedUsageTypes = {InputType.Anchor})
-public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
+public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Node.IndirectInputChangedCanonicalization {
     public static final NodeClass<FixedProjAnchorNode> TYPE = NodeClass.create(FixedProjAnchorNode.class);
 
     @OptionalInput NodeInputList<ValueNode> objects = new NodeInputList<>(this);
@@ -70,7 +71,8 @@ public class FixedProjAnchorNode extends FixedWithNextNode implements LIRLowerab
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (objects.stream().noneMatch(f -> f.getNodeClass().equals(InlineTypeNode.ProjNode.TYPE))) {
+        if (objects.count() == 1) {
+            // only anchors oop, therefore remove
             return null;
         }
         return this;
