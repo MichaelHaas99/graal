@@ -133,7 +133,6 @@ import jdk.graal.compiler.nodes.GraphState.GuardsStage;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
-import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoweredCallTargetNode;
 import jdk.graal.compiler.nodes.MergeNode;
@@ -141,21 +140,20 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
+import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.SafepointNode;
 import jdk.graal.compiler.nodes.StartNode;
-import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.UnwindNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.AddNode;
-import jdk.graal.compiler.nodes.calc.AndNode;
 import jdk.graal.compiler.nodes.calc.CompareNode;
 import jdk.graal.compiler.nodes.calc.FloatingIntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.calc.IntegerConvertNode;
 import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
-import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
+import jdk.graal.compiler.nodes.calc.IntegerTestNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.NarrowNode;
@@ -1269,31 +1267,15 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     private void lowerInlineTypeNode(InlineTypeNode inlineTypeNode, LoweringTool tool) {
         StructuredGraph graph = inlineTypeNode.graph();
 
-        FrameState framestate = null;
-
-        FixedNode frameStatePrevious = inlineTypeNode;
-        while (framestate == null) {
-            if (frameStatePrevious instanceof StateSplit stateSplit) {
-                if (stateSplit.stateAfter() != null) {
-                    framestate = stateSplit.stateAfter();
-                } else {
-                    frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
-                }
-            } else {
-                frameStatePrevious = (FixedNode) frameStatePrevious.predecessor();
-            }
-        }
+        FrameState framestate = ReturnScalarizedNode.searchForFrameState(inlineTypeNode);
 
         FixedNode next = inlineTypeNode.next();
         inlineTypeNode.setNext(null);
 
-        WordCastNode oopOrHub = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOopOrHub(), tool.getWordTypes().getWordKind()));
-        graph.addBeforeFixed(inlineTypeNode, oopOrHub);
-        // set bit 0 to 1, to indicate a scalarized return value
-        ValueNode result = graph.addOrUnique(new AndNode(oopOrHub, graph.addOrUnique(ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1))));
-        LogicNode isNotAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
-        LogicNode isAlreadyBuffered = graph.addOrUnique(LogicNegationNode.create(isNotAlreadyBuffered));
-        // graph.replaceFixed(this, taggedHub);
+        WordCastNode oopOrHubWord = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOopOrHub(), tool.getWordTypes().getWordKind()));
+        graph.addBeforeFixed(inlineTypeNode, oopOrHubWord);
+
+        LogicNode isAlreadyBuffered = graph.addOrUnique(new IntegerTestNode(oopOrHubWord, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
 
         BeginNode trueBegin = graph.add(new BeginNode());
         BeginNode falseBegin = graph.add(new BeginNode());
@@ -1315,7 +1297,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         CommitAllocationNode commit = graph.add(new CommitAllocationNode());
         falseBegin.setNext(commit);
         VirtualObjectNode virtualObj = graph.add(new VirtualInstanceNode(inlineTypeNode.getType(), false));
-        virtualObj.setObjectId(0);
 
         AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
         commit.getVirtualObjects().add(virtualObj);
@@ -1334,44 +1315,18 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         assert commit.verify();
         commit.setNext(falseEnd);
 
-// FixedWithNextNode previous = falseBegin;
-// ResolvedJavaField[] fields = inlineTypeNode.getType().getInstanceFields(true);
-// for (int i = 0; i < fields.length; i++) {
-//
-// ResolvedJavaField field = fields[i];
-// ValueNode value = inlineTypeNode.getField(i);
-//
-// StoreFieldNode storeFieldNode = new StoreFieldNode(inlineTypeNode, fields[i], value);
-//
-// value = implicitStoreConvert(graph, getStorageKind(fields[i]), value);
-//
-// AddressNode address = createFieldAddress(graph, inlineTypeNode, field);
-// BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
-// WriteNode memoryWrite = new WriteNode(address,
-// overrideFieldLocationIdentity(storeFieldNode.getLocationIdentity()), value, barrierType,
-// storeFieldNode.getMemoryOrder());
-// memoryWrite.noSideEffect();
-// memoryWrite = graph.add(memoryWrite);
-//
-// previous.setNext(memoryWrite);
-// previous = memoryWrite;
-//
-// }
         if (falseBegin.next() == null)
             falseBegin.setNext(falseEnd);
-// else
-// previous.setNext(falseEnd);
-
-        // falseBegin.setNext(falseEnd);
 
         // merge
         MergeNode merge = graph.add(new MergeNode());
         merge.setStateAfter(framestate);
 
         ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.objectNonNull(), merge, inlineTypeNode.getOopOrHub(), newObj));
+
+        // replace inline type node with phi node
         inlineTypeNode.replaceAtUsages(phi);
         inlineTypeNode.safeDelete();
-        // graph.replaceFixedWithFloating(inlineTypeNode, phi);
 
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
@@ -1379,7 +1334,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
         commit.lower(tool);
 
-        // inlineTypeNode.lowerSuper(tool);
     }
 
     @Override
