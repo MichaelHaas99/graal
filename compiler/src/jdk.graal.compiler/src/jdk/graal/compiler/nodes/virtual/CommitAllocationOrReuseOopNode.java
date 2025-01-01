@@ -162,6 +162,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
             commit.lower(tool);
             valuePos += virtualObj.entryCount();
             previous = merge;
+            commit.lower(tool);
         }
         this.safeDelete();
 
