@@ -12,11 +12,9 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
-import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
@@ -31,6 +29,7 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -40,71 +39,71 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * The {@code InlineTypeNode} represents possible the allocation of an inline object.
+ * The {@link InlineTypeNode} represents a nullable scalarized inline object. It takes an Object
+ * {@link #oopOrHub} and the scalarized field values {@link #scalarizedInlineObject} as input. If
+ * the object represents a null value then the input {@link #oopOrHub} will be null at runtime. If
+ * the bit 0 of {@link #oopOrHub} is set at runtime, no oop exists and the object needs to be
+ * reconstructed by the scalarized field values, if needed. If an oop exists it is up to the
+ * compiler to either use the oop or the scalarized field values.
  */
-@NodeInfo(nameTemplate = "New InlineType")
+@NodeInfo(nameTemplate = "InlineTypeNode")
 public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable, Node.IndirectInputChangedCanonicalization {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @Input ValueNode oop;
-    @Input NodeInputList<ValueNode> scalarizedInlineType;
-    // @Input(InputType.Guard) GuardingNode nullCheck;
-
-    @OptionalInput(InputType.State) FrameState stateAfter;
+    @Input ValueNode oopOrHub;
+    @Input NodeInputList<ValueNode> scalarizedInlineObject;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, boolean fillContents, ValueNode oop, ValueNode[] scalarizedInlineType) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type)));
-        this.oop = oop;
-        this.scalarizedInlineType = new NodeInputList<>(this, scalarizedInlineType);
+        this.oopOrHub = oopOrHub;
+        this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
         this.type = type;
     }
 
-    public ValueNode getOop() {
-        return oop;
+    public ValueNode getOopOrHub() {
+        return oopOrHub;
     }
 
-    public List<ValueNode> getScalarizedInlineType() {
-        return scalarizedInlineType;
+    public List<ValueNode> getScalarizedInlineObject() {
+        return scalarizedInlineObject;
     }
 
     public ResolvedJavaType getType() {
         return type;
     }
 
+
     public ValueNode getField(int index) {
-        return scalarizedInlineType.get(index);
+        return scalarizedInlineObject.get(index);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, InvokeNode invoke) {
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
-        ProjNode oop = b.add(new ProjNode(StampFactory.object(), invoke));
+        ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke, 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ProjNode[] projs = new ProjNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke));
+            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke, 1));
 
         }
-        // LogicNode isInit = b.add(new IntegerEqualsNode(projs[projs.length - 1],
-        // ConstantNode.forByte((byte) 1, b.getGraph())));
-        // LogicNode isInit = b.add(LogicNegationNode.create(b.add(new IsNullNode(oop))));
-        // GuardingNode guard = b.add(new FixedGuardNode(isInit,
-        // DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
 
         FixedProjAnchorNode anchor = b.add(new FixedProjAnchorNode());
         anchor.objects().addAll(List.of(projs));
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, false, oop, projs));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
         // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
-        // b.append(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter,
-        // DeoptimizationAction.None));
+
         return newInstance;
     }
 
+    /**
+     * Needed for replacement with a {@link CommitAllocationNode}
+     */
     @Override
     public LocationIdentity getKilledLocationIdentity() {
         return LocationIdentity.init();
@@ -112,31 +111,44 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (!oop.getNodeClass().equals(ProjNode.TYPE)) {
-            return oop;
+        if (!oopOrHub.getNodeClass().equals(ProjNode.TYPE)) {
+            return oopOrHub;
         }
         return this;
     }
 
+    /**
+     * The {@link ProjNode} represents one returned value from a MultiNode. E.g. an InvokeNode which
+     * has a scalarized return can return multiple values in registers.
+     */
     @NodeInfo(nameTemplate = "ProjNode")
     public static class ProjNode extends ValueNode implements LIRLowerable, Canonicalizable {
         public static final NodeClass<ProjNode> TYPE = NodeClass.create(ProjNode.class);
 
         @Input ValueNode src;
 
+        int index;
+
+        public boolean pointsToOopOrHub() {
+            return index == 0;
+        }
+
         protected ProjNode(NodeClass<? extends ProjNode> c, Stamp stamp) {
             super(c, stamp);
         }
 
-        public ProjNode(Stamp stamp, InvokeNode src) {
+        public ProjNode(Stamp stamp, InvokeNode src, int index) {
             this(TYPE, stamp);
             this.src = src;
+            this.index = index;
         }
 
-        public ProjNode(JavaType type, Assumptions assumptions, InvokeNode src) {
-            this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), src);
+        public ProjNode(JavaType type, Assumptions assumptions, InvokeNode src, int index) {
+            this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), src, index);
         }
 
+        // TODO: Due to the cycle with the framestate, ProjNodes can be scheduled before the
+        // InvokeNode, therefore trigger InvokeNode code generation.
         @Override
         public void generate(NodeLIRBuilderTool generator) {
             ((InvokeNode) src).generate(generator);
@@ -145,77 +157,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         @Override
         public Node canonical(CanonicalizerTool tool) {
             if (!src.getNodeClass().equals(InvokeNode.TYPE)) {
-                return src;
+                // Inlining can replace the InvokeNode, therefore canonicalize
+                if (pointsToOopOrHub()) {
+                    // The first ProjNode always represents the regular result
+                    return src;
+                } else {
+                    return null;
+                }
             }
             return this;
         }
     }
 
-// public void lowerSuper(LoweringTool tool) {
-// super.lower(tool);
-// }
-
-/*
- * @Override public void lower(LoweringTool tool) { StructuredGraph graph = graph(); FixedNode next
- * = this.next();
- * 
- * WordCastNode oopOrHub = graph.addOrUnique(WordCastNode.addressToWord(oop,
- * tool.getWordTypes().getWordKind())); graph.addBeforeFixed(this, oopOrHub); // set bit 0 to 1, to
- * indicate a scalarized return value ValueNode result = graph.addOrUnique(new AndNode(oopOrHub,
- * graph.addOrUnique(ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1)))); LogicNode
- * isAlreadyBuffered = graph.addOrUnique(new IntegerEqualsNode(result,
- * ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph))); //
- * graph.replaceFixed(this, taggedHub);
- * 
- * BeginNode trueBegin = graph.add(new BeginNode()); BeginNode falseBegin = graph.add(new
- * BeginNode());
- * 
- * IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin,
- * ProfileData.BranchProbabilityData.unknown())); ((FixedWithNextNode)
- * this.predecessor()).setNext(ifNode);
- * 
- * // true branch - inline object is already buffered
- * 
- * EndNode trueEnd = graph.add(new EndNode()); trueBegin.setNext(trueEnd);
- * 
- * // false branch - inline object is not buffered
- * 
- * EndNode falseEnd = graph.add(new EndNode()); ResolvedJavaField[] fields =
- * type.getInstanceFields(true); for (int i = 0; i < fields.length; i++) {
- * 
- * StoreFieldNode storeField = nodes.get(i); ResolvedJavaField field = storeField.field(); ValueNode
- * object = storeField.object(); assert StampTool.isPointerNonNull(object) :
- * "store to null-restricted flat field should include null check";
- * 
- * ValueNode value = implicitStoreConvert(graph, getStorageKind(storeField.field()),
- * storeField.value());
- * 
- * AddressNode address = createFieldAddress(graph, object, field); BarrierType barrierType =
- * barrierSet.fieldWriteBarrierType(field, getStorageKind(field)); WriteNode memoryWrite = new
- * WriteNode(address, overrideFieldLocationIdentity(storeFlatField.getLocationIdentity()), value,
- * barrierType, storeField.getMemoryOrder());
- * 
- * memoryWrite = graph.add(memoryWrite);
- * 
- * if (i != nodes.size() - 1) { // assign invalid framestate because writes don't exist in bytecode
- * memoryWrite.setStateAfter(graph.addOrUnique(new
- * FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI))); graph.addBeforeFixed(storeFlatField,
- * memoryWrite); } else { // only last write operation gets a vaild framestate
- * memoryWrite.setStateAfter(storeFlatField.stateAfter()); graph.replaceFixed(storeFlatField,
- * memoryWrite); }
- * 
- * } if (falseBegin.next() == null) falseBegin.setNext(falseEnd);
- * 
- * // falseBegin.setNext(falseEnd);
- * 
- * // merge MergeNode merge = graph.add(new MergeNode());
- * 
- * graph.add(new ValuePhiNode(StampFactory.objectNonNull(), merge, oop, this));
- * 
- * merge.addForwardEnd(trueEnd); merge.addForwardEnd(falseEnd); merge.setNext(next);
- * 
- * super.lower(tool); }
- */
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -225,20 +178,20 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
          */
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(type) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
-// IsNullNode isNullNode = new IsNullNode(oop);
-// tool.addNode(isNullNode);
-// LogicNode isInit = LogicNegationNode.create(isNullNode);
-// tool.addNode(isInit);
-            LogicNode isInit = LogicNegationNode.create(new IsNullNode(oop));
+
+            // Because the node can represent a null value, insert a guard before we virtualize
+            LogicNode isInit = LogicNegationNode.create(new IsNullNode(oopOrHub));
             tool.addNode(isInit);
             tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
+
+            // virtualize
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false);
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
-                state[i] = scalarizedInlineType.get(i);
+                state[i] = getField(i);
             }
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oopOrHub);
             tool.replaceWithVirtual(virtualObject);
         }
     }
