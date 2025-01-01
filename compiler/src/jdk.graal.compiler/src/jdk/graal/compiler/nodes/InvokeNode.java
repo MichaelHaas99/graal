@@ -56,7 +56,6 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -79,17 +78,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     protected InlineControl inlineControl;
     protected final LocationIdentity identity;
     private boolean isInOOMETry;
-
-    private boolean hasSideEffect = true;
-
-    @Override
-    public boolean hasSideEffect() {
-        return hasSideEffect;
-    }
-
-    public void noSideEffect() {
-        hasSideEffect = false;
-    }
 
     public InvokeNode(CallTargetNode callTarget, int bci) {
         this(callTarget, bci, callTarget.returnStamp().getTrustedStamp());
@@ -163,17 +151,13 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        if (!callTarget().targetMethod.hasScalarizedReturn()) {
+        if (!callTarget().targetMethod().hasScalarizedReturn()) {
             gen.emitInvoke(this);
             return;
         }
-        // gen.getLIRGeneratorTool().getRegisterConfig().getReturnRegister(JavaKind.Object);
-        ResolvedJavaField[] fields = this.callTarget().returnStamp().getTrustedStamp().javaType(gen.getLIRGeneratorTool().getMetaAccess()).getInstanceFields(true);
-        ResolvedJavaType[] types = new ResolvedJavaType[fields.length + 1];
-        types[0] = stamp(NodeView.DEFAULT).javaType(gen.getLIRGeneratorTool().getMetaAccess());
-        for (int i = 0; i < fields.length; i++) {
-            types[i + 1] = fields[i].getType().resolve(this.callTarget().targetMethod.getDeclaringClass());
-        }
+
+        ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
+
         ProjNode[] projs = new ProjNode[types.length];
         int i = 0;
         for (Node usage : usages()) {
@@ -181,8 +165,8 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
                 projs[i++] = projNode;
             }
         }
-        assert projs.length == fields.length + 1 : "expected same length";
-        gen.emitScalarizedReturnMove(this, projs, types);
+        assert i == types.length : "expected same length";
+        gen.emitScalarizedInvokeAndMoves(this, projs, types);
     }
 
     @Override

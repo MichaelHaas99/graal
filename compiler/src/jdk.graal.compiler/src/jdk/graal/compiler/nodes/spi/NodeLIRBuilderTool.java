@@ -64,7 +64,7 @@ public interface NodeLIRBuilderTool extends NodeValueMap {
 
     void emitInvoke(Invoke i);
 
-    default void emitScalarizedReturnMove(Invoke i, ValueNode[] values, JavaType[] types) {
+    default void emitScalarizedInvokeAndMoves(Invoke i, ValueNode[] values, JavaType[] types) {
         throw new UnsupportedOperationException();
     }
 
