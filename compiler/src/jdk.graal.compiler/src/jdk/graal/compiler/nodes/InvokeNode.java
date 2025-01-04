@@ -158,14 +158,16 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
         ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
 
-        ProjNode[] projs = new ProjNode[types.length];
+        ProjNode[] projs = new ProjNode[types.length + 1];
         int i = 0;
         for (Node usage : usages()) {
             if (usage instanceof ProjNode projNode) {
                 projs[i++] = projNode;
             }
         }
-        assert i == types.length : "expected same length";
+
+        // isNotNull also included therefore types + 1
+        assert i == types.length + 1 : "expected same length";
         gen.emitScalarizedInvokeAndMoves(this, projs, types);
     }
 

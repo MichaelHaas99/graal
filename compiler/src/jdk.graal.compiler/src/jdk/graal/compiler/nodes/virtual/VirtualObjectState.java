@@ -46,10 +46,10 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         return values;
     }
 
-    @OptionalInput ValueNode oopOrHub;
+    @OptionalInput ValueNode isNotNull;
 
-    public ValueNode getOopOrHub() {
-        return oopOrHub;
+    public ValueNode getIsNotNull() {
+        return isNotNull;
     }
 
     public VirtualObjectState(VirtualObjectNode object, ValueNode[] values) {
@@ -58,9 +58,9 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         this.values = new NodeInputList<>(this, values);
     }
 
-    public VirtualObjectState(VirtualObjectNode object, ValueNode[] values, ValueNode oopOrHub) {
+    public VirtualObjectState(VirtualObjectNode object, ValueNode[] values, ValueNode isNotNull) {
         this(object, values);
-        this.oopOrHub = oopOrHub;
+        this.isNotNull = isNotNull;
     }
 
     public VirtualObjectState(VirtualObjectNode object, List<ValueNode> values) {
