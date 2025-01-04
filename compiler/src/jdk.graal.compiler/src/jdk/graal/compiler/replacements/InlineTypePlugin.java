@@ -80,8 +80,9 @@ public class InlineTypePlugin implements NodePlugin {
 
 
             // create virtual object representing nullable scalarized inline object in framestate
-            VirtualObjectNode virtual = b.append(new VirtualInstanceNode(result.getType(), false));
-            // virtual.setObjectId(0);
+            VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
+            virtual.setObjectId(0);
+            b.append(virtual);
 
             ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineObject().size()];
 
@@ -97,7 +98,7 @@ public class InlineTypePlugin implements NodePlugin {
             // create framestate for invoke with virtual object
             b.push(b.getInvokeReturnType().getJavaKind(), virtual);
             b.setStateAfter(invoke);
-            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getOopOrHub())));
+            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getIsInit())));
             b.pop(b.getInvokeReturnType().getJavaKind());
 
             // push the real result
