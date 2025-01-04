@@ -97,6 +97,7 @@ import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.GuardedNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
@@ -508,6 +509,9 @@ public class InliningUtil extends ValueMergeUtil {
             }
         }
 
+        if (invoke.next() instanceof InlineTypeNode inlineTypeNode) {
+            inlineTypeNode.removeOnInlining();
+        }
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph, returnAction, mark);
         GraphUtil.killCFG(invokeNode);
 
