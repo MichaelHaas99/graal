@@ -45,20 +45,23 @@ public class ProjNode extends FloatingNode implements LIRLowerable, Canonicaliza
 
     /**
      * TODO: Due to the cycle InvokeNode -> Framestate -> ProjNode -> InvokeNode, ProjNodes can be
-     * scheduled before the InvokeNode, therefore trigger InvokeNode code generation.
+     * scheduled before the InvokeNode.
      */
     @Override
     public void generate(NodeLIRBuilderTool generator) {
         // nothing to do
-// assert src instanceof LIRLowerable : "source of ProjNode has to be LIRLowerable";
-// ((LIRLowerable) src).generate(generator);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (!src.getNodeClass().equals(InvokeNode.TYPE)) {
             // Inlining can replace the InvokeNode, therefore canonicalize
-            return null;
+            if (pointsToOopOrHub()) {
+                // The first ProjNode always represents the regular result
+                return src;
+            } else {
+                return null;
+            }
         }
         return this;
     }
