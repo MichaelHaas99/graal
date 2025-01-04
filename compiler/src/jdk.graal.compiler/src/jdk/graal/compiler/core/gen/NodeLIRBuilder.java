@@ -60,6 +60,7 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeMap;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.graph.iterators.NodeIterable;
+import jdk.graal.compiler.lir.ConstantValue;
 import jdk.graal.compiler.lir.FullInfopointOp;
 import jdk.graal.compiler.lir.LIRFrameState;
 import jdk.graal.compiler.lir.LIRInstruction;
@@ -701,11 +702,33 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     public void emitScalarizedInvokeAndMoves(Invoke x, ValueNode[] values, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
-        emitInvoke(x, results);
-        for (int i = 0; i < types.length; i++) {
+        emitInvoke(x, frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true));
+        for (int i = 1; i < types.length; i++) {
             assert isLegal(results[i]) : "expected legal register for scalarized inline type";
-            setResult(values[i], gen.emitMove(results[i]));
+            setResult(values[i - 1], gen.emitMove(results[i]));
         }
+        Value value = operand(x.asNode());
+// ValueKind<?> resultKind = this.getLIRGeneratorTool().getValueKind(JavaKind.Long);
+// AllocatableValue result = getLIRGeneratorTool().emitMove(resultKind, value);
+// ConstantValue longOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Long),
+// JavaConstant.forLong(1));
+// ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+// JavaConstant.forInt(1));
+// ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+// JavaConstant.forInt(0));
+// Variable integerTest = getLIRGeneratorTool().emitIntegerTestMove(result, longOne, intOne,
+// intZero);
+
+        ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                        JavaConstant.forInt(1));
+        ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                        JavaConstant.forInt(0));
+        LIRKind kind = gen.getLIRKind(x.asNode().stamp(NodeView.DEFAULT));
+        Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
+        Variable isInit = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
+
+        // getLIRGeneratorTool().emitConditionalMove()
+        setResult(values[values.length - 1], isInit);
     }
 
     protected void emitInvoke(LoweredCallTargetNode callTarget, Value[] parameters, LIRFrameState callState, Value result, Value[] temps) {

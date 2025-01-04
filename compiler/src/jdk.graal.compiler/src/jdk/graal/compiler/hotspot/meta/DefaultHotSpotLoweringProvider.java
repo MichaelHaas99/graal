@@ -1296,7 +1296,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         // the new instance.
         CommitAllocationNode commit = graph.add(new CommitAllocationNode());
         falseBegin.setNext(commit);
-        VirtualObjectNode virtualObj = graph.add(new VirtualInstanceNode(inlineTypeNode.getType(), false));
+        VirtualObjectNode virtualObj = new VirtualInstanceNode(inlineTypeNode.getType(), false);
+        virtualObj.setObjectId(0);
+        graph.add(virtualObj);
 
         AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
         commit.getVirtualObjects().add(virtualObj);
