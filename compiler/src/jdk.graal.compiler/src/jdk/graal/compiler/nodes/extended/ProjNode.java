@@ -2,14 +2,11 @@ package jdk.graal.compiler.nodes.extended;
 
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
-import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
-import jdk.graal.compiler.nodes.spi.Canonicalizable;
-import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.vm.ci.meta.Assumptions;
@@ -21,10 +18,10 @@ import jdk.vm.ci.meta.JavaType;
  * scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ProjNode")
-public class ProjNode extends FloatingNode implements LIRLowerable, Canonicalizable {
+public class ProjNode extends FloatingNode implements LIRLowerable {
     public static final NodeClass<ProjNode> TYPE = NodeClass.create(ProjNode.class);
 
-    @Input ValueNode src;
+    @Input ValueNode multiNode;
 
     private final int index;
 
@@ -32,15 +29,23 @@ public class ProjNode extends FloatingNode implements LIRLowerable, Canonicaliza
         return index == 0;
     }
 
+    public ValueNode getMultiNode() {
+        return multiNode;
+    }
 
-    public ProjNode(Stamp stamp, InvokeNode src, int index) {
+    public ProjNode(Stamp stamp, InvokeNode multiNode, int index) {
         super(TYPE, stamp);
-        this.src = src;
+        this.multiNode = multiNode;
         this.index = index;
     }
 
-    public ProjNode(JavaType type, Assumptions assumptions, InvokeNode src, int index) {
-        this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), src, index);
+    public ProjNode(JavaType type, Assumptions assumptions, InvokeNode multiNode, int index) {
+        this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiNode, index);
+    }
+
+    public void delete() {
+        replaceAtUsages(null);
+        safeDelete();
     }
 
     /**
@@ -52,17 +57,4 @@ public class ProjNode extends FloatingNode implements LIRLowerable, Canonicaliza
         // nothing to do
     }
 
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (!src.getNodeClass().equals(InvokeNode.TYPE)) {
-            // Inlining can replace the InvokeNode, therefore canonicalize
-            if (pointsToOopOrHub()) {
-                // The first ProjNode always represents the regular result
-                return src;
-            } else {
-                return null;
-            }
-        }
-        return this;
-    }
 }

@@ -14,6 +14,7 @@ import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
@@ -45,17 +46,17 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * is null or not, and can be used e.g. for the debugInfo (in C2 it is called isInit).
  */
 @NodeInfo(nameTemplate = "InlineTypeNode")
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable, Node.IndirectInputChangedCanonicalization {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @OptionalInput ValueNode oopOrHub;
-    @Input NodeInputList<ValueNode> scalarizedInlineObject;
-    @OptionalInput ValueNode isNotNull;
+    @OptionalInput ProjNode oopOrHub;
+    @Input NodeInputList<ProjNode> scalarizedInlineObject;
+    @OptionalInput ProjNode isNotNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
+    public InlineTypeNode(ResolvedJavaType type, ProjNode oopOrHub, ProjNode[] scalarizedInlineObject, ProjNode isNotNull) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type)));
         this.oopOrHub = oopOrHub;
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
@@ -71,7 +72,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return isNotNull;
     }
 
-    public List<ValueNode> getScalarizedInlineObject() {
+    public List<ProjNode> getScalarizedInlineObject() {
         return scalarizedInlineObject;
     }
 
@@ -96,13 +97,30 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         }
 
-        ValueNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int), invoke, fields.length + 1));
+        ProjNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int), invoke, fields.length + 1));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
         // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
         return newInstance;
+    }
+
+    public void removeOnInlining() {
+        ValueNode invoke = oopOrHub.getMultiNode();
+        assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
+        replaceAtUsages(invoke);
+
+        // remove inputs of ProjNodes to MultiNode
+        oopOrHub.delete();
+        isNotNull.delete();
+        for (ProjNode p : scalarizedInlineObject) {
+            p.delete();
+        }
+
+        // set control flow correctly and delete
+        graph().removeFixed(this);
+
     }
 
     /**
@@ -113,10 +131,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return LocationIdentity.init();
     }
 
+
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (scalarizedInlineObject.filter(n -> n.getNodeClass().equals(ProjNode.TYPE)).isEmpty()) {
-            return oopOrHub;
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
+            return null;
         }
         return this;
     }
