@@ -8,7 +8,6 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
-import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
@@ -22,8 +21,6 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.spi.Canonicalizable;
-import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
@@ -46,7 +43,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * is null or not, and can be used e.g. for the debugInfo (in C2 it is called isInit).
  */
 @NodeInfo(nameTemplate = "InlineTypeNode")
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
@@ -132,13 +129,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
 
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
-            return null;
-        }
-        return this;
-    }
 
 
     @Override
