@@ -1,8 +1,6 @@
 package jdk.graal.compiler.nodes.extended;
 
 import java.lang.ref.Reference;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -37,40 +35,44 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * The {@link InlineTypeNode} represents a nullable scalarized inline object. It takes an Object
- * {@link #oopOrHub} and the scalarized field values {@link #scalarizedInlineObject} as input. If
- * the object represents a null value then the input {@link #oopOrHub} will be null at runtime. If
- * the bit 0 of {@link #oopOrHub} is set at runtime, no oop exists and the object needs to be
- * reconstructed by the scalarized field values, if needed. If an oop exists it is up to the
- * compiler to either use the oop or the scalarized field values.
+ * The {@link InlineTypeNode} represents a (nullable) scalarized inline object. It takes an optional
+ * object {@link #oopOrHub} (in C2 it is called Oop) and the scalarized field values
+ * {@link #scalarizedInlineObject} as well as an isNotNull information as input. If the object
+ * represents a null value then the input {@link #oopOrHub} will be null at runtime. If the bit 0 of
+ * {@link #oopOrHub} is set at runtime, no oop exists and the object needs to be reconstructed by
+ * the scalarized field values, if needed. If an oop exists it is up to the compiler to either use
+ * the oop or the scalarized field values. The isNotNull information indicates if the inline object
+ * is null or not, and can be used e.g. for the debugInfo (in C2 it is called isInit).
  */
 @NodeInfo(nameTemplate = "InlineTypeNode")
 public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable, Node.IndirectInputChangedCanonicalization {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @Input ValueNode oopOrHub;
+    @OptionalInput ValueNode oopOrHub;
     @Input NodeInputList<ValueNode> scalarizedInlineObject;
+    @OptionalInput ValueNode isNotNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type)));
         this.oopOrHub = oopOrHub;
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
         this.type = type;
+        this.isNotNull = isNotNull;
     }
 
     public ValueNode getOopOrHub() {
         return oopOrHub;
     }
 
-    public ValueNode getIsInit() {
-        return scalarizedInlineObject.last();
+    public ValueNode getIsNotNull() {
+        return isNotNull;
     }
 
     public List<ValueNode> getScalarizedInlineObject() {
-        return scalarizedInlineObject.subList(0, scalarizedInlineObject.size() - 1);
+        return scalarizedInlineObject;
     }
 
     public ResolvedJavaType getType() {
@@ -84,25 +86,19 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, InvokeNode invoke) {
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
-        // ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke, 0));
-        ValueNode oopOrHub = invoke;
+        ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke, 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
-        ProjNode[] projs = new ProjNode[fields.length + 1];
+        ProjNode[] projs = new ProjNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
             projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke, i + 1));
 
         }
 
-        projs[fields.length] = b.add(new ProjNode(StampFactory.forKind(JavaKind.Long), invoke, fields.length + 1));
+        ValueNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int), invoke, fields.length + 1));
 
-        FixedProjAnchorNode anchor = b.add(new FixedProjAnchorNode());
-        List<ProjNode> list = new ArrayList<>();
-        // list.addFirst(oopOrHub);
-        list.addAll(Arrays.asList(projs));
-        anchor.objects().addAll(list);
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
         // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 

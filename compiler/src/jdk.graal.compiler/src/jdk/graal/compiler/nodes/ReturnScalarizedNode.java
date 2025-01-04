@@ -25,7 +25,8 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 
 /**
- * The {@link ReturnScalarizedNode} represents a return of a nullable scalarized inline object.
+ * The {@link ReturnScalarizedNode} represents a return of a nullable scalarized inline object. see
+ * Compile::return_values in parse.cpp of the C2 compiler.
  */
 @NodeInfo(nameTemplate = "ReturnScalarized")
 public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
