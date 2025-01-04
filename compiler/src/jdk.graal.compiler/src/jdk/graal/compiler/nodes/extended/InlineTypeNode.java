@@ -1,6 +1,8 @@
 package jdk.graal.compiler.nodes.extended;
 
 import java.lang.ref.Reference;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -30,6 +32,7 @@ import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -62,8 +65,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return oopOrHub;
     }
 
+    public ValueNode getIsInit() {
+        return scalarizedInlineObject.last();
+    }
+
     public List<ValueNode> getScalarizedInlineObject() {
-        return scalarizedInlineObject;
+        return scalarizedInlineObject.subList(0, scalarizedInlineObject.size() - 1);
     }
 
     public ResolvedJavaType getType() {
@@ -77,18 +84,24 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, InvokeNode invoke) {
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
-        ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke, 0));
+        // ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke, 0));
+        ValueNode oopOrHub = invoke;
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
-        ProjNode[] projs = new ProjNode[fields.length];
+        ProjNode[] projs = new ProjNode[fields.length + 1];
 
         for (int i = 0; i < fields.length; i++) {
-            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke, 1));
+            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke, i + 1));
 
         }
 
+        projs[fields.length] = b.add(new ProjNode(StampFactory.forKind(JavaKind.Long), invoke, fields.length + 1));
+
         FixedProjAnchorNode anchor = b.add(new FixedProjAnchorNode());
-        anchor.objects().addAll(List.of(projs));
+        List<ProjNode> list = new ArrayList<>();
+        // list.addFirst(oopOrHub);
+        list.addAll(Arrays.asList(projs));
+        anchor.objects().addAll(list);
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
         // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
@@ -106,7 +119,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (!oopOrHub.getNodeClass().equals(ProjNode.TYPE)) {
+        if (scalarizedInlineObject.filter(n -> n.getNodeClass().equals(ProjNode.TYPE)).isEmpty()) {
             return oopOrHub;
         }
         return this;
