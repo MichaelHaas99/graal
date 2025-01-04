@@ -182,9 +182,9 @@ public class DebugInfoBuilder {
 
                 // Also add oopOrHub if exists. Produced for a framestate of an InvokeNode which
                 // has a nullable scalarized inline object as return.
-                ValueNode oopOrHub = ((VirtualObjectState) objectStates.get(vobjNode)).getOopOrHub();
-                if (oopOrHub != null) {
-                    vobjValue.setOopOrHub(new JavaValue[]{toJavaValue(oopOrHub)});
+                ValueNode isNotNull = ((VirtualObjectState) objectStates.get(vobjNode)).getIsNotNull();
+                if (isNotNull != null) {
+                    vobjValue.setIsNotNull(new JavaValue[]{toJavaValue(isNotNull)});
                 }
             }
 

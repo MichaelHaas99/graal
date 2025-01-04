@@ -98,7 +98,7 @@ public class InlineTypePlugin implements NodePlugin {
             // create framestate for invoke with virtual object
             b.push(b.getInvokeReturnType().getJavaKind(), virtual);
             b.setStateAfter(invoke);
-            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getIsInit())));
+            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getIsNotNull())));
             b.pop(b.getInvokeReturnType().getJavaKind());
 
             // push the real result
