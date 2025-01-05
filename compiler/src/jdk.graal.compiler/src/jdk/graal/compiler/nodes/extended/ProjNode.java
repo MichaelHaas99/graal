@@ -4,7 +4,6 @@ import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
@@ -33,13 +32,13 @@ public class ProjNode extends FloatingNode implements LIRLowerable {
         return multiNode;
     }
 
-    public ProjNode(Stamp stamp, InvokeNode multiNode, int index) {
+    public ProjNode(Stamp stamp, ValueNode multiNode, int index) {
         super(TYPE, stamp);
         this.multiNode = multiNode;
         this.index = index;
     }
 
-    public ProjNode(JavaType type, Assumptions assumptions, InvokeNode multiNode, int index) {
+    public ProjNode(JavaType type, Assumptions assumptions, ValueNode multiNode, int index) {
         this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiNode, index);
     }
 

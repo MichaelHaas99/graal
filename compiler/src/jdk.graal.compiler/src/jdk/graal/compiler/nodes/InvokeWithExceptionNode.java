@@ -34,6 +34,8 @@ import static jdk.graal.compiler.nodes.Invoke.SIZE_UNKNOWN_RATIONALE;
 
 import java.util.Map;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
@@ -42,6 +44,7 @@ import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
+import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -49,9 +52,8 @@ import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.graal.compiler.nodes.util.GraphUtil;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 // @formatter:off
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}",
@@ -142,7 +144,24 @@ public final class InvokeWithExceptionNode extends WithExceptionNode implements 
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        gen.emitInvoke(this);
+        if (!callTarget().targetMethod().hasScalarizedReturn()) {
+            gen.emitInvoke(this);
+            return;
+        }
+
+        ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
+
+        ProjNode[] projs = new ProjNode[types.length + 1];
+        int i = 0;
+        for (Node usage : usages()) {
+            if (usage instanceof ProjNode projNode) {
+                projs[i++] = projNode;
+            }
+        }
+
+        // isNotNull also included therefore types + 1
+        assert i == types.length + 1 : "expected same length";
+        gen.emitScalarizedInvokeAndMoves(this, projs, types);
     }
 
     @Override
