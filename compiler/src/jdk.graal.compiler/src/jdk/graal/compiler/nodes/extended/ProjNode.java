@@ -2,10 +2,13 @@ package jdk.graal.compiler.nodes.extended;
 
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
+import jdk.graal.compiler.nodes.spi.Canonicalizable;
+import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.vm.ci.meta.Assumptions;
@@ -17,12 +20,16 @@ import jdk.vm.ci.meta.JavaType;
  * scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ProjNode")
-public class ProjNode extends FloatingNode implements LIRLowerable {
+public class ProjNode extends FloatingNode implements LIRLowerable, Canonicalizable {
     public static final NodeClass<ProjNode> TYPE = NodeClass.create(ProjNode.class);
 
     @Input ValueNode multiNode;
 
     private final int index;
+
+    public int getIndex() {
+        return index;
+    }
 
     public boolean pointsToOopOrHub() {
         return index == 0;
@@ -56,4 +63,11 @@ public class ProjNode extends FloatingNode implements LIRLowerable {
         // nothing to do
     }
 
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
+            return null;
+        }
+        return this;
+    }
 }
