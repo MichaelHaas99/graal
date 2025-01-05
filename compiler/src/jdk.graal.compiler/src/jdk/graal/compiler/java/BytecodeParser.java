@@ -396,6 +396,7 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -439,6 +440,9 @@ import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.spi.CoreProvidersDelegate;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
@@ -2290,8 +2294,44 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         } else {
             invoke = append(createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge));
         }
-        invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
+
+        if (callTarget.targetMethod().hasScalarizedReturn()) {
+            handleScalarizedReturnOnInvoke(invoke, resultType);
+        } else {
+            frameState.pushReturn(resultType, invoke.asNode());
+            invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
+        }
+
         return invoke;
+    }
+
+    public void handleScalarizedReturnOnInvoke(Invoke invoke, JavaKind resultType) {
+        InlineTypeNode result = InlineTypeNode.createFromInvoke(this, invoke);
+
+        // create virtual object representing nullable scalarized inline object in framestate
+        VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
+        virtual.setObjectId(0);
+        append(virtual);
+
+        ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineObject().size()];
+
+        for (int i = 0; i < newEntries.length; i++) {
+            ValueNode entry = result.getScalarizedInlineObject().get(i);
+            if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(getMetaAccessExtensionProvider(), i).getStackKind())) {
+                newEntries[i] = null;
+            } else {
+                newEntries[i] = entry;
+            }
+        }
+
+        // create framestate for invoke with virtual object
+        push(resultType, virtual);
+        setStateAfter(invoke);
+        invoke.stateAfter().addVirtualObjectMapping(append(new VirtualObjectState(virtual, newEntries, result.getIsNotNull())));
+        pop(resultType);
+
+        // push the InlineTypeNode as result
+        push(resultType, result);
     }
 
     /**
@@ -2897,7 +2937,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected InvokeNode createInvoke(int invokeBci, CallTargetNode callTarget, JavaKind resultType) {
         InvokeNode invoke = new InvokeNode(callTarget, invokeBci);
-        frameState.pushReturn(resultType, invoke);
         return invoke;
     }
 
@@ -2912,7 +2951,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         AbstractBeginNode exceptionEdge = handleException(null, bci(), exceptionEdgeAction == ExceptionEdgeAction.INCLUDE_AND_DEOPTIMIZE);
         InvokeWithExceptionNode invoke = new InvokeWithExceptionNode(callTarget, exceptionEdge, invokeBci);
-        frameState.pushReturn(resultType, invoke);
         return invoke;
     }
 

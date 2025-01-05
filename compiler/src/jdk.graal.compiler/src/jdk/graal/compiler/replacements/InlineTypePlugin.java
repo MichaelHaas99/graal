@@ -22,7 +22,6 @@ import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.IfNode;
-import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
@@ -36,7 +35,6 @@ import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -48,66 +46,21 @@ import jdk.graal.compiler.nodes.java.InstanceOfDynamicNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
-import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class InlineTypePlugin implements NodePlugin {
 
-    @Override
-    public boolean handleInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-
-
-        if (method.hasScalarizedReturn()) {
-            InvokeNode invoke = new InvokeNode(b.append(new MethodCallTargetNode(b.getInvokeKind(), method, args, b.getInvokeReturnStamp(b.getAssumptions()), null)), b.bci());
-            b.append(invoke);
-
-            InlineTypeNode result = InlineTypeNode.createFromInvoke(b, invoke);
-
-
-            // create virtual object representing nullable scalarized inline object in framestate
-            VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
-            virtual.setObjectId(0);
-            b.append(virtual);
-
-            ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineObject().size()];
-
-            for (int i = 0; i < newEntries.length; i++) {
-                ValueNode entry = result.getScalarizedInlineObject().get(i);
-                if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(b.getMetaAccessExtensionProvider(), i).getStackKind())) {
-                    newEntries[i] = null;
-                } else {
-                    newEntries[i] = entry;
-                }
-            }
-
-            // create framestate for invoke with virtual object
-            b.push(b.getInvokeReturnType().getJavaKind(), virtual);
-            b.setStateAfter(invoke);
-            invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getIsNotNull())));
-            b.pop(b.getInvokeReturnType().getJavaKind());
-
-            // push the real result
-            b.push(b.getInvokeReturnType().getJavaKind(), result);
-
-            return true;
-        }
-        return false;
-    }
 
     @Override
     public boolean handleLoadField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
