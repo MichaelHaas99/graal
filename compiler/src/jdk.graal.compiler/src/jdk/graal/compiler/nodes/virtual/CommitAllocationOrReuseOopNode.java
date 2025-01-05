@@ -24,7 +24,6 @@ import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.ProfileData;
-import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
@@ -32,6 +31,7 @@ import jdk.graal.compiler.nodes.calc.IntegerTestNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.word.WordCastNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -72,7 +72,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
         int valuePos = 0;
 
         // TODO: create a general util function or use some existing implementation
-        FrameState framestate = ReturnScalarizedNode.searchForFrameState(this);
+        FrameState framestate = GraphUtil.findLastFrameState(this);
 
         List<AllocatedObjectNode> commitUsages = this.usages().filter(AllocatedObjectNode.class).stream().toList();
 
