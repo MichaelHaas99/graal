@@ -49,14 +49,10 @@ import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
-import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.memory.AbstractMemoryCheckpoint;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.spi.LIRLowerable;
-import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
@@ -67,7 +63,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
           cycles = CYCLES_UNKNOWN, cyclesRationale = CYCLES_UNKNOWN_RATIONALE,
           size   = SIZE_UNKNOWN,   sizeRationale   = SIZE_UNKNOWN_RATIONALE)
 // @formatter:on
-public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, SingleMemoryKill, UncheckedInterfaceProvider {
+public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, SingleMemoryKill, UncheckedInterfaceProvider {
     public static final NodeClass<InvokeNode> TYPE = NodeClass.create(InvokeNode.class);
 
     @OptionalInput ValueNode classInit;
@@ -149,27 +145,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         return identity;
     }
 
-    @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        if (!callTarget().targetMethod().hasScalarizedReturn()) {
-            gen.emitInvoke(this);
-            return;
-        }
-
-        ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
-
-        ProjNode[] projs = new ProjNode[types.length + 1];
-        int i = 0;
-        for (Node usage : usages()) {
-            if (usage instanceof ProjNode projNode) {
-                projs[i++] = projNode;
-            }
-        }
-
-        // isNotNull also included therefore types + 1
-        assert i == types.length + 1 : "expected same length";
-        gen.emitScalarizedInvokeAndMoves(this, projs, types);
-    }
 
     @Override
     public String toString(Verbosity verbosity) {

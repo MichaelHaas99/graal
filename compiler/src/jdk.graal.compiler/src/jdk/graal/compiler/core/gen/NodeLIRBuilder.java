@@ -111,6 +111,7 @@ import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.OpaqueLogicNode;
+import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -699,29 +700,36 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitScalarizedInvokeAndMoves(Invoke x, ValueNode[] values, JavaType[] types) {
+    public void emitScalarizedInvokeAndMoves(Invoke x, ProjNode oopOrHub, ProjNode[] scalarizedInlineObject, ProjNode isNotNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         emitInvoke(x, results);
-        for (int i = 0; i < types.length; i++) {
-            assert isLegal(results[i]) : "expected legal register for scalarized inline type";
-            setResult(values[i], gen.emitMove(results[i]));
+        if (oopOrHub != null) {
+            assert isLegal(results[oopOrHub.getIndex()]);
+            setResult(oopOrHub, gen.emitMove(results[oopOrHub.getIndex()]));
+        }
+        for (int i = 0; i < scalarizedInlineObject.length; i++) {
+            assert isLegal(results[scalarizedInlineObject[i].getIndex()]) : "expected legal register for scalarized inline type";
+            setResult(scalarizedInlineObject[i], gen.emitMove(results[scalarizedInlineObject[i].getIndex()]));
         }
 
-        // produce code for the isNotNull information
+        if (isNotNull != null) {
+            // produce code for the isNotNull information
 
-        // get oopOrHub value
-        Value value = operand(values[0].asNode());
+            // get oopOrHub value
+            Value value = operand(oopOrHub.asNode());
 
-        ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
-                        JavaConstant.forInt(1));
-        ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
-                        JavaConstant.forInt(0));
-        LIRKind kind = gen.getLIRKind(x.asNode().stamp(NodeView.DEFAULT));
-        Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
+            ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                            JavaConstant.forInt(1));
+            ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                            JavaConstant.forInt(0));
+            LIRKind kind = gen.getLIRKind(oopOrHub.asNode().stamp(NodeView.DEFAULT));
+            Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
 
-        Variable isNotNull = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
-        setResult(values[values.length - 1], isNotNull);
+            Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
+            setResult(isNotNull, isNotNullVariable);
+        }
+
     }
 
     protected void emitInvoke(LoweredCallTargetNode callTarget, Value[] parameters, LIRFrameState callState, Value result, Value[] temps) {

@@ -24,16 +24,22 @@
  */
 package jdk.graal.compiler.nodes;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
+import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, DeoptimizingNode.DeoptDuring, FixedNodeInterface, Invokable {
+public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, DeoptimizingNode.DeoptDuring, FixedNodeInterface, Invokable, LIRLowerable {
 
     String CYCLES_UNKNOWN_RATIONALE = "Cannot estimate the runtime cost of a call; it's a blackhole.";
     String SIZE_UNKNOWN_RATIONALE = "Can only dynamically decide how much code is generated based on the type of a call (special, static, virtual, interface).";
@@ -102,9 +108,6 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
     @Override
     default ResolvedJavaMethod getContextMethod() {
-// if (next().getNodeClass().equals(InlineTypeNode.TYPE)) {
-// return ((InlineTypeNode) next()).stateAfter().getMethod();
-// }
         FrameState state = stateAfter();
         if (state == null) {
             state = stateDuring();
@@ -141,4 +144,33 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
     boolean isInOOMETry();
 
     void setInOOMETry(boolean isInOOMETry);
+
+    @Override
+    default void generate(NodeLIRBuilderTool gen) {
+        if (!callTarget().targetMethod().hasScalarizedReturn()) {
+            gen.emitInvoke(this);
+            return;
+        }
+
+        ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
+        int oorOrHubIndex = 0;
+        ProjNode oopOrHub = null;
+        int isNotNullIndex = types.length;
+        ProjNode isNotNull = null;
+
+        List<ProjNode> projs = new ArrayList<>(types.length - 1);
+        for (Node usage : asNode().usages()) {
+            if (usage instanceof ProjNode projNode) {
+                if (projNode.getIndex() == oorOrHubIndex) {
+                    oopOrHub = projNode;
+                } else if (projNode.getIndex() == isNotNullIndex) {
+                    isNotNull = projNode;
+                } else {
+                    projs.add(projNode);
+                }
+            }
+        }
+
+        gen.emitScalarizedInvokeAndMoves(this, oopOrHub, projs.toArray(new ProjNode[projs.size()]), isNotNull, types);
+    }
 }

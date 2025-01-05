@@ -44,16 +44,12 @@ import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
-import jdk.graal.compiler.nodes.extended.ProjNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.spi.LIRLowerable;
-import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 // @formatter:off
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}",
@@ -61,7 +57,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
           cycles = CYCLES_UNKNOWN, cyclesRationale = CYCLES_UNKNOWN_RATIONALE,
           size   = SIZE_UNKNOWN,   sizeRationale   = SIZE_UNKNOWN_RATIONALE)
 // @formatter:on
-public final class InvokeWithExceptionNode extends WithExceptionNode implements Invoke, IterableNodeType, SingleMemoryKill, LIRLowerable, UncheckedInterfaceProvider, Simplifiable {
+public final class InvokeWithExceptionNode extends WithExceptionNode implements Invoke, IterableNodeType, SingleMemoryKill, UncheckedInterfaceProvider, Simplifiable {
     public static final NodeClass<InvokeWithExceptionNode> TYPE = NodeClass.create(InvokeWithExceptionNode.class);
 
     @OptionalInput ValueNode classInit;
@@ -142,27 +138,6 @@ public final class InvokeWithExceptionNode extends WithExceptionNode implements 
         }
     }
 
-    @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        if (!callTarget().targetMethod().hasScalarizedReturn()) {
-            gen.emitInvoke(this);
-            return;
-        }
-
-        ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
-
-        ProjNode[] projs = new ProjNode[types.length + 1];
-        int i = 0;
-        for (Node usage : usages()) {
-            if (usage instanceof ProjNode projNode) {
-                projs[i++] = projNode;
-            }
-        }
-
-        // isNotNull also included therefore types + 1
-        assert i == types.length + 1 : "expected same length";
-        gen.emitScalarizedInvokeAndMoves(this, projs, types);
-    }
 
     @Override
     public FrameState stateAfter() {
