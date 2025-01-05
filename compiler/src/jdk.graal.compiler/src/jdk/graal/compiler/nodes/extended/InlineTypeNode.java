@@ -14,7 +14,6 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.Invoke;
-import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -82,19 +81,21 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return scalarizedInlineObject.get(index);
     }
 
-    public static InlineTypeNode createFromInvoke(GraphBuilderContext b, InvokeNode invoke) {
+    public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
-        ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke, 0));
+
+        // can also represent a hub therefore stamp is of type object
+        ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke.asNode(), 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ProjNode[] projs = new ProjNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke, i + 1));
+            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
 
         }
 
-        ProjNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int), invoke, fields.length + 1));
+        ProjNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int), invoke.asNode(), fields.length + 1));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
