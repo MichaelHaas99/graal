@@ -140,7 +140,6 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
-import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.SafepointNode;
 import jdk.graal.compiler.nodes.StartNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -221,6 +220,7 @@ import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.StampProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
@@ -1267,7 +1267,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     private void lowerInlineTypeNode(InlineTypeNode inlineTypeNode, LoweringTool tool) {
         StructuredGraph graph = inlineTypeNode.graph();
 
-        FrameState framestate = ReturnScalarizedNode.searchForFrameState(inlineTypeNode);
+        FrameState framestate = GraphUtil.findLastFrameState(inlineTypeNode);
 
         FixedNode next = inlineTypeNode.next();
         inlineTypeNode.setNext(null);

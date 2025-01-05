@@ -18,6 +18,7 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -53,19 +54,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         return b.add(new ReturnScalarizedNode(result, List.of(phis)));
     }
 
-    public static FrameState searchForFrameState(FixedNode start) {
-        FrameState framestate = null;
-
-        FixedNode current = start;
-        while (framestate == null) {
-            if (current instanceof StateSplit stateSplit && stateSplit.stateAfter() != null) {
-                framestate = stateSplit.stateAfter();
-            } else {
-                current = (FixedNode) current.predecessor();
-            }
-        }
-        return framestate;
-    }
 
     public static ValuePhiNode[] genCFG(GraphBuilderContext b, ValueNode result, ResolvedJavaField[] fields, LogicNode isInit) {
         BeginNode trueBegin = b.getGraph().add(new BeginNode());
@@ -74,7 +62,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         IfNode ifNode = b.add(new IfNode(b.add(isInit), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
 
         // get a valid framestate for the merge node
-        FrameState framestate = searchForFrameState(ifNode);
+        FrameState framestate = GraphUtil.findLastFrameState(ifNode);
 
         ValueNode[] loads = new ValueNode[fields.length];
         ValueNode[] consts = new ValueNode[fields.length];
