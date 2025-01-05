@@ -134,9 +134,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
-            return null;
-        }
+        // TODO: produces error in TestCallingConvention test49
+// if (tool.allUsagesAvailable() && hasNoUsages()) {
+// return null;
+// }
         return this;
     }
 
