@@ -40,7 +40,11 @@ public class ProjNode extends FloatingNode implements LIRLowerable, Canonicaliza
     }
 
     public ProjNode(Stamp stamp, ValueNode multiNode, int index) {
-        super(TYPE, stamp);
+        this(TYPE, stamp, multiNode, index);
+    }
+
+    public ProjNode(NodeClass<? extends FloatingNode> c, Stamp stamp, ValueNode multiNode, int index) {
+        super(c, stamp);
         this.multiNode = multiNode;
         this.index = index;
     }
@@ -70,4 +74,5 @@ public class ProjNode extends FloatingNode implements LIRLowerable, Canonicaliza
         }
         return this;
     }
+
 }

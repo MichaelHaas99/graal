@@ -12,13 +12,13 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.Invoke;
-import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
@@ -33,7 +33,6 @@ import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -77,8 +76,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public LogicNode createIsNullCheck() {
         assert !isNullFree() : "should only be called if node is not null free";
-        LogicNode isNull = graph().addOrUnique(IsNullNode.create(isNotNull, JavaConstant.INT_0));
-        return graph().addOrUnique(LogicNegationNode.create(isNull));
+        return graph().addOrUnique(new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1, graph())));
     }
 
     public List<ValueNode> getScalarizedInlineObject() {
@@ -124,7 +122,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         }
 
-        ProjNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int), invoke.asNode(), fields.length + 1));
+        // additional usage for oopOrHub
+        ProjNode isNotNull = b.add(new ProjWithInputNode(StampFactory.forKind(JavaKind.Int), invoke.asNode(), fields.length + 1, oopOrHub));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
         // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
