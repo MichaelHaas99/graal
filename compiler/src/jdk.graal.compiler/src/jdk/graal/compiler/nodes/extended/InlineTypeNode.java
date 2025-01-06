@@ -20,16 +20,20 @@ import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -49,14 +53,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @OptionalInput ProjNode oopOrHub;
-    @Input NodeInputList<ProjNode> scalarizedInlineObject;
-    @OptionalInput ProjNode isNotNull;
+    @OptionalInput ValueNode oopOrHub;
+    @Input NodeInputList<ValueNode> scalarizedInlineObject;
+    @OptionalInput ValueNode isNotNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ProjNode oopOrHub, ProjNode[] scalarizedInlineObject, ProjNode isNotNull) {
-        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type)));
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
+        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), isNotNull == null));
         this.oopOrHub = oopOrHub;
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
         this.type = type;
@@ -71,7 +75,13 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return isNotNull;
     }
 
-    public List<ProjNode> getScalarizedInlineObject() {
+    public LogicNode createIsNullCheck() {
+        assert !isNullFree() : "should only be called if node is not null free";
+        LogicNode isNull = graph().addOrUnique(IsNullNode.create(isNotNull, JavaConstant.INT_0));
+        return graph().addOrUnique(LogicNegationNode.create(isNull));
+    }
+
+    public List<ValueNode> getScalarizedInlineObject() {
         return scalarizedInlineObject;
     }
 
@@ -82,6 +92,22 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public ValueNode getField(int index) {
         return scalarizedInlineObject.get(index);
+    }
+
+    public boolean isNullFree() {
+        return isNotNull == null;
+    }
+
+    public boolean hasOopOrHub() {
+        return oopOrHub != null;
+    }
+
+    public static InlineTypeNode createNullFree(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject) {
+        return new InlineTypeNode(type, oopOrHub, scalarizedInlineObject, null);
+    }
+
+    public static InlineTypeNode createNullFreeWithoutOop(ResolvedJavaType type, ValueNode[] scalarizedInlineObject) {
+        return InlineTypeNode.createNullFree(type, null, scalarizedInlineObject);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
@@ -107,16 +133,44 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return newInstance;
     }
 
+    public static InlineTypeNode createFromFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
+        assert StampTool.isPointerNonNull(object) : "expect an already null-checked object";
+
+        // only support null-restricted flat fields for now
+
+        HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
+        ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
+        LoadFieldNode[] loads = new LoadFieldNode[innerFields.length];
+
+        int srcOff = field.getOffset();
+
+        for (int i = 0; i < innerFields.length; i++) {
+            ResolvedJavaField innerField = innerFields[i];
+            assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
+
+            // returned fields include a header offset of their holder
+            int off = innerField.getOffset() - fieldType.firstFieldOffset();
+
+            // holder has no header so remove the header offset
+            loads[i] = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off)));
+        }
+
+        return b.append(new InlineTypeNode(fieldType, null, loads, null));
+    }
+
     public void removeOnInlining() {
-        ValueNode invoke = oopOrHub.getMultiNode();
+        assert oopOrHub instanceof ProjNode : "oopOrHub has to be a ProjNode";
+        assert isNotNull instanceof ProjNode : "isNotNull has to be a ProjNode";
+        ValueNode invoke = ((ProjNode) oopOrHub).getMultiNode();
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
         replaceAtUsages(invoke);
 
         // remove inputs of ProjNodes to MultiNode
-        oopOrHub.delete();
-        isNotNull.delete();
-        for (ProjNode p : scalarizedInlineObject) {
-            p.delete();
+        ((ProjNode) oopOrHub).delete();
+        ((ProjNode) isNotNull).delete();
+        for (ValueNode p : scalarizedInlineObject) {
+            assert p instanceof ProjNode : "scalarized value has to be a ProjNode";
+            ((ProjNode) p).delete();
         }
 
         // set control flow correctly and delete
@@ -151,10 +205,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(type) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
-            // Because the node can represent a null value, insert a guard before we virtualize
-            LogicNode isInit = LogicNegationNode.create(new IsNullNode(oopOrHub));
-            tool.addNode(isInit);
-            tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
+            if (!isNullFree()) {
+                // Because the node can represent a null value, insert a guard before we virtualize
+                LogicNode isInit = LogicNegationNode.create(new IsNullNode(oopOrHub));
+                tool.addNode(isInit);
+                tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
+            }
 
             // virtualize
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false);
