@@ -112,6 +112,7 @@ import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.OpaqueLogicNode;
 import jdk.graal.compiler.nodes.extended.ProjNode;
+import jdk.graal.compiler.nodes.extended.ProjWithInputNode;
 import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -716,14 +717,16 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         if (isNotNull != null) {
             // produce code for the isNotNull information
 
+            assert oopOrHub == ((ProjWithInputNode) isNotNull).getInput() : "is not null info should point to oopOrHub";
+
             // get oopOrHub value
-            Value value = operand(oopOrHub.asNode());
+            Value value = operand(oopOrHub);
 
             ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
                             JavaConstant.forInt(1));
             ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
                             JavaConstant.forInt(0));
-            LIRKind kind = gen.getLIRKind(oopOrHub.asNode().stamp(NodeView.DEFAULT));
+            LIRKind kind = gen.getLIRKind(oopOrHub.stamp(NodeView.DEFAULT));
             Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
 
             Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
