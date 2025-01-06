@@ -207,9 +207,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
             if (!isNullFree()) {
                 // Because the node can represent a null value, insert a guard before we virtualize
-                LogicNode isInit = LogicNegationNode.create(new IsNullNode(oopOrHub));
-                tool.addNode(isInit);
-                tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
+                tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, false));
             }
 
             // virtualize
