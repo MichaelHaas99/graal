@@ -60,8 +60,6 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
     @Input ValueNode value;
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    private boolean hasSideEffect = true;
-
     @Override
     public FrameState stateAfter() {
         return stateAfter;
@@ -76,11 +74,7 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     @Override
     public boolean hasSideEffect() {
-        return hasSideEffect;
-    }
-
-    public void noSideEffect() {
-        hasSideEffect = false;
+        return true;
     }
 
     public ValueNode value() {

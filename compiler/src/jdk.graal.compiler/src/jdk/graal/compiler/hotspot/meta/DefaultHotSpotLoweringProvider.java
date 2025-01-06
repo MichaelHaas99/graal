@@ -1267,74 +1267,121 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     private void lowerInlineTypeNode(InlineTypeNode inlineTypeNode, LoweringTool tool) {
         StructuredGraph graph = inlineTypeNode.graph();
 
-        FrameState framestate = GraphUtil.findLastFrameState(inlineTypeNode);
+        LogicNode check = null;
+        if (inlineTypeNode.hasOopOrHub()) {
+            // use oopOrHub for check if already buffered
+            // true case: oop or null -> just return
+            // false case: scalarized -> reconstruct
+            WordCastNode oopOrHubWord = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOopOrHub(), tool.getWordTypes().getWordKind()));
+            graph.addBeforeFixed(inlineTypeNode, oopOrHubWord);
+            check = graph.addOrUnique(new IntegerTestNode(oopOrHubWord, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+
+        } else if (!inlineTypeNode.isNullFree()) {
+            // check if the scalarized object is null
+            // true case: null -> just return
+            // false case: scalarized -> reconstruct
+            check = graph.addOrUnique(inlineTypeNode.createIsNullCheck());
+        }
 
         FixedNode next = inlineTypeNode.next();
         inlineTypeNode.setNext(null);
 
-        WordCastNode oopOrHubWord = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOopOrHub(), tool.getWordTypes().getWordKind()));
-        graph.addBeforeFixed(inlineTypeNode, oopOrHubWord);
+        if (check != null) {
+            FrameState framestate = GraphUtil.findLastFrameState(inlineTypeNode);
 
-        LogicNode isAlreadyBuffered = graph.addOrUnique(new IntegerTestNode(oopOrHubWord, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+            BeginNode trueBegin = graph.add(new BeginNode());
+            BeginNode falseBegin = graph.add(new BeginNode());
 
-        BeginNode trueBegin = graph.add(new BeginNode());
-        BeginNode falseBegin = graph.add(new BeginNode());
+            IfNode ifNode = graph.add(new IfNode(check, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+            ((FixedWithNextNode) inlineTypeNode.predecessor()).setNext(ifNode);
 
-        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-        ((FixedWithNextNode) inlineTypeNode.predecessor()).setNext(ifNode);
+            // true branch - inline object is already buffered (oop or null) or is null
 
-        // true branch - inline object is already buffered
+            EndNode trueEnd = graph.add(new EndNode());
+            trueBegin.setNext(trueEnd);
 
-        EndNode trueEnd = graph.add(new EndNode());
-        trueBegin.setNext(trueEnd);
+            // false branch - inline object is not buffered
 
-        // false branch - inline object is not buffered
+            EndNode falseEnd = graph.add(new EndNode());
 
-        EndNode falseEnd = graph.add(new EndNode());
+            // Use a CommitAllocation node so that no FrameState is required when creating
+            // the new instance.
+            CommitAllocationNode commit = graph.add(new CommitAllocationNode());
+            falseBegin.setNext(commit);
+            VirtualObjectNode virtualObj = new VirtualInstanceNode(inlineTypeNode.getType(), false);
+            virtualObj.setObjectId(0);
+            graph.add(virtualObj);
 
-        // Use a CommitAllocation node so that no FrameState is required when creating
-        // the new instance.
-        CommitAllocationNode commit = graph.add(new CommitAllocationNode());
-        falseBegin.setNext(commit);
-        VirtualObjectNode virtualObj = new VirtualInstanceNode(inlineTypeNode.getType(), false);
-        virtualObj.setObjectId(0);
-        graph.add(virtualObj);
+            AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
+            commit.getVirtualObjects().add(virtualObj);
+            newObj.setCommit(commit);
 
-        AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
-        commit.getVirtualObjects().add(virtualObj);
-        newObj.setCommit(commit);
+            /*
+             * The commit values follow the same ordering as the declared fields returned by JVMCI.
+             * Since the new object's fields are copies of the old one's, the values are given by a
+             * load of the corresponding field in the old object.
+             */
+            List<ValueNode> commitValues = commit.getValues();
+            commitValues.addAll(inlineTypeNode.getScalarizedInlineObject());
 
-        /*
-         * The commit values follow the same ordering as the declared fields returned by JVMCI.
-         * Since the new object's fields are copies of the old one's, the values are given by a load
-         * of the corresponding field in the old object.
-         */
-        List<ValueNode> commitValues = commit.getValues();
-        commitValues.addAll(inlineTypeNode.getScalarizedInlineObject());
+            commit.addLocks(Collections.emptyList());
+            commit.getEnsureVirtual().add(false);
+            assert commit.verify();
+            commit.setNext(falseEnd);
 
-        commit.addLocks(Collections.emptyList());
-        commit.getEnsureVirtual().add(false);
-        assert commit.verify();
-        commit.setNext(falseEnd);
+            if (falseBegin.next() == null)
+                falseBegin.setNext(falseEnd);
 
-        if (falseBegin.next() == null)
-            falseBegin.setNext(falseEnd);
+            // merge
+            MergeNode merge = graph.add(new MergeNode());
+            merge.setStateAfter(framestate);
 
-        // merge
-        MergeNode merge = graph.add(new MergeNode());
-        merge.setStateAfter(framestate);
+            ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(inlineTypeNode.stamp(NodeView.DEFAULT), merge, inlineTypeNode.getOopOrHub(), newObj));
 
-        ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.objectNonNull(), merge, inlineTypeNode.getOopOrHub(), newObj));
+            // replace inline type node with phi node
+            inlineTypeNode.replaceAtUsages(phi);
+            inlineTypeNode.safeDelete();
 
-        // replace inline type node with phi node
-        inlineTypeNode.replaceAtUsages(phi);
-        inlineTypeNode.safeDelete();
+            merge.addForwardEnd(trueEnd);
+            merge.addForwardEnd(falseEnd);
+            merge.setNext(next);
 
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        merge.setNext(next);
+            commit.lower(tool);
+        } else {
+            // scalarized reconstruct
 
-        commit.lower(tool);
+            // Use a CommitAllocation node so that no FrameState is required when creating
+            // the new instance.
+            CommitAllocationNode commit = graph.add(new CommitAllocationNode());
+            ((FixedWithNextNode) inlineTypeNode.predecessor()).setNext(commit);
+
+            VirtualObjectNode virtualObj = new VirtualInstanceNode(inlineTypeNode.getType(), false);
+            virtualObj.setObjectId(0);
+            graph.add(virtualObj);
+
+            AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
+            commit.getVirtualObjects().add(virtualObj);
+            newObj.setCommit(commit);
+
+            /*
+             * The commit values follow the same ordering as the declared fields returned by JVMCI.
+             * Since the new object's fields are copies of the old one's, the values are given by a
+             * load of the corresponding field in the old object.
+             */
+            List<ValueNode> commitValues = commit.getValues();
+            commitValues.addAll(inlineTypeNode.getScalarizedInlineObject());
+
+            commit.addLocks(Collections.emptyList());
+            commit.getEnsureVirtual().add(false);
+
+            assert commit.verify();
+
+            commit.setNext(next);
+            inlineTypeNode.replaceAtUsages(newObj);
+            inlineTypeNode.safeDelete();
+
+            commit.lower(tool);
+        }
 
     }
 

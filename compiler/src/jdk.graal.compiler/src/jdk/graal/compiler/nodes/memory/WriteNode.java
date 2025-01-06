@@ -63,13 +63,6 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerableAccess, 
 
     private final LocationIdentity killedLocationIdentity;
     private MemoryOrderMode memoryOrder;
-
-    private boolean hasSideEffect = true;
-
-    public void noSideEffect() {
-        hasSideEffect = false;
-    }
-
     public WriteNode(AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, MemoryOrderMode memoryOrder) {
         this(TYPE, address, location, location, value, barrierType, memoryOrder);
     }
@@ -113,9 +106,6 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerableAccess, 
 
     @Override
     public boolean hasSideEffect() {
-        if (!hasSideEffect)
-            return false;
-
         /*
          * Writes with memory ordering requirements have visible side-effects
          */
