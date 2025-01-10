@@ -26,10 +26,15 @@ package jdk.graal.compiler.hotspot.amd64;
 
 import static jdk.graal.compiler.core.common.GraalOptions.ZapStackOnMethodEntry;
 import static jdk.vm.ci.amd64.AMD64.r10;
+import static jdk.vm.ci.amd64.AMD64.r13;
+import static jdk.vm.ci.amd64.AMD64.r14;
 import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbp;
 import static jdk.vm.ci.amd64.AMD64.rsp;
+import static jdk.vm.ci.amd64.AMD64.xmm8;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
+
+import java.util.Arrays;
 
 import jdk.graal.compiler.asm.BranchTargetOutOfBoundsException;
 import jdk.graal.compiler.asm.Label;
@@ -43,6 +48,7 @@ import jdk.graal.compiler.core.amd64.AMD64NodeMatchRules;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
+import jdk.graal.compiler.core.common.memory.BarrierType;
 import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
 import jdk.graal.compiler.core.gen.LIRGenerationProvider;
 import jdk.graal.compiler.debug.DebugContext;
@@ -70,18 +76,25 @@ import jdk.graal.compiler.lir.framemap.FrameMapBuilder;
 import jdk.graal.compiler.lir.gen.LIRGenerationResult;
 import jdk.graal.compiler.lir.gen.LIRGeneratorTool;
 import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.gc.BarrierSet;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Signature;
 
 /**
  * HotSpot AMD64 specific backend.
@@ -326,6 +339,478 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         emitCodeSuffix(crb, asm);
     }
 
+    // see MacroAssembler::unpack_inline_args
+    public void unpackInlineArgs(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, boolean receiverOnly) {
+
+        // VIEP: nothing scalarized yet
+        // VIEP_RO: everything except receiver already scalarized
+        JavaType[] currentParameterTypes = receiverOnly ? installedCodeOwner.getScalarizedParameters(false) : getParameters(installedCodeOwner); // TODO
+        CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
+
+        // VEP: the parameters that are expected
+        JavaType[] expectedParameterTypes = installedCodeOwner.getScalarizedParameters(true);
+        CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
+
+        if (true /* receiver_only */) {
+            CallingConvention sig;/* = sig_cc_R0 */
+        } else {
+            CallingConvention sig;/* = sig */
+        }
+        CallingConvention sig_cc; /* sig_cc */
+
+        int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
+        AllocatableValue[] currentArguments = currentCC.getArguments();
+        int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
+        AllocatableValue[] expectedArguments = expectedCC.getArguments();
+
+        int spInc = 0;
+        if (expectedStackSizeArguments > currentStackSizeArguments) {
+            spInc = extendStackForInlineArgs(installedCodeOwner, crb, asm, regConfig, expectedStackSizeArguments, receiverOnly);
+        }
+
+        shuffleInlineArgs(installedCodeOwner, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedParameterTypes, expectedArguments,
+                        expectedStackSizeArguments,
+                        spInc);
+
+    }
+
+/*
+ * receiver_only, sig, args_passed, args_on_stack, regs, // from args_passed_cc, args_on_stack_cc,
+ * regs_cc, // to sp_inc
+ */
+
+    public JavaType[] getParameters(ResolvedJavaMethod method) {
+        Signature sig = method.getSignature();
+        int sigCount = sig.getParameterCount(false);
+        JavaType[] argTypes;
+        int argIndex = 0;
+        if (!method.isStatic()) {
+            argTypes = new JavaType[sigCount + 1];
+            argTypes[argIndex++] = method.getDeclaringClass();
+        } else {
+            argTypes = new JavaType[sigCount];
+        }
+        for (int i = 0; i < sigCount; i++) {
+            argTypes[argIndex++] = sig.getParameterType(i, null);
+        }
+        return argTypes;
+    }
+
+    public void shuffleInlineArgs(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, boolean receiverOnly, JavaType[] currentParameterTypes,
+                    AllocatableValue[] currentArguments, int currentStackSizeArguments,
+                    JavaType[] expectedParameterTypes, AllocatableValue[] expectedArguments, int expectedStackSizeArguments, int spInc) {
+
+        State[] state = initRegState(currentArguments, currentStackSizeArguments, expectedStackSizeArguments, spInc);
+
+        // Emit code for unpacking inline type arguments
+        // We try multiple times and eventually start spilling to resolve (circular) dependencies
+        int currentArgsPassedLength = currentArguments.length;
+        int expectedArgsPassedLength = expectedArguments.length;
+        boolean done = (expectedArgsPassedLength == 0);
+        for (int i = 0; i < 2 * expectedArgsPassedLength && !done; i++) {
+            done = true;
+            boolean spill = (i > expectedArgsPassedLength);
+            // iterate over arguments in revers
+            int step = -1;
+            int fromIndex = currentArgsPassedLength - 1;
+            int toIndex = expectedArgsPassedLength - 1;
+            int signatureLength = installedCodeOwner.getSignature().getParameterCount(true);
+            int signatureIndex = signatureLength;
+            int signatureIndexEnd = -1;
+            int vTargIndex = 0;
+
+            for (; signatureIndex != signatureIndexEnd; signatureIndex += step) {
+                assert 0 <= signatureIndex && signatureIndex < signatureLength : "index out of bounds";
+                if (spill) {
+                    spill = shuffleInlineArgsSpill(installedCodeOwner, crb, asm, state, currentArguments, currentParameterTypes, fromIndex);
+                }
+                JavaKind kind = currentParameterTypes[signatureIndex].getJavaKind();
+                boolean isScalarized = signatureIndex == 0 ? installedCodeOwner.hasScalarizedReceiver() : installedCodeOwner.isScalarizedParameter(signatureIndex - 1);
+
+                // for receiver only all parameters except receiver are already scalarized so just
+                // move then
+                boolean result = true;
+                if (isScalarized && (!receiverOnly || signatureIndex == 0)) {
+                    AllocatableValue fromArgument = currentArguments[fromIndex];
+                    // TODO: unpackInline Helper
+                    result = unpackInlineHelper();
+                    if (fromIndex == -1 && signatureIndex != 0) {
+                        assert receiverOnly : "sanity";
+                        fromIndex = 0;
+                    }
+                } else {
+                    AllocatableValue fromArgument = currentArguments[fromIndex];
+                    AllocatableValue toArgument = expectedArguments[toIndex];
+                    result = moveHelper(crb, asm, fromArgument, toArgument, kind, state);
+
+                    toIndex += step;
+                    fromIndex += step;
+                }
+                if (done && result)
+                    done = true;
+                else
+                    done = false;
+
+            }
+        }
+
+    }
+
+    public boolean unpackInlineHelper(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, int signatureIndex, AllocatableValue fromValue,
+                    AllocatableValue[] toValues,
+                    int toIndex,
+                    State[] state) {
+
+        AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
+        boolean receiver = signatureIndex == 0;
+        assert receiver && installedCodeOwner.hasScalarizedReceiver() || installedCodeOwner.isScalarizedParameter(signatureIndex - 1) : "should be scalarized type";
+        assert !ValueUtil.isIllegal(fromValue) : "source must be valid";
+        boolean progress = false;
+        final Label labelIsNull = new Label();
+        final Label labelIsNotNull = new Label();
+        // Don't use r14 as tmp because it's used for spilling spillRegFor
+
+        Register tmp1 = r10;
+        Register tmp2 = r13;
+        Register fromReg = Register.None;
+
+        int fromValueIndex = argumentToStateIndex(fromValue);
+
+        JavaType[] types = receiver ? installedCodeOwner.getScalarizedReceiver() : installedCodeOwner.getScalarizedParameter(signatureIndex - 1);
+        // TODO: nicer interface
+        ResolvedJavaField[] fields = installedCodeOwner.getSignature().getParameterType(signatureIndex - 1, installedCodeOwner.getDeclaringClass()).resolve(
+                        installedCodeOwner.getDeclaringClass()).getInstanceFields(true);
+        boolean done = true;
+        boolean markDone = true;
+        AllocatableValue toValue = null;
+
+        // receiver is null-free
+        boolean nullCheck = !receiver && installedCodeOwner.isParameterNullFree(signatureIndex - 1);
+
+        // we traverse from back therefore null check field subtract to get nullcheck field
+        AllocatableValue nullCheckValue = nullCheck ? toValues[toIndex - (types.length - 1)] : null;
+        for (int i = 0; i < types.length; i++) {
+            JavaKind kind = types[types.length - i - 1].getJavaKind();
+            toValue = toValues[toIndex - i];
+            assert !ValueUtil.isIllegal(toValue) : "destination must be valid";
+            int toValueIndex = argumentToStateIndex(toValue);
+            if (state[toValueIndex] == State.READ_ONLY) {
+                if (!toValue.equals(fromValue)) {
+                    markDone = false;
+                }
+                done = false;
+                continue;
+            } else if (state[toValueIndex] == State.WRITTEN) {
+                continue;
+            }
+            assert state[toValueIndex] == State.WRITEABLE : "must be writable";
+            state[toValueIndex] = State.WRITTEN;
+            progress = true;
+
+            if (fromReg == Register.None) {
+                if (ValueUtil.isRegister(fromValue)) {
+                    fromReg = ValueUtil.asRegister(fromValue);
+                } else {
+                    AMD64Address fromAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(fromValue)));
+                    asm.movq(tmp1, fromAddress);
+                    fromReg = tmp1;
+                }
+                if (nullCheck) {
+                    // Nullable inline type argument, emit null check
+                    asm.testq(fromReg, fromReg);
+                    asm.jcc(ConditionFlag.Zero, labelIsNull);
+                }
+            }
+            if (i == types.length - 1 && nullCheck) {
+                if (ValueUtil.isStackSlot(toValue)) {
+                    AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    // TODO: is new assembly correct?
+                    asm.movq(address, 1);
+                } else {
+                    asm.movq(ValueUtil.asRegister(toValue), 1);
+                }
+                continue;
+            }
+
+            AMD64Address fromAddress = new AMD64Address(fromReg, fields[fields.length - i - 1].getOffset());
+            if (ValueUtil.isRegister(toValue) && !isXMMRegister(ValueUtil.asRegister(toValue))) {
+                Register dst = ValueUtil.isStackSlot(toValue) ? tmp2 : ValueUtil.asRegister(toValue);
+                if (kind == JavaKind.Object) {
+                    // TODO: need a barrier?
+                    // asm.movptr(dst, fromAddress);
+                    BarrierSet barrierSet = crb.getPlatformConfigurationProvider().getBarrierSet();
+                    BarrierType barrierType = barrierSet.fieldReadBarrierType(fields[fields.length - i - 1],
+                                    crb.getMetaAccessExtensionProvider().getStorageKind(fields[fields.length - i - 1].getType()));
+
+                } else {
+                    boolean isSigned = kind != JavaKind.Char && kind != JavaKind.Boolean;
+                    loadSizedValue(asm, dst, fromAddress, kind.getByteCount(), isSigned);
+                }
+                if (ValueUtil.isStackSlot(toValue)) {
+                    AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    asm.movq(address, dst);
+                }
+            } else if (kind == JavaKind.Double) {
+                asm.movdbl(ValueUtil.asRegister(toValue), fromAddress);
+            } else {
+                assert kind == JavaKind.Float : "must be float";
+                asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
+            }
+
+        }
+        if (progress && nullCheck) {
+            if (done) {
+                asm.jmp(labelIsNotNull);
+                asm.bind(labelIsNull);
+                // Set IsNotNull field to zero to signal that the argument is null.
+                // Also set all oop fields to zero to make the GC happy.
+                for (int i = 0; i < types.length; i++) {
+                    JavaKind kind = types[types.length - i - 1].getJavaKind();
+                    if (i == types.length - 1 && nullCheck || kind == JavaKind.Object) {
+                        if (ValueUtil.isStackSlot(toValue)) {
+                            AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                            asm.movq(address, 0);
+                        } else {
+                            asm.xorq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(toValue));
+                        }
+                    }
+                }
+            } else {
+                asm.bind(labelIsNull);
+            }
+        }
+
+        if (markDone && state[fromValueIndex] != State.WRITTEN) {
+            // This is okay because no one else will write to that slot
+            state[fromValueIndex] = State.WRITEABLE;
+        }
+        fromValueIndex--;
+        signatureIndex--;
+        toIndex -= types.length;
+        return done;
+
+    }
+
+    public void loadSizedValue(AMD64MacroAssembler asm, Register dst, AMD64Address src, int sizeInBytes, boolean isSigned) {
+        switch (sizeInBytes) {
+            case 8:
+                asm.movq(dst, src);
+                break;
+            case 4:
+                asm.movl(dst, src);
+                break;
+            case 2:
+                if (isSigned) {
+                    loadSignedShort(asm, dst, src);
+                } else {
+                    loadUnsignedShort(asm, dst, src);
+                }
+                break;
+            case 1:
+                if (isSigned) {
+                    loadSignedByte(asm, dst, src);
+                } else {
+                    loadUnsignedByte(asm, dst, src);
+                }
+                break;
+        }
+    }
+
+    public void loadSignedShort(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movswl(dst, src);
+    }
+
+    public void loadUnsignedShort(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movzwl(dst, src);
+    }
+
+    public void loadSignedByte(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movsbl(dst, src);
+    }
+
+    public void loadUnsignedByte(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movzbl(dst, src);
+    }
+
+    public boolean shuffleInlineArgsSpill(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, State[] state, AllocatableValue[] currentArguments,
+                    JavaType[] currentParameterTypes, int fromIndex) {
+        AllocatableValue fromArgument = currentArguments[fromIndex];
+        JavaKind fromKind = currentParameterTypes[fromIndex].getJavaKind();
+        int fromArgumentStateIndex = argumentToStateIndex(fromArgument);
+        State fromArgumentState = state[fromArgumentStateIndex];
+        if (fromArgumentState != State.READ_ONLY) {
+            // spilling this won't break any cycles
+            return true;
+        }
+
+        // Spill argument to be able to write the source and resolve circular dependencies
+        AllocatableValue spilled = spillRegFor(fromArgument);
+        int spilledArgumentStateIndex = argumentToStateIndex(spilled);
+        if (state[spilledArgumentStateIndex] == State.READ_ONLY) {
+            // We have already spilled (in previous round). The spilled register should be consumed
+            // by this round.
+        } else {
+            boolean result = moveHelper(crb, asm, fromArgument, spilled, fromKind, state);
+            assert result : "spilling should not fail";
+            // Set spill_reg as new source and update state
+            currentArguments[fromIndex] = spilled;
+            state[spilledArgumentStateIndex] = State.READ_ONLY;
+        }
+
+        // Do not spill again in this round
+        return false;
+    }
+
+    private AllocatableValue spillRegFor(AllocatableValue value) {
+        if (ValueUtil.isRegister(value) && ValueUtil.asRegister(value).getRegisterCategory().equals(AMD64.XMM)) {
+            return xmm8.asValue(value.getValueKind());
+        }
+        return r14.asValue(value.getValueKind());
+    }
+
+    private boolean moveHelper(CompilationResultBuilder crb, AMD64MacroAssembler asm, AllocatableValue fromValue, AllocatableValue toValue, JavaKind kind, State[] state) {
+        assert !ValueUtil.isIllegal(fromValue) && !ValueUtil.isIllegal(toValue) : "source and destination must be valid";
+        AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
+        int toValueIndex = argumentToStateIndex(toValue);
+        int fromValueIndex = argumentToStateIndex(fromValue);
+        if (state[toValueIndex] == State.WRITTEN) {
+            // already written
+            return true;
+        }
+        if (!fromValue.equals(toValue)) {
+            if (state[toValueIndex] == State.READ_ONLY) {
+                return false;
+            }
+        }
+        if (ValueUtil.isRegister(fromValue)) {
+            if (ValueUtil.isRegister(toValue)) {
+                if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
+                    if (kind == JavaKind.Double) {
+                        asm.movdbl(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                    } else {
+                        assert kind == JavaKind.Float : "kind must be float";
+                        asm.movflt(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                    }
+                } else {
+                    asm.movq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                }
+            } else {
+                // TODO Address from_addr = Address(rsp, from->reg2stack() *
+                // VMRegImpl::stack_slot_size + wordSize); + wordSize because RBP not included in
+                // their case
+                AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
+                    if (kind == JavaKind.Double) {
+                        asm.movdbl(toAddress, ValueUtil.asRegister(fromValue));
+                    } else {
+                        assert kind == JavaKind.Float : "kind must be float";
+                        asm.movflt(toAddress, ValueUtil.asRegister(fromValue));
+                    }
+                } else {
+                    asm.movq(toAddress, ValueUtil.asRegister(fromValue));
+                }
+            }
+        } else {
+            AMD64Address fromAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(fromValue)));
+            if (ValueUtil.isRegister(toValue)) {
+                if (isXMMRegister(ValueUtil.asRegister(toValue))) {
+                    if (kind == JavaKind.Double) {
+                        asm.movdbl(ValueUtil.asRegister(toValue), fromAddress);
+                    } else {
+                        assert kind == JavaKind.Float : "kind must be float";
+                        asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
+                    }
+                } else {
+                    asm.movq(ValueUtil.asRegister(fromValue), fromAddress);
+                }
+            } else {
+                AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                asm.movq(r13, fromAddress);
+                asm.movq(toAddress, r13);
+            }
+
+        }
+
+        // update states
+        state[fromValueIndex] = State.WRITEABLE;
+        state[toValueIndex] = State.WRITTEN;
+        return true;
+    }
+
+    private boolean isXMMRegister(Register register) {
+        return register.getRegisterCategory().equals(AMD64.XMM);
+    }
+
+    public State[] initRegState(AllocatableValue[] currentArguments, int currentStackSizeArguments, int expectedStackSizeArguments, int spInc) {
+        RegisterArray registers = getTarget().arch.getAvailableValueRegisters();
+        int currentArgsOnStack = currentStackSizeArguments / getTarget().wordSize;
+        int expectedArgsOnStack = expectedStackSizeArguments / getTarget().wordSize;
+        State[] state;
+        // no additional stack slots
+        if (spInc == 0) {
+            state = new State[registers.size() + currentArgsOnStack];
+        } else {
+            // include all registers, the current args and the increased stack space and RA
+            state = new State[registers.size() + currentArgsOnStack + expectedArgsOnStack + 1];
+        }
+
+        // initialize the state, set all locations to writeable
+        Arrays.fill(state, State.WRITEABLE);
+
+        // correct the stack offset of the current args by the sp inc
+        for (int i = 0; i < currentArguments.length; i++) {
+            if (currentArguments[i] instanceof StackSlot stackSlot) {
+                StackSlot newStackSlot = StackSlot.get(stackSlot.getValueKind(), stackSlot.getRawOffset() + spInc, stackSlot.getRawAddFrameSize());
+                currentArguments[i] = newStackSlot;
+
+                // make the slot read only to prevent accidental writing
+                state[argumentToStateIndex(newStackSlot)] = State.READ_ONLY;
+            }
+        }
+
+        return state;
+    }
+
+    public static enum State {
+        READ_ONLY,
+        WRITEABLE,
+        WRITTEN
+    }
+
+    /**
+     * calculates the index for the state
+     */
+    public int argumentToStateIndex(AllocatableValue argument) {
+        // include all registers, TODO: only the ones used for the calling convention
+        RegisterArray registers = getTarget().arch.getAvailableValueRegisters();
+        for (int i = 0; i < registers.size(); i++) {
+            if (argument instanceof RegisterValue registerValue) {
+                if (registerValue.getRegister().equals(registers.get(i))) {
+                    return i;
+                }
+            } else {
+                break;
+            }
+        }
+
+        // no register calculate index from offset, every stack slot is 8 byte aligned
+        int regNumber = registers.size();
+        assert argument instanceof StackSlot : "expected stack slot in calling convention";
+        return regNumber + ((StackSlot) argument).getRawOffset() / getTarget().wordSize;
+    }
+
+    public int extendStackForInlineArgs(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, int argsOnStack, boolean receiverOnly) {
+        JavaType[] parameterTypes = installedCodeOwner.getScalarizedParameters(false);
+        CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
+
+        int RAsize = crb.target.arch.getReturnAddressSize();
+        int spInc = (cc.getStackSize() + RAsize);
+        asm.pop(r13);
+        asm.decrementq(rsp, spInc);
+        asm.push(r13);
+        return spInc;
+    }
+
     /**
      * Emits the code prior to the verified entry point.
      *
@@ -345,7 +830,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                  * Just set the new entry point to the same position for the moment. TODO produce a
                  * correct code prefix for the new entry points
                  */
-                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+                // crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 // c1_LIRAssembler_x86.cpp: const Register IC_Klass = rax;
                 Register inlineCacheKlass = rax;
 
@@ -389,7 +874,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                  * Just set the new entry point to the same position for the moment. TODO produce a
                  * correct code prefix for the new entry points
                  */
-                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+                // crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 AMD64Address icSpeculatedKlass = new AMD64Address(data, config.icSpeculatedKlassOffset);
 
                 AMD64BaseAssembler.OperandSize size;
