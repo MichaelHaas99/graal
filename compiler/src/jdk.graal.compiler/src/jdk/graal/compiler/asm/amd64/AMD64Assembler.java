@@ -3848,6 +3848,13 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         }
     }
 
+    public final void movq(AMD64Address dst, int imm32) {
+        prefixq(dst);
+        emitByte(0xC7);
+        emitOperandHelper(AMD64.rax, dst, 4);
+        emitInt(imm32);
+    }
+
     public final void movsbl(Register dst, AMD64Address src) {
         prefix(src, dst);
         emitByte(0x0F);
