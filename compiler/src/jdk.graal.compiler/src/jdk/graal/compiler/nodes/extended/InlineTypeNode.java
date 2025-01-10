@@ -46,6 +46,18 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * the scalarized field values, if needed. If an oop exists it is up to the compiler to either use
  * the oop or the scalarized field values. The isNotNull information indicates if the inline object
  * is null or not, and can be used e.g. for the debugInfo (in C2 it is called isInit).
+ *
+ * An {@link Invoke} is responsible for setting the {@link #isNotNull} output correctly based on the
+ * {@link #oopOrHub}, because the information doesn't exist as return value.
+ *
+ * For a null-restricted flat field only the {@link #scalarizedInlineObject} will be set.
+ *
+ * For a scalarized method parameter, the {@link #scalarizedInlineObject} and the {@link #isNotNull}
+ * fields will be directly set by passed parameters. The {@link #oopOrHub} will stay empty.
+ *
+ * For a nullable flat field, the {@link #scalarizedInlineObject} and the {@link #isNotNull}
+ * information can be loaded directly from the flat field.
+ *
  */
 @NodeInfo(nameTemplate = "InlineTypeNode")
 public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable {
@@ -106,6 +118,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public static InlineTypeNode createNullFreeWithoutOop(ResolvedJavaType type, ValueNode[] scalarizedInlineObject) {
         return InlineTypeNode.createNullFree(type, null, scalarizedInlineObject);
+    }
+
+    public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
+        return new InlineTypeNode(type, null, scalarizedInlineObject, isNotNull);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
