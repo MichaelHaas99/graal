@@ -4,7 +4,9 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.EnumSet;
 
+import jdk.graal.compiler.core.phases.HighTier;
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
+import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.code.InstalledCode;
@@ -394,6 +396,23 @@ public class TestLWorld extends JTTTest {
         return array;
     }
 
+    public static long testLWorld126(boolean trap) {
+        MyValue2 nonNull = MyValue2.createWithFieldsInline(rI, rD);
+        MyValue2 val = null;
+
+        for (int i = 0; i < 4; i++) {
+            if ((i % 2) == 0) {
+                val = nonNull;
+            }
+        }
+        // 'val' is always non-null here but that's only known after loop opts
+        if (trap) {
+            // Uncommon trap with an inline input that can only be scalarized after loop opts
+            return val.hash();
+        }
+        return 0;
+    }
+
     @ImplicitlyConstructible
     @LooselyConsistentValue
     static value class NotFlattenable {
@@ -763,5 +782,46 @@ public class TestLWorld extends JTTTest {
     @Test
     public void run29() throws Throwable {
         runTest(WITHOUT_PEA, "test34", new Object[]{testValue1Array, null, Math.abs(rI) % 3});
+    }
+
+    private static final OptionValues DEMO_OPTIONS_WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, GraalOptions.InlineVTableStubs, false, GraalOptions.LimitInlinedInvokes, 0.0, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
+
+
+    @Test
+    public void run30() throws Throwable {
+        resetCache();
+        for (int i = 0; i < 100000; i++) {
+            testLWorld126(false);
+            //test("testLWorld126", false);
+        }
+        //runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testLWorld126", false);
+        //runTest( DEMO_OPTIONS_WITHOUT_INLINING,"testLWorld126", true);
+        InstalledCode c = getCode(getResolvedJavaMethod("testLWorld126"), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        c.executeVarargs(true);
+    }
+
+    @Test
+    public void run31() throws Throwable {
+        resetCache();
+        for (int i = 0; i < 100000; i++) {
+            testLWorld126(false);
+            //test("testLWorld126", false);
+        }
+        //runTest( WITHOUT_PEA,"testLWorld126", false);
+        //runTest(WITHOUT_PEA, "testLWorld126", true);
+        InstalledCode c = getCode(getResolvedJavaMethod("testLWorld126"), null, true, false, getInitialOptions());
+        c.executeVarargs(true);
+    }
+
+    public void randomTestMethod(){
+        MyValue2.createWithFieldsInline(1,2.0);
+    }
+
+    @Test
+    public void run32() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("randomTestMethod"), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
     }
 }
