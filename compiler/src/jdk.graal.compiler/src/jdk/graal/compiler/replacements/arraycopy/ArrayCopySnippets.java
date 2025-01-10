@@ -320,38 +320,17 @@ public abstract class ArrayCopySnippets implements Snippets {
 
         GuardingNode anchor = SnippetAnchorNode.anchor();
 
-        Object[] srcArray = (Object[]) src;
-        Object[] destArray = (Object[]) dest;
-        boolean oneArrayIsFlat = isFlatArray(src) || isFlatArray(dest);
-
         if (probability(FREQUENT_PROBABILITY, src == dest) && probability(NOT_FREQUENT_PROBABILITY, srcPos < destPos)) {
             // bad aliased case so we need to copy the array from back to front
-            if (oneArrayIsFlat) {
-                // can't directly copy the contents between the arrays, inline type plugin will
-                // handle it for us
-                // TODO: replace with runtime call if both arrays are flat
-                for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
-                    destArray[destPos + position] = srcArray[srcPos + position];
-                }
-            } else {
-                for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
-                    Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
-                    RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
-                }
+            for (int position = length - 1; probability(FAST_PATH_PROBABILITY, position >= 0); position--) {
+                Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
+                RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
             }
-
         } else {
-            if (oneArrayIsFlat) {
-                for (int position = 0; probability(FAST_PATH_PROBABILITY, position < length); position++) {
-                    destArray[destPos + position] = srcArray[srcPos + position];
-                }
-            } else {
-                for (int position = 0; probability(FAST_PATH_PROBABILITY, position < length); position++) {
-                    Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
-                    RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
-                }
+            for (int position = 0; probability(FAST_PATH_PROBABILITY, position < length); position++) {
+                Object value = GuardedUnsafeLoadNode.guardedLoad(src, sourceOffset + position * scale, elementKind, arrayLocation, anchor);
+                RawStoreNode.storeObject(dest, destOffset + position * scale, value, elementKind, arrayLocation, true);
             }
-
         }
     }
 
