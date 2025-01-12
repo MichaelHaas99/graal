@@ -40,6 +40,10 @@ public interface FrameContext {
      */
     void enter(CompilationResultBuilder crb);
 
+    default void enter(CompilationResultBuilder crb, int stackIncrement) {
+        enter(crb);
+    }
+
     /**
      * Emits code to be executed just prior to returning from a method. This may include:
      * <ul>
