@@ -93,6 +93,11 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
      */
     private StackSlot deoptimizationRescueSlot;
 
+    /**
+     * The stack increment used for stack repair.
+     */
+    private StackSlot stackIncrement;
+
     @SuppressWarnings("this-escape")
     public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer) {
         super(codeCache, registerConfig, referenceMapFactory, preserveFramePointer);
@@ -105,6 +110,23 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
             assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
         }
         deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+    }
+
+    public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer, boolean stackRepair) {
+        super(codeCache, registerConfig, referenceMapFactory, preserveFramePointer);
+        // HotSpot is picky about the frame layout in the presence of nmethod entry barriers, so
+        // always allocate the space for rbp and the deoptimization rescue slot. If we don't
+        // allocate rbp the rbp spill slot will never be written.
+        if (!preserveFramePointer()) {
+            assert spillSize == initialSpillSize : "RBP spill slot must be the first allocated stack slots";
+            rbpSpillSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+            assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
+        }
+        if (stackRepair) {
+            stackIncrement = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+        }
+        deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+
     }
 
     @Override
@@ -123,6 +145,11 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
     public StackSlot getDeoptimizationRescueSlot() {
         assert deoptimizationRescueSlot != null;
         return deoptimizationRescueSlot;
+    }
+
+    public StackSlot getStackIncrement() {
+        assert stackIncrement != null;
+        return stackIncrement;
     }
 
     @Override
