@@ -423,7 +423,14 @@ public class GraphEncoder {
              * Note that not all parameters must be present (unused parameters are deleted after
              * parsing). This leads to holes in the orderId, i.e., unused orderIds.
              */
-            int parameterCount = graph.method().getSignature().getParameterCount(!graph.method().isStatic());
+            int parameterCount;
+            if (graph.method().hasScalarizedParameters()) {
+                parameterCount = graph.method().getScalarizedParameters(true).length;
+            } else {
+                parameterCount = graph.method().getSignature().getParameterCount(!graph.method().isStatic());
+            }
+            // int parameterCount =
+            // graph.method().getSignature().getParameterCount(!graph.method().isStatic());
             for (ParameterNode node : graph.getNodes(ParameterNode.TYPE)) {
                 assert orderIds.get(node) == null : "Parameter node must not be ordered yet";
                 assert node.index() < parameterCount : "Parameter index out of range";
