@@ -561,6 +561,16 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         return start;
     }
 
+    private FixedWithNextNode updatedStart;
+
+    public FixedWithNextNode updatedStart() {
+        return updatedStart;
+    }
+
+    public void setUpdatedStart(FixedWithNextNode updatedStart) {
+        this.updatedStart = updatedStart;
+    }
+
     /**
      * Gets the root method from which this graph was built.
      *
