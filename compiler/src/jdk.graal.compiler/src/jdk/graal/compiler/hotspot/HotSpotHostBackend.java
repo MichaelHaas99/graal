@@ -28,7 +28,7 @@ import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideE
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF_NO_VZERO;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
 import static jdk.vm.ci.code.CodeUtil.K;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
+import static jdk.vm.ci.code.CodeUtil.getScalarizedCallingConvention;
 import static jdk.vm.ci.common.InitTimer.timer;
 
 import java.util.Collections;
@@ -125,7 +125,9 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             return stub.getLinkage().getIncomingCallingConvention();
         }
 
-        CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, graph.method(), this);
+        // CallingConvention cc = getCallingConvention(getCodeCache(),
+        // HotSpotCallingConventionType.JavaCallee, graph.method(), this);
+        CallingConvention cc = getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, graph.method(), this, true);
         if (graph.getEntryBCI() != JVMCICompiler.INVOCATION_ENTRY_BCI) {
             // for OSR, only a pointer is passed to the method.
             JavaType[] parameterTypes = new JavaType[]{getMetaAccess().lookupJavaType(long.class)};
