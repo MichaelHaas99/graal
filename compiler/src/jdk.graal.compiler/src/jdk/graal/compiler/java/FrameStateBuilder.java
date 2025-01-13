@@ -34,6 +34,7 @@ import static jdk.graal.compiler.bytecode.Bytecodes.POP;
 import static jdk.graal.compiler.bytecode.Bytecodes.POP2;
 import static jdk.graal.compiler.bytecode.Bytecodes.SWAP;
 import static jdk.graal.compiler.debug.GraalError.shouldNotReachHereUnexpectedValue;
+import static jdk.graal.compiler.hotspot.replacements.Log.LOG_PRIMITIVE;
 import static jdk.graal.compiler.nodes.FrameState.TWO_SLOT_MARKER;
 
 import java.util.ArrayList;
@@ -69,14 +70,19 @@ import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import jdk.graal.compiler.nodes.graphbuilderconf.IntrinsicContext.SideEffectsState;
 import jdk.graal.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -386,15 +392,34 @@ public final class FrameStateBuilder implements SideEffectsState {
                 if (method.isScalarizedParameter(i)) {
                     JavaType[] parameterTypes = method.getScalarizedParameter(i);
                     ParameterNode isNotNull = null;
-                    if (method.isParameterNullFree(index)) {
-                        isNotNull = new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(index), false));
+                    if (!method.isParameterNullFree(i)) {
+                        isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
+                        ForeignCallNode foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE, ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), isNotNull, ConstantNode.forBoolean(true,
+                                        graph)));
+                        newStartPosition.setNext(foreign);
+                        newStartPosition = foreign;
                     }
                     ParameterNode[] scalarizedValues = new ParameterNode[parameterTypes.length];
                     for (int j = 0; j < parameterTypes.length; j++) {
-                        ParameterNode current = new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, parameterTypes[j], false));
+                        ParameterNode current = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, parameterTypes[j], false)));
                         scalarizedValues[j] = current;
+                        ForeignCallNode foreign = null;
+                        if (parameterTypes[j].getJavaKind() == JavaKind.Object) {
+// foreign = graph.add(new ForeignCallNode(LOG_OBJECT, current, ConstantNode.forBoolean(false,
+// graph), ConstantNode.forBoolean(true, graph)));
+// newStartPosition.setNext(foreign);
+// newStartPosition = foreign;
+                        } else if (parameterTypes[j].getJavaKind() != JavaKind.Double && parameterTypes[j].getJavaKind() != JavaKind.Float) {
+                            foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE, ConstantNode.forInt(parameterTypes[j].getJavaKind().getTypeChar(), graph), current, ConstantNode.forBoolean(true,
+                                            graph)));
+                            newStartPosition.setNext(foreign);
+                            newStartPosition = foreign;
+                        }
+
                     }
-                    InlineTypeNode inlineTypeNode = InlineTypeNode.createWithoutOop(method.getDeclaringClass(), scalarizedValues, isNotNull);
+
+                    InlineTypeNode inlineTypeNode = graph.addOrUniqueWithInputs(InlineTypeNode.createWithoutOop(
+                                    method.getSignature().getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()), scalarizedValues, isNotNull));
                     newStartPosition.setNext(inlineTypeNode);
                     newStartPosition = inlineTypeNode;
                     param = inlineTypeNode;
@@ -415,6 +440,156 @@ public final class FrameStateBuilder implements SideEffectsState {
                 javaIndex++;
             }
         }
+        graph.setUpdatedStart(newStartPosition);
+    }
+
+    public ArrayList<VirtualObjectState> initializeForMethodStartScalarizedVirtual(Assumptions assumptions, boolean eagerResolve, Plugins plugins, List<ValueNode> collectParameterNodes) {
+
+        ArrayList<VirtualObjectState> virtualStates = new ArrayList<>();
+        // counts the local slots
+        int javaIndex = 0;
+
+        // counts the non-scalarized parameters
+        int index = 0;
+        ResolvedJavaMethod method = getMethod();
+        ResolvedJavaType originalType = method.getDeclaringClass();
+        if (!method.isStatic()) {
+            // add the receiver
+            ValueNode receiver = null;
+            StampPair receiverStamp = null;
+            if (plugins != null) {
+                receiverStamp = plugins.getOverridingStamp(tool, originalType, true);
+            }
+            if (receiverStamp == null) {
+                receiverStamp = StampFactory.forDeclaredType(assumptions, originalType, true);
+            }
+
+            if (plugins != null) {
+                for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
+                    receiver = plugin.interceptParameter(tool, index, receiverStamp);
+                    if (receiver != null) {
+                        break;
+                    }
+                }
+            }
+            if (receiver == null) {
+                if (method.hasScalarizedReceiver()) {
+                    JavaType[] receiverTypes = method.getScalarizedReceiver();
+                    ParameterNode[] scalarizedValues = new ParameterNode[receiverTypes.length];
+                    for (int i = 0; i < receiverTypes.length; i++) {
+                        ParameterNode current = graph.addOrUnique(new ParameterNode(index, StampFactory.forDeclaredType(assumptions, receiverTypes[i], false)));
+                        current = graph.addOrUniqueWithInputs(current);
+                        scalarizedValues[i] = current;
+                        index++;
+                    }
+                    VirtualObjectNode virtual = new VirtualInstanceNode(method.getDeclaringClass(), false);
+                    virtual.setObjectId(index);
+                    graph.addOrUnique(virtual);
+
+                    ValueNode[] newEntries = new ValueNode[receiverTypes.length];
+
+                    for (int j = 0; j < newEntries.length; j++) {
+                        ValueNode entry = scalarizedValues[j];
+                        if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(tool.getMetaAccessExtensionProvider(), j).getStackKind())) {
+                            newEntries[j] = null;
+                        } else {
+                            newEntries[j] = entry;
+                        }
+                    }
+                    virtualStates.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, null)));
+                    receiver = virtual;
+                } else {
+                    receiver = new ParameterNode(index++, receiverStamp);
+                    receiver = graph.addOrUniqueWithInputs(receiver);
+
+                }
+                locals[javaIndex] = receiver;
+                if (collectParameterNodes != null) {
+                    collectParameterNodes.add(receiver);
+                }
+                javaIndex = 1;
+
+            }
+
+        }
+        Signature sig = method.getSignature();
+        int max = sig.getParameterCount(false);
+        ResolvedJavaType accessingClass = originalType;
+        for (int i = 0; i < max; i++) {
+            JavaType type = sig.getParameterType(i, accessingClass);
+            if (eagerResolve) {
+                type = type.resolve(accessingClass);
+            }
+            JavaKind kind = type.getJavaKind();
+            StampPair stamp = null;
+            if (plugins != null) {
+                stamp = plugins.getOverridingStamp(tool, type, false);
+            }
+            if (stamp == null) {
+                // GR-714: subword inputs cannot be trusted
+                if (kind.getStackKind() != kind) {
+                    stamp = StampPair.createSingle(StampFactory.forKind(JavaKind.Int));
+                } else {
+                    stamp = StampFactory.forDeclaredType(assumptions, type, false);
+                }
+            }
+
+            ValueNode param = null;
+            if (plugins != null) {
+                for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
+                    param = plugin.interceptParameter(tool, index, stamp);
+                    if (param != null) {
+                        break;
+                    }
+                }
+            }
+            if (param == null) {
+                if (method.isScalarizedParameter(i)) {
+                    JavaType[] parameterTypes = method.getScalarizedParameter(i);
+                    ParameterNode isNotNull = null;
+                    if (!method.isParameterNullFree(i)) {
+                        isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
+                    }
+                    ParameterNode[] scalarizedValues = new ParameterNode[parameterTypes.length];
+                    for (int j = 0; j < parameterTypes.length; j++) {
+                        ParameterNode current = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, parameterTypes[j], false)));
+                        scalarizedValues[j] = current;
+                    }
+                    VirtualObjectNode virtual = new VirtualInstanceNode(method.getSignature().getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()), false);
+                    virtual.setObjectId(index);
+                    graph.addOrUnique(virtual);
+
+                    ValueNode[] newEntries = new ValueNode[parameterTypes.length];
+
+                    for (int j = 0; j < newEntries.length; j++) {
+                        ValueNode entry = scalarizedValues[j];
+                        if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(tool.getMetaAccessExtensionProvider(), j).getStackKind())) {
+                            newEntries[j] = null;
+                        } else {
+                            newEntries[j] = entry;
+                        }
+                    }
+                    virtualStates.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, isNotNull)));
+
+                    param = virtual;
+                } else {
+                    param = new ParameterNode(index++, stamp);
+                }
+
+            }
+
+            param = graph.addOrUniqueWithInputs(param);
+            locals[javaIndex] = param;
+            if (collectParameterNodes != null) {
+                collectParameterNodes.add(param);
+            }
+            javaIndex++;
+            if (kind.needsTwoSlots()) {
+                locals[javaIndex] = TWO_SLOT_MARKER;
+                javaIndex++;
+            }
+        }
+        return virtualStates;
     }
 
     private FrameStateBuilder(FrameStateBuilder other) {
