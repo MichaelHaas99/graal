@@ -926,7 +926,12 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     receiver = nonNullReceiver;
                 }
             }
-            JavaType[] signature = callTarget.targetMethod().getSignature().toParameterTypes(callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
+            JavaType[] signature;
+            if (callTarget.targetMethod().hasScalarizedParameters()) {
+                signature = callTarget.targetMethod().getScalarizedParameters(!callTarget.invokeKind().isIndirect());
+            } else {
+                signature = callTarget.targetMethod().getSignature().toParameterTypes(callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
+            }
 
             LoweredCallTargetNode loweredCallTarget = null;
             OptionValues options = graph.getOptions();
@@ -1336,7 +1341,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             MergeNode merge = graph.add(new MergeNode());
             merge.setStateAfter(framestate);
 
-            ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(inlineTypeNode.stamp(NodeView.DEFAULT), merge, inlineTypeNode.getOopOrHub(), newObj));
+            ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(inlineTypeNode.stamp(NodeView.DEFAULT), merge,
+                            inlineTypeNode.getOopOrHub() == null ? ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph) : inlineTypeNode.getOopOrHub(), newObj));
 
             // replace inline type node with phi node
             inlineTypeNode.replaceAtUsages(phi);
