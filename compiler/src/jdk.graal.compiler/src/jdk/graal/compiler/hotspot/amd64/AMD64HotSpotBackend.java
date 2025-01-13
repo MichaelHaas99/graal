@@ -71,6 +71,7 @@ import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMap;
+import jdk.graal.compiler.lir.amd64.AMD64Move;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
 import jdk.graal.compiler.lir.asm.DataBuilder;
@@ -99,7 +100,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Signature;
 
 /**
  * HotSpot AMD64 specific backend.
@@ -420,25 +420,20 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     }
 
     // see MacroAssembler::unpack_inline_args
-    public int unpackInlineArgs(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, boolean receiverOnly) {
+    public int unpackInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, boolean receiverOnly) {
 
         // TODO: replace installedCodeOwner with crb.compilationResult.getMethods()[0]
 
+
         // VIEP: nothing scalarized yet
         // VIEP_RO: everything except receiver already scalarized
-        JavaType[] currentParameterTypes = receiverOnly ? installedCodeOwner.getScalarizedParameters(false) : getParameters(installedCodeOwner); // TODO
+        JavaType[] currentParameterTypes = receiverOnly ? rootMethod.getScalarizedParameters(false)
+                        : rootMethod.getSignature().toParameterTypes(rootMethod.isStatic() ? null : rootMethod.getDeclaringClass()); // TODO
         CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
 
         // VEP: the parameters that are expected
-        JavaType[] expectedParameterTypes = installedCodeOwner.getScalarizedParameters(true);
+        JavaType[] expectedParameterTypes = rootMethod.getScalarizedParameters(true);
         CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
-
-        if (true /* receiver_only */) {
-            CallingConvention sig;/* = sig_cc_R0 */
-        } else {
-            CallingConvention sig;/* = sig */
-        }
-        CallingConvention sig_cc; /* sig_cc */
 
         int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
         AllocatableValue[] currentArguments = currentCC.getArguments();
@@ -447,10 +442,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         int spInc = 0;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
-            spInc = extendStackForInlineArgs(installedCodeOwner, crb, asm, regConfig, expectedStackSizeArguments, receiverOnly);
+            spInc = extendStackForInlineArgs(rootMethod, crb, asm, regConfig, expectedStackSizeArguments, receiverOnly);
         }
 
-        shuffleInlineArgs(installedCodeOwner, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedParameterTypes, expectedArguments,
+        shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedParameterTypes, expectedArguments,
                         expectedStackSizeArguments,
                         spInc);
         return spInc;
@@ -461,24 +456,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
  * regs_cc, // to sp_inc
  */
 
-    public JavaType[] getParameters(ResolvedJavaMethod method) {
-        Signature sig = method.getSignature();
-        int sigCount = sig.getParameterCount(false);
-        JavaType[] argTypes;
-        int argIndex = 0;
-        if (!method.isStatic()) {
-            argTypes = new JavaType[sigCount + 1];
-            argTypes[argIndex++] = method.getDeclaringClass();
-        } else {
-            argTypes = new JavaType[sigCount];
-        }
-        for (int i = 0; i < sigCount; i++) {
-            argTypes[argIndex++] = sig.getParameterType(i, null);
-        }
-        return argTypes;
-    }
-
-    public void shuffleInlineArgs(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, boolean receiverOnly, JavaType[] currentParameterTypes,
+    public void shuffleInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, boolean receiverOnly, JavaType[] currentParameterTypes,
                     AllocatableValue[] currentArguments, int currentStackSizeArguments,
                     JavaType[] expectedParameterTypes, AllocatableValue[] expectedArguments, int expectedStackSizeArguments, int spInc) {
 
@@ -496,34 +474,50 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             int step = -1;
             int fromIndex = currentArgsPassedLength - 1;
             int toIndex = expectedArgsPassedLength - 1;
-            int signatureLength = installedCodeOwner.getSignature().getParameterCount(true);
-            int signatureIndex = signatureLength;
+            int signatureLength = rootMethod.getSignature().getParameterCount(!rootMethod.isStatic());
+            int signatureIndex = signatureLength - 1;
             int signatureIndexEnd = -1;
             int vTargIndex = 0;
 
             for (; signatureIndex != signatureIndexEnd; signatureIndex += step) {
                 assert 0 <= signatureIndex && signatureIndex < signatureLength : "index out of bounds";
                 if (spill) {
-                    spill = shuffleInlineArgsSpill(installedCodeOwner, crb, asm, state, currentArguments, currentParameterTypes, fromIndex);
+                    spill = shuffleInlineArgsSpill(rootMethod, crb, asm, state, currentArguments, currentParameterTypes, fromIndex);
                 }
-                JavaKind kind = currentParameterTypes[signatureIndex].getJavaKind();
-                boolean isScalarized = signatureIndex == 0 ? installedCodeOwner.hasScalarizedReceiver() : installedCodeOwner.isScalarizedParameter(signatureIndex - 1);
+                JavaKind kind = rootMethod.getSignature().getParameterKind(signatureIndex);
+                // boolean isScalarized = signatureIndex == 0 ? rootMethod.hasScalarizedReceiver() :
+                // rootMethod.isScalarizedParameter(signatureIndex - 1);
+                boolean isScalarized = rootMethod.isScalarizedParameter(signatureIndex, true);
 
                 // for receiver only all parameters except receiver are already scalarized so just
                 // move then
                 boolean result = true;
                 if (isScalarized && (!receiverOnly || signatureIndex == 0)) {
+                    // parameter which is not scalarized yet
                     AllocatableValue fromArgument = currentArguments[fromIndex];
                     // TODO: unpackInline Helper
-                    result = unpackInlineHelper(installedCodeOwner, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
-                    toIndex -= (signatureIndex == 0 ? installedCodeOwner.getScalarizedReceiver() : installedCodeOwner.getScalarizedParameter(signatureIndex - 1)).length;
-                    signatureIndex--;
+                    result = unpackInlineHelper(rootMethod, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
+                    // toIndex -= (signatureIndex == 0 ? rootMethod.getScalarizedReceiver() :
+                    // rootMethod.getScalarizedParameter(signatureIndex - 1)).length;
+                    toIndex -= rootMethod.getScalarizedParameter(signatureIndex, true).length;
                     fromIndex--;
                     if (fromIndex == -1 && signatureIndex != 0) {
                         assert receiverOnly : "sanity";
                         fromIndex = 0;
                     }
+                } else if (isScalarized && receiverOnly) {
+                    // parameters without receiver already scalarized iterate over them and move
+                    JavaType[] types = rootMethod.getScalarizedParameter(signatureIndex, true);
+                    for (int j = 0; j < types.length; j++) {
+                        AllocatableValue fromArgument = currentArguments[fromIndex];
+                        AllocatableValue toArgument = expectedArguments[toIndex];
+                        result = moveHelper(crb, asm, fromArgument, toArgument, kind, state);
+
+                        toIndex += step;
+                        fromIndex += step;
+                    }
                 } else {
+                    // parameter which is not sclarized
                     AllocatableValue fromArgument = currentArguments[fromIndex];
                     AllocatableValue toArgument = expectedArguments[toIndex];
                     result = moveHelper(crb, asm, fromArgument, toArgument, kind, state);
@@ -541,14 +535,16 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
     }
 
-    public boolean unpackInlineHelper(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, int signatureIndex, AllocatableValue fromValue,
+    public boolean unpackInlineHelper(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, int signatureIndex, AllocatableValue fromValue,
                     AllocatableValue[] toValues,
                     int toIndex,
                     State[] state) {
 
         AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
-        boolean receiver = signatureIndex == 0;
-        assert receiver && installedCodeOwner.hasScalarizedReceiver() || installedCodeOwner.isScalarizedParameter(signatureIndex - 1) : "should be scalarized type";
+        // boolean receiver = signatureIndex == 0;
+        // assert receiver && rootMethod.hasScalarizedReceiver() ||
+        // rootMethod.isScalarizedParameter(signatureIndex - 1) : "should be scalarized type";
+        assert rootMethod.isScalarizedParameter(signatureIndex, true);
         assert !ValueUtil.isIllegal(fromValue) : "source must be valid";
         boolean progress = false;
         final Label labelIsNull = new Label();
@@ -561,16 +557,21 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         int fromValueIndex = argumentToStateIndex(fromValue);
 
-        JavaType[] types = receiver ? installedCodeOwner.getScalarizedReceiver() : installedCodeOwner.getScalarizedParameter(signatureIndex - 1);
+        // JavaType[] types = receiver ? rootMethod.getScalarizedReceiver() :
+        // rootMethod.getScalarizedParameter(signatureIndex - 1);
+        JavaType[] types = rootMethod.getScalarizedParameter(signatureIndex, true);
         // TODO: nicer interface
-        ResolvedJavaField[] fields = installedCodeOwner.getSignature().getParameterType(signatureIndex - 1, installedCodeOwner.getDeclaringClass()).resolve(
-                        installedCodeOwner.getDeclaringClass()).getInstanceFields(true);
+        // ResolvedJavaField[] fields = rootMethod.getSignature().getParameterType(signatureIndex -
+        // 1, rootMethod.getDeclaringClass()).resolve(
+        // rootMethod.getDeclaringClass()).getInstanceFields(true);
+        ResolvedJavaField[] fields = rootMethod.getScalarizedParameterFields(signatureIndex, true);
         boolean done = true;
         boolean markDone = true;
         AllocatableValue toValue = null;
 
         // receiver is null-free
-        boolean nullCheck = !receiver && installedCodeOwner.isParameterNullFree(signatureIndex - 1);
+        // boolean nullCheck = !receiver && rootMethod.isParameterNullFree(signatureIndex - 1);
+        boolean nullCheck = !rootMethod.isParameterNullFree(signatureIndex, true);
 
         // we traverse from back therefore null check field subtract to get nullcheck field
         AllocatableValue nullCheckValue = nullCheck ? toValues[toIndex - (types.length - 1)] : null;
@@ -621,6 +622,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (ValueUtil.isRegister(toValue) && !isXMMRegister(ValueUtil.asRegister(toValue))) {
                 Register dst = ValueUtil.isStackSlot(toValue) ? tmp2 : ValueUtil.asRegister(toValue);
                 if (kind == JavaKind.Object) {
+                    // TODO: only compatibly with -XX:-UseCompressedOops at the moment
                     loadHeapOop(crb, asm, dst, fromAddress);
                 } else {
                     boolean isSigned = kind != JavaKind.Char && kind != JavaKind.Boolean;
@@ -655,6 +657,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                         }
                     }
                 }
+                asm.bind(labelIsNotNull);
             } else {
                 asm.bind(labelIsNull);
             }
@@ -664,15 +667,20 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             // This is okay because no one else will write to that slot
             state[fromValueIndex] = State.WRITEABLE;
         }
-        fromValueIndex--;
-        signatureIndex--;
-        toIndex -= types.length;
+/*
+ * fromValueIndex--; signatureIndex--; toIndex -= types.length;
+ */
         return done;
 
     }
 
     private void loadHeapOop(CompilationResultBuilder crb, AMD64MacroAssembler asm, Register dst, AMD64Address fromAddress) {
         asm.movptr(dst, fromAddress);
+        if (config.useCompressedOops) {
+            // loaded compressed oop, uncompress it, zero out upper 32 bits
+            asm.movl(dst, dst);
+            AMD64Move.UncompressPointerOp.emitUncompressCode(asm, dst, config.getOopEncoding().getShift(), getProviders().getRegisters().getHeapBaseRegister(), false);
+        }
         if (config.gc == HotSpotGraalRuntime.HotSpotGC.X) {
             ForeignCallLinkage xCallTarget = this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.X_FIELD_BARRIER);
             emitXBarrier(crb, asm, null, dst, config, xCallTarget, fromAddress);
@@ -683,34 +691,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         // TODO: others don't need a read barrier?
         // config.gc == HotSpotGraalRuntime.HotSpotGC.Epsilon || config.useG1GC()
 
-        // TODO: need a barrier?
-        // asm.movptr(dst, fromAddress);
-// BarrierSet barrierSet = crb.getPlatformConfigurationProvider().getBarrierSet();
-// BarrierType barrierType = barrierSet.fieldReadBarrierType(fields[fields.length - i - 1],
-// crb.getMetaAccessExtensionProvider().getStorageKind(fields[fields.length - i - 1].getType()));
-// Register scratch = r12;
-// asm.push(scratch);
-// asm.movptr(dst, fromAddress);
-//
-// ForeignCallLinkage xCallTarget =
-// this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.X_FIELD_BARRIER);
-// emitXBarrier(crb, asm, null, dst, config, xCallTarget, fromAddress);
-//
-// ForeignCallLinkage zCallTarget =
-// this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.Z_LOAD_BARRIER);
-// emitZBarrier(crb, asm, dst, zCallTarget, fromAddress, null, false);
-
-        // AllocatableValue result = r16.asValue();
-// Register scratch = r12;
-// asm.push(scratch);
-
-// AMD64HotSpotZReadBarrierOp readBarrier = new AMD64HotSpotZReadBarrierOp(result, fromAddress,
-// null, config, callTarget, false);
-// AMD64HotSpotZBarrierSetLIRGenerator.emitLoadBarrier(crb, masm, asRegister(result), callTarget,
-// loadAddress.toAddress(), this, isNotStrong);
-// readBarrier.emitCode(crb, asm);
-
-        // asm.movq(dst, scratch);
     }
 
     public static void emitXBarrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Label success, Register resultReg, GraalHotSpotVMConfig config, ForeignCallLinkage callTarget,
@@ -956,9 +936,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 StackSlot newStackSlot = StackSlot.get(stackSlot.getValueKind(), stackSlot.getRawOffset() + spInc, stackSlot.getRawAddFrameSize());
                 currentArguments[i] = newStackSlot;
 
-                // make the slot read only to prevent accidental writing
-                state[argumentToStateIndex(newStackSlot)] = State.READ_ONLY;
             }
+            // make the slot read only to prevent accidental writing
+            state[argumentToStateIndex(currentArguments[i])] = State.READ_ONLY;
         }
 
         return state;
@@ -970,10 +950,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         WRITTEN
     }
 
-    public boolean needStackRepair(ResolvedJavaMethod installedCodeOwner) {
-        CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, installedCodeOwner, this);
-        CallingConvention ccScalarized = CodeUtil.getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, installedCodeOwner, this, true);
-        CallingConvention ccScalarizedWithoutReceiver = CodeUtil.getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, installedCodeOwner, this, false);
+    public boolean needStackRepair(ResolvedJavaMethod rootMethod) {
+        if (rootMethod == null)
+            return false;
+        CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this);
+        CallingConvention ccScalarized = CodeUtil.getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
+        CallingConvention ccScalarizedWithoutReceiver = CodeUtil.getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
         // _c2_needs_stack_repair = (_args_on_stack_cc > _args_on_stack) || (_args_on_stack_cc >
         // _args_on_stack_cc_ro);
         return ccScalarized.getStackSize() > cc.getStackSize() || ccScalarized.getStackSize() > ccScalarizedWithoutReceiver.getStackSize();
@@ -1001,8 +983,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return regNumber + ((StackSlot) argument).getRawOffset() / getTarget().wordSize;
     }
 
-    public int extendStackForInlineArgs(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, int argsOnStack, boolean receiverOnly) {
-        JavaType[] parameterTypes = installedCodeOwner.getScalarizedParameters(false);
+    public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, int argsOnStack, boolean receiverOnly) {
+        JavaType[] parameterTypes = rootMethod.getScalarizedParameters(false);
         CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
 
         int RAsize = crb.target.arch.getReturnAddressSize();
@@ -1013,112 +995,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return spInc;
     }
 
-    private void icCheck(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId) {
+    private void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId) {
         HotSpotProviders providers = getProviders();
-        if (installedCodeOwner != null && !installedCodeOwner.isStatic()) {
-            JavaType[] parameterTypes = {providers.getMetaAccess().lookupJavaType(Object.class)};
-            CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
-            Register receiver = asRegister(cc.getArgument(0));
-            AMD64Address src = new AMD64Address(receiver, config.hubOffset);
-            int before;
-            if (config.icSpeculatedKlassOffset == Integer.MAX_VALUE) {
-                crb.recordMark(markId);
-                /*
-                 * Just set the new entry point to the same position for the moment. TODO produce a
-                 * correct code prefix for the new entry points
-                 */
-                // crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
-                // c1_LIRAssembler_x86.cpp: const Register IC_Klass = rax;
-                Register inlineCacheKlass = rax;
-
-                if (config.useCompressedClassPointers) {
-                    Register register = r10;
-                    Register heapBase = providers.getRegisters().getHeapBaseRegister();
-                    AMD64HotSpotMove.decodeKlassPointer(asm, register, heapBase, src, config);
-                    if (config.narrowKlassBase != 0) {
-                        // The heap base register was destroyed above, so restore it
-                        if (config.narrowOopBase == 0L) {
-                            asm.xorq(heapBase, heapBase);
-                        } else {
-                            asm.movq(heapBase, config.narrowOopBase);
-                        }
-                    }
-                    before = asm.cmpqAndJcc(inlineCacheKlass, register, ConditionFlag.NotEqual, null, false);
-                } else {
-                    before = asm.cmpqAndJcc(inlineCacheKlass, src, ConditionFlag.NotEqual, null, false);
-                }
-                crb.recordDirectCall(before, asm.position(), getForeignCalls().lookupForeignCall(IC_MISS_HANDLER), null);
-            } else {
-                // JDK-8322630 (removed ICStubs)
-                Register data = rax;
-                Register temp = r10;
-                ForeignCallLinkage icMissHandler = getForeignCalls().lookupForeignCall(IC_MISS_HANDLER);
-
-                // Size of IC check sequence checked with a guarantee below.
-                int inlineCacheCheckSize = 14;
-                if (asm.force4ByteNonZeroDisplacements()) {
-                    /*
-                     * The mov and cmp below each contain a 1-byte displacement that is emitted as 4
-                     * bytes instead, thus we have 3 extra bytes for each of these instructions.
-                     */
-                    inlineCacheCheckSize += 3 + 3;
-                }
-                asm.align(config.codeEntryAlignment, asm.position() + inlineCacheCheckSize);
-
-                int startICCheck = asm.position();
-                crb.recordMark(markId);
-                /*
-                 * Just set the new entry point to the same position for the moment. TODO produce a
-                 * correct code prefix for the new entry points
-                 */
-                // crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
-                AMD64Address icSpeculatedKlass = new AMD64Address(data, config.icSpeculatedKlassOffset);
-
-                AMD64BaseAssembler.OperandSize size;
-                if (config.useCompressedClassPointers) {
-                    asm.movl(temp, src);
-                    size = AMD64BaseAssembler.OperandSize.DWORD;
-                } else {
-                    asm.movptr(temp, src);
-                    size = AMD64BaseAssembler.OperandSize.QWORD;
-                }
-                before = asm.cmpAndJcc(size, temp, icSpeculatedKlass, ConditionFlag.NotEqual, null, false);
-                crb.recordDirectCall(before, asm.position(), icMissHandler, null);
-
-                int actualInlineCacheCheckSize = asm.position() - startICCheck;
-                if (actualInlineCacheCheckSize != inlineCacheCheckSize) {
-                    // Code emission pattern has changed: adjust `inlineCacheCheckSize`
-                    // initialization above accordingly.
-                    throw new GraalError("%s != %s", actualInlineCacheCheckSize, inlineCacheCheckSize);
-                }
-            }
-        }
-    }
-
-    private void emitEntry(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, boolean receiverOnly,
-                    boolean verified, Label verifiedEntry) {
-        crb.recordMark(markId);
-        if (!verified) {
-            icCheck(installedCodeOwner, crb, asm, regConfig, markId);
-        } else {
-            int stackIncrement = unpackInlineArgs(installedCodeOwner, crb, asm, regConfig, receiverOnly);
-            crb.frameContext.enter(crb, stackIncrement);
-            asm.jmp(verifiedEntry);
-        }
-        asm.align(config.codeEntryAlignment);
-
-    }
-
-    /**
-     * Emits the code prior to the verified entry point.
-     *
-     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
-     */
-    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
-        HotSpotProviders providers = getProviders();
-        icCheck(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY);
-        icCheck(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.INLINE_ENTRY);
-        if (installedCodeOwner != null && !installedCodeOwner.isStatic()) {
+        if (rootMethod != null && !rootMethod.isStatic()) {
             JavaType[] parameterTypes = {providers.getMetaAccess().lookupJavaType(Object.class)};
             CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
             Register receiver = asRegister(cc.getArgument(0));
@@ -1208,49 +1087,71 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 }
             }
         }
+    }
 
+    private void emitEntry(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, boolean receiverOnly,
+                    boolean verified, Label verifiedEntry) {
+        crb.recordMark(markId);
+        if (!verified) {
+            icCheck(rootMethod, crb, asm, regConfig, markId);
+        } else {
+            int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
+            crb.frameContext.enter(crb, stackIncrement);
+            asm.jmp(verifiedEntry);
+        }
         asm.align(config.codeEntryAlignment);
-        crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_ENTRY);
-        /*
-         * Just set the new entry points to the same position for the moment. TODO produce a correct
-         * code prefix for the new entry points
-         */
-        crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_INLINE_ENTRY);
-        crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
 
-        // TODO delete upper part
+    }
 
+    /**
+     * Emits the code prior to the verified entry point.
+     *
+     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     */
+    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
         Label verifiedEntry = new Label();
         if (crb.compilationResult.getEntryBCI() != -1) {
             crb.recordMark(HotSpotMarkId.OSR_ENTRY);
+            // TODO: needed?
+            crb.frameContext.enter(crb);
+            return;
         } else {
-            assert installedCodeOwner != null : "method shouldn't be null";
-            if (installedCodeOwner.hasScalarizedParameters()) {
-                // we have parameters that need to be scalarized
-                if (!installedCodeOwner.isStatic()) {
-                    // additional unverified entry points for receiver
+            // assert crb.compilationResult.getMethods() : "methods shouldn't be null";
+            if (installedCodeOwner != null) {
+                assert installedCodeOwner != null : "root method should not be null";
+                if (installedCodeOwner.hasScalarizedParameters()) {
+                    // we have parameters that need to be scalarized
+                    if (!installedCodeOwner.isStatic()) {
+                        // additional unverified entry points for receiver
 
-                    // unverified and no parameter scalarized, falls through to
-                    // VERIFIED_INLINE_ENTRY
-                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.INLINE_ENTRY, false, false, verifiedEntry);
+                        // unverified and no parameter scalarized, falls through to
+                        // VERIFIED_INLINE_ENTRY
+                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.INLINE_ENTRY, false, false, verifiedEntry);
 
-                    // verified but no parameter scalarized yet, jumps to verified entry
-                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY, true, true, verifiedEntry);
+                        // verified but no parameter scalarized yet, jumps to verified entry
+                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
 
-                    // unverified and all parameters except receiver scalarized, falls through to
-                    // VERIFIED_INLINE_ENTRY_RO
-                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, false, false, verifiedEntry);
+                        // unverified and all parameters except receiver scalarized, falls through
+                        // to
+                        // VERIFIED_INLINE_ENTRY_RO
+                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, true, false, verifiedEntry);
 
-                    // verified and all parameters except receiver scalarized, falls through to
-                    // VERIFIED_INLINE_ENTRY_RO
-                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, false, true, verifiedEntry);
+                        // verified and all parameters except receiver scalarized, falls through to
+                        // VERIFIED_INLINE_ENTRY_RO
+                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
+                    } else {
+                        // TODO: use a workaround at the moment because it doesn't jump to correct
+                        // entry point, entry point works though
+                        // crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
+                        // only add entry point to unpack all inline type arguments
+                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                        // asm.bind(verifiedEntry);
+                        // return;
+                    }
                 } else {
-                    // only add entry point to unpack all inline type arguments
-                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    // no additional entry points needed
+                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, false, false, verifiedEntry);
                 }
-            } else {
-                // no additional entry points needed
-                emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, false, false, verifiedEntry);
             }
         }
 
