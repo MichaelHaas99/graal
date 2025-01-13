@@ -223,14 +223,15 @@ public class LIRCompilerBackend {
 
             FrameMap frameMap = lirGenRes.getFrameMap();
             CompilationResultBuilder crb = lirBackend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory, entryPointDecorator);
-            lirBackend.emitCode(crb, installedCodeOwner, entryPointDecorator);
-            if (assumptions != null && !assumptions.isEmpty()) {
-                compilationResult.setAssumptions(assumptions.toArray());
-            }
             if (rootMethod != null) {
                 compilationResult.setMethods(rootMethod, inlinedMethods);
                 compilationResult.setBytecodeSize(bytecodeSize);
             }
+            lirBackend.emitCode(crb, installedCodeOwner, entryPointDecorator);
+            if (assumptions != null && !assumptions.isEmpty()) {
+                compilationResult.setAssumptions(assumptions.toArray());
+            }
+
             if (speculationLog != null) {
                 compilationResult.setSpeculationLog(speculationLog);
             }
