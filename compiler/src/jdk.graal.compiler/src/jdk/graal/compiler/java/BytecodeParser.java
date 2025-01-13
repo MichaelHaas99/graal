@@ -350,6 +350,7 @@ import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.PluginReplacementNode;
 import jdk.graal.compiler.nodes.PluginReplacementWithExceptionNode;
+import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.ProfileData.BranchProbabilityData;
 import jdk.graal.compiler.nodes.ProfileData.ProfileSource;
 import jdk.graal.compiler.nodes.ProfileData.SwitchProbabilityData;
@@ -1056,10 +1057,25 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     @SuppressWarnings("try")
     protected void buildRootMethod() {
         FrameStateBuilder startFrameState = new FrameStateBuilder(this, code, graph, graphBuilderConfig.retainLocalVariables());
-        startFrameState.initializeForMethodStart(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins(), null);
+        // startFrameState.initializeForMethodStart(graph.getAssumptions(),
+        // graphBuilderConfig.eagerResolving() || intrinsicContext != null,
+        // graphBuilderConfig.getPlugins(), null);
+
+        // initializeForMethodStartScalarized
+        FrameStateBuilder startFrameStateNonVirtual = null;
+        ArrayList<VirtualObjectState> states = null;
+        if (graph.method().hasScalarizedParameters()) {
+            startFrameStateNonVirtual = new FrameStateBuilder(this, code, graph, graphBuilderConfig.retainLocalVariables());
+            startFrameStateNonVirtual.initializeForMethodStartScalarized(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins(),
+                            null);
+            states = startFrameState.initializeForMethodStartScalarizedVirtual(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null,
+                            graphBuilderConfig.getPlugins(), null);
+        } else {
+            startFrameState.initializeForMethodStart(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins(), null);
+        }
 
         try (IntrinsicScope s = intrinsicContext != null ? new IntrinsicScope(this) : null) {
-            build(graph.start(), startFrameState);
+            build(graph.updatedStart() == null ? graph.start() : graph.updatedStart(), startFrameState, states, startFrameStateNonVirtual);
         }
 
         cleanupFinalGraph();
@@ -1077,8 +1093,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         return true;
     }
 
-    @SuppressWarnings("try")
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState) {
+        build(startInstruction, startFrameState, null, null);
+    }
+    @SuppressWarnings("try")
+    protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState, ArrayList<VirtualObjectState> virtualStates, FrameStateBuilder startFrameStateNonVirtual) {
         if (PrintProfilingInformation.getValue(options) && profilingInfo != null) {
             TTY.println("Profiling info for " + method.format("%H.%n(%p)"));
             TTY.println(Util.indent(profilingInfo.toString(method, CodeUtil.NEW_LINE), "  "));
@@ -1123,6 +1142,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 if (method.isSynchronized()) {
                     assert !parsingIntrinsic();
                     startNode.setStateAfter(createFrameState(BytecodeFrame.BEFORE_BCI, startNode));
+                    if (virtualStates != null) {
+                        for (int i = 0; i < virtualStates.size(); i++) {
+                            startNode.stateAfter().addVirtualObjectMapping(virtualStates.get(i));
+                        }
+                        frameState = startFrameStateNonVirtual;
+                    }
                 } else {
                     if (!parsingIntrinsic()) {
                         if (graph.method() != null && graph.method().isJavaLangObjectInit()) {
@@ -1132,13 +1157,28 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                              */
                         } else {
                             frameState.clearNonLiveLocals(startBlock, liveness, true);
+                            if (startFrameStateNonVirtual != null) {
+                                startFrameStateNonVirtual.clearNonLiveLocals(startBlock, liveness, true);
+                            }
                         }
                         assert bci() == 0 : bci();
                         startNode.setStateAfter(createFrameState(bci(), startNode));
+                        if (virtualStates != null) {
+                            for (int i = 0; i < virtualStates.size(); i++) {
+                                startNode.stateAfter().addVirtualObjectMapping(virtualStates.get(i));
+                            }
+                            frameState = startFrameStateNonVirtual;
+                        }
                     } else {
                         if (startNode.stateAfter() == null) {
                             FrameState stateAfterStart = createStateAfterStartOfReplacementGraph();
                             startNode.setStateAfter(stateAfterStart);
+                            if (virtualStates != null) {
+                                for (int i = 0; i < virtualStates.size(); i++) {
+                                    startNode.stateAfter().addVirtualObjectMapping(virtualStates.get(i));
+                                }
+                                frameState = startFrameStateNonVirtual;
+                            }
                         }
                     }
                 }
@@ -2260,6 +2300,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod,
                     InvokeKind invokeKind, JavaKind resultType, JavaType returnType, JavaTypeProfile profile) {
 
+        // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
+        if (targetMethod.hasScalarizedParameters()) {
+            invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
+        }
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, invokeArgs, returnType, profile));
         Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType);
 
@@ -2268,6 +2312,103 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
 
         return invoke;
+    }
+
+    private ValueNode[] scalarizedInvokeArgs(ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod) {
+        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(invokeArgs.length);
+        int signatureIndex = 0;
+        if (targetMethod.hasReceiver()) {
+            if (targetMethod.hasScalarizedReceiver()) {
+                ValueNode nonNullReceiver = nullCheckedValue(invokeArgs[0]);
+                ValueNode[] scalarized = genScalarizationCFG(this, nonNullReceiver, targetMethod, signatureIndex);
+                scalarizedArgs.addAll(List.of(scalarized));
+            } else {
+                scalarizedArgs.add(invokeArgs[0]);
+            }
+            signatureIndex++;
+        }
+        for (; signatureIndex < invokeArgs.length; signatureIndex++) {
+            if (targetMethod.isScalarizedParameter(signatureIndex, true)) {
+                ValueNode[] scalarized = genScalarizationCFG(this, invokeArgs[signatureIndex], targetMethod, signatureIndex);
+                scalarizedArgs.addAll(List.of(scalarized));
+            } else {
+                scalarizedArgs.add(invokeArgs[signatureIndex]);
+            }
+
+        }
+        return scalarizedArgs.toArray(new ValueNode[scalarizedArgs.size()]);
+    }
+
+    public ValueNode[] genScalarizationCFG(GraphBuilderContext b, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
+        boolean nullFree = targetMethod.isParameterNullFree(signatureIndex, true);
+        // TODO: nicer interface
+/*
+ * ResolvedJavaField[] fields = (targetMethod.hasReceiver() && signatureIndex == 0) ?
+ * targetMethod.getDeclaringClass().getInstanceFields(true) :
+ * targetMethod.getSignature().getParameterType(signatureIndex,
+ * targetMethod.getDeclaringClass()).resolve(targetMethod.getDeclaringClass()).getInstanceFields(
+ * true);
+ */
+        ResolvedJavaField[] fields = targetMethod.getScalarizedParameterFields(signatureIndex, true);
+        if (nullFree) {
+            ValueNode[] loads = new ValueNode[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), arg, fields[i]));
+                loads[i] = load;
+            }
+            return loads;
+        }
+
+        BeginNode trueBegin = b.getGraph().add(new BeginNode());
+        BeginNode falseBegin = b.getGraph().add(new BeginNode());
+
+        IfNode ifNode = b.add(new IfNode(b.add(new IsNullNode(arg)), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+
+        // get a valid framestate for the merge node
+        FrameState framestate = GraphUtil.findLastFrameState(ifNode);
+
+        ValueNode[] loads = new ValueNode[fields.length];
+        ValueNode[] consts = new ValueNode[fields.length];
+
+        // true branch - inline object is non-null, load the field values
+
+        ValueNode nonNull = PiNode.create(arg, objectNonNull(), trueBegin);
+        for (int i = 0; i < fields.length; i++) {
+            LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNull, fields[i]));
+            loads[i] = load;
+            if (trueBegin.next() == null)
+                trueBegin.setNext(load);
+        }
+        EndNode trueEnd = b.add(new EndNode());
+
+        // check maybe needed for empty inline objects?
+        if (trueBegin.next() == null)
+            trueBegin.setNext(trueEnd);
+
+        // false branch - inline object is null, use default values of fields
+
+        for (int i = 0; i < fields.length; i++) {
+            ConstantNode load = b.add(ConstantNode.defaultForKind(fields[i].getJavaKind()));
+            consts[i] = load;
+        }
+        EndNode falseEnd = b.add(new EndNode());
+        if (falseBegin.next() == null)
+            falseBegin.setNext(falseEnd);
+
+        // merge
+        MergeNode merge = b.append(new MergeNode());
+        merge.setStateAfter(framestate);
+
+        // produces phi nodes
+        ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
+        phis[0] = b.add(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
+        for (int i = 0; i < fields.length; i++) {
+            phis[i + 1] = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
+        }
+
+        merge.addForwardEnd(trueEnd);
+        merge.addForwardEnd(falseEnd);
+        return phis;
     }
 
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, CallTargetNode callTarget, JavaKind resultType) {
