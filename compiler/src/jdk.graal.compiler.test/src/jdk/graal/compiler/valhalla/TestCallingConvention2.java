@@ -10,6 +10,7 @@ import jdk.graal.compiler.options.OptionKey;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
 import jdk.graal.compiler.test.AddExports;
+import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
@@ -21,7 +22,7 @@ import jdk.graal.compiler.jtt.JTTTest;
 import jdk.vm.ci.meta.DeoptimizationReason;
 
 @AddExports({"java.base/jdk.internal.vm.annotation","java.base/jdk.internal.value"})
-public class TestCallingConvention extends JTTTest {
+public class TestCallingConvention2 extends JTTTest {
 
     @ImplicitlyConstructible
     @LooselyConsistentValue
@@ -39,7 +40,7 @@ public class TestCallingConvention extends JTTTest {
         }
 
         MyValue1(){
-            this.a=3;
+            this.a=4;
             b = 4;
             c = null;
             d=4.0;
@@ -50,50 +51,28 @@ public class TestCallingConvention extends JTTTest {
         }
     }
 
+    @DontInline
     public static MyValue1 test(MyValue1 value){
-        return null;
+        return value;
     }
 
-    public static MyValue1 test2(MyValue1 value){
-        MyValue1 object = new MyValue1(4);
-        global = object;
-        return object;
-    }
-
-    public static MyValue1 test3(MyValue1 value){
-        MyValue1 object = new MyValue1(4);
-        return test2(object);
-    }
-
-    public static MyValue1 test4(MyValue1 value){
-        MyValue1 object = test2(value);
-        global = object;
-        return object;
-    }
-
-    public static MyValue1 testz(MyValue1 value){
-        MyValue1 object = new MyValue1(4);
-        global = object;
-        return object;
-    }
-
-    public static MyValue1 test5(MyValue1 value){
-        MyValue1 object = testz(value);
-        global = object;
-        return object;
-    }
 
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
 
+    @DontInline
+    public static MyValue1 testStaticInvoke(){
+        return test(new MyValue1());
+    }
 
 
 
     /*
-    * Tests the JVMCI interface concerning the scalarized calling convention
-    * */
+     * Tests the JVMCI interface concerning the scalarized calling convention
+     * */
     @Test
     public void run0() throws Throwable {
         ResolvedJavaMethod method = getResolvedJavaMethod("test");
+        method.getScalarizedParameter(0, true);
         Assert.assertTrue(method.hasScalarizedParameters());
         Assert.assertTrue(method.isScalarizedParameter(0));
         Assert.assertTrue(method.hasScalarizedReturn());
@@ -116,127 +95,23 @@ public class TestCallingConvention extends JTTTest {
 
     }
 
-    public static MyValue1 global;
-
-    @Test
-    public void run2() throws Throwable {
-        runTest("test2", new MyValue1());
-    }
-
-    @Test
-    public void run3() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_PEA, "test2", new MyValue1());
-    }
 
     private static final OptionValues WITHOUT_PEA_INLINING = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
     private static final OptionValues WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
-
-    @Test
-    public void run4() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_PEA_INLINING, "test3", new MyValue1());
-    }
-
-    @Test
-    public void run5() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_INLINING, "test3", new MyValue1());
-    }
-
-    @Test
-    public void run6() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_PEA_INLINING, "test4", new MyValue1());
-    }
-
-    @Test
-    public void run7() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_INLINING, "test4", new MyValue1());
-    }
-
-
-
-    @Test
-    public void run8() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_PEA_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test5", new MyValue1());
-    }
-
-    @Test
-    public void run9() throws Throwable {
-        resetCache();
-        runTest(WITHOUT_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test5", new MyValue1());
-    }
-
-
-    // demonstration purpose
-
-    public static value class MyValue{
-        int i=2;
-        float f=3.0f;
-    }
-
-    public static MyValue demonstrateReturnNonNull(){
-        return new MyValue();
-    }
-
-    public static MyValue demonstrateReturnNull(){
-        return null;
-    }
-
-    private static MyValue randomGlobal= null;
-
-    public static MyValue random(){
-        MyValue s = new MyValue();
-        randomGlobal = s;
-        return s;
-    }
-
-    public static MyValue demonstrateFramestate(){
-        return random();
-    }
-
-    public static MyValue demonstratePEA(){
-        MyValue m = random();
-        randomGlobal = m;
-        return m;
-    }
-
     private static final OptionValues DEMO_OPTIONS_WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, GraalOptions.InlineVTableStubs, false, GraalOptions.LimitInlinedInvokes, 0.0,UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
     private static final OptionValues DEMO_OPTIONS_WITH_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, true, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
 
-
     @Test
-    public void runDemo0() throws Throwable {
-        resetCache();
-        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateReturnNonNull");
+    public void run2() throws Throwable{
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testStaticInvoke");
     }
 
     @Test
-    public void runDemo1() throws Throwable {
-        resetCache();
-        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateReturnNull");
+    public void run3() throws Throwable{
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING, "test", new MyValue1());
     }
 
-    @Test
-    public void runDemo2() throws Throwable {
-        resetCache();
-        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstrateFramestate");
-    }
-
-    @Test
-    public void runDemo3() throws Throwable {
-        resetCache();
-        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstratePEA");
-    }
-
-    @Test
-    public void runDemo4() throws Throwable {
-        resetCache();
-        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateFramestate");
-    }
+    //mx unittest --verbose -XX:+UnlockDiagnosticVMOptions -Djdk.graal.Dump -Djdk.graal.Dump=:5 -XX:CompileCommand=compileonly,TestCallingConvention2::test -XX:-UseCompressedOops -XX:-InlineTypeReturnedAsFields jdk.graal.compiler.valhalla.TestCallingConvention2#run3
 
     private static String getCallingConvention(ResolvedJavaMethod method){
         StringBuilder builder = new StringBuilder();
