@@ -242,6 +242,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
             if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
                 // needs stack repair
+                // stack increment doesn't include RBP so add it, RA already included
                 asm.movq(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())), frameSize + stackIncrement + getTarget().wordSize);
             }
 
@@ -619,7 +620,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             }
 
             AMD64Address fromAddress = new AMD64Address(fromReg, fields[fields.length - i - 1].getOffset());
-            if (ValueUtil.isRegister(toValue) && !isXMMRegister(ValueUtil.asRegister(toValue))) {
+            // if (!ValueUtil.isRegister(toValue) || !isXMMRegister(ValueUtil.asRegister(toValue)))
+            if (!isXMMRegister(toValue)) {
                 Register dst = ValueUtil.isStackSlot(toValue) ? tmp2 : ValueUtil.asRegister(toValue);
                 if (kind == JavaKind.Object) {
                     // TODO: only compatibly with -XX:-UseCompressedOops at the moment
@@ -912,6 +914,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
     private boolean isXMMRegister(Register register) {
         return register.getRegisterCategory().equals(AMD64.XMM);
+    }
+
+    private boolean isXMMRegister(AllocatableValue value) {
+        if (!ValueUtil.isRegister(value))
+            return false;
+        return ValueUtil.asRegister(value).getRegisterCategory().equals(AMD64.XMM);
     }
 
     public State[] initRegState(AllocatableValue[] currentArguments, int currentStackSizeArguments, int expectedStackSizeArguments, int spInc) {
