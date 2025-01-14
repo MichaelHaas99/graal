@@ -920,7 +920,12 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     // We use LocationNode.ANY_LOCATION for the reads that access the
                     // compiled code entry as HotSpot does not guarantee they are final
                     // values.
-                    int methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledEntryOffset;
+                    int methodCompiledEntryOffset;
+                    if (hsMethod.hasScalarizedParameters()) {
+                        methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledROEntryOffset;
+                    } else {
+                        methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledEntryOffset;
+                    }
                     AddressNode address = createOffsetAddress(graph, metaspaceMethod, methodCompiledEntryOffset);
                     ReadNode compiledEntry = graph.add(new ReadNode(address, any(), StampFactory.forKind(wordKind), BarrierType.NONE, MemoryOrderMode.PLAIN));
 

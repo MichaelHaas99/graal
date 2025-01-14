@@ -396,8 +396,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
                     Integer.class, "address");
-    // public final int methodCompiledEntryOffset =
-    // getFieldOffset("Method::_from_compiled_inline_entry", Integer.class, "address");
+    // used for virtual calls with scalarized parameters
+    public final int methodCompiledROEntryOffset = getFieldOffset("Method::_from_compiled_inline_ro_entry", Integer.class, "address");
 
     public final int compilationLevelFullOptimization = getConstant("CompLevel_full_optimization", Integer.class);
 
