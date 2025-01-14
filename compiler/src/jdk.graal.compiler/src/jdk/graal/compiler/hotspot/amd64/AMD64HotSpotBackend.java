@@ -1110,8 +1110,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
             crb.frameContext.enter(crb, stackIncrement);
             asm.jmp(verifiedEntry);
+            asm.align(config.codeEntryAlignment);
         }
-        asm.align(config.codeEntryAlignment);
 
     }
 
@@ -1160,7 +1160,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                         // asm.bind(verifiedEntry);
                         // return;
                     }
-                } else {
+                } else if (!installedCodeOwner.isStatic()) {
                     // no additional entry points needed
                     emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, false, false, verifiedEntry);
                 }
