@@ -422,7 +422,15 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int contEntryOffset = getFieldOffset("JavaThread::_cont_entry", Integer.class, "ContinuationEntry*", -1, JDK >= 24);
     public final int pinCountOffset = getFieldOffset("ContinuationEntry::_pin_count", Integer.class, "uint32_t", -1, JDK >= 24);
 
-    public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry", Integer.class, "address");
+    /**
+     * Identity hash code value when uninitialized.
+     */
+    public final int uninitializedIdentityHashCodeValue = getConstant("markWord::no_hash", Integer.class);
+
+    public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
+                    Integer.class, "address");
+    // used for virtual calls with scalarized parameters
+    public final int methodCompiledROEntryOffset = getFieldOffset("Method::_from_compiled_inline_ro_entry", Integer.class, "address");
 
     public final int compilationLevelFullOptimization = getConstant("CompLevel_full_optimization", Integer.class);
 
