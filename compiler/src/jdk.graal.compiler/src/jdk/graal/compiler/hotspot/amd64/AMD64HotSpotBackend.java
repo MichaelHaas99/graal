@@ -243,7 +243,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
                 // needs stack repair
                 // stack increment doesn't include RBP so add it, RA already included
-                asm.movq(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())), frameSize + stackIncrement + getTarget().wordSize);
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                                frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
 
             if (!isStub && config.nmethodEntryBarrier != 0) {
@@ -586,7 +587,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             assert !ValueUtil.isIllegal(toValue) : "destination must be valid";
             int toValueIndex = argumentToStateIndex(toValue);
             if (state[toValueIndex] == State.READ_ONLY) {
-                if (!toValue.equals(fromValue)) {
+                if (toValueIndex != argumentToStateIndex(fromValue)) {
                     markDone = false;
                 }
                 done = false;
@@ -856,58 +857,60 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             // already written
             return true;
         }
-        if (!fromValue.equals(toValue)) {
+        if (fromValueIndex != toValueIndex) {
             if (state[toValueIndex] == State.READ_ONLY) {
                 return false;
             }
-        }
-        if (ValueUtil.isRegister(fromValue)) {
-            if (ValueUtil.isRegister(toValue)) {
-                if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
-                    if (kind == JavaKind.Double) {
-                        asm.movdbl(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
-                    } else {
-                        assert kind == JavaKind.Float : "kind must be float";
-                        asm.movflt(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
-                    }
-                } else {
-                    asm.movq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
-                }
-            } else {
-                // TODO Address from_addr = Address(rsp, from->reg2stack() *
-                // VMRegImpl::stack_slot_size + wordSize); + wordSize because RBP not included in
-                // their case
-                AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
-                if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
-                    if (kind == JavaKind.Double) {
-                        asm.movdbl(toAddress, ValueUtil.asRegister(fromValue));
-                    } else {
-                        assert kind == JavaKind.Float : "kind must be float";
-                        asm.movflt(toAddress, ValueUtil.asRegister(fromValue));
-                    }
-                } else {
-                    asm.movq(toAddress, ValueUtil.asRegister(fromValue));
-                }
-            }
-        } else {
-            AMD64Address fromAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(fromValue)));
-            if (ValueUtil.isRegister(toValue)) {
-                if (isXMMRegister(ValueUtil.asRegister(toValue))) {
-                    if (kind == JavaKind.Double) {
-                        asm.movdbl(ValueUtil.asRegister(toValue), fromAddress);
-                    } else {
-                        assert kind == JavaKind.Float : "kind must be float";
-                        asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
-                    }
-                } else {
-                    asm.movq(ValueUtil.asRegister(fromValue), fromAddress);
-                }
-            } else {
-                AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
-                asm.movq(r13, fromAddress);
-                asm.movq(toAddress, r13);
-            }
 
+            if (ValueUtil.isRegister(fromValue)) {
+                if (ValueUtil.isRegister(toValue)) {
+                    if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
+                        if (kind == JavaKind.Double) {
+                            asm.movdbl(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                        } else {
+                            assert kind == JavaKind.Float : "kind must be float";
+                            asm.movflt(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                        }
+                    } else {
+                        asm.movq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                    }
+                } else {
+                    // TODO Address from_addr = Address(rsp, from->reg2stack() *
+                    // VMRegImpl::stack_slot_size + wordSize); + wordSize because RBP not included
+                    // in
+                    // their case
+                    AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
+                        if (kind == JavaKind.Double) {
+                            asm.movdbl(toAddress, ValueUtil.asRegister(fromValue));
+                        } else {
+                            assert kind == JavaKind.Float : "kind must be float";
+                            asm.movflt(toAddress, ValueUtil.asRegister(fromValue));
+                        }
+                    } else {
+                        asm.movq(toAddress, ValueUtil.asRegister(fromValue));
+                    }
+                }
+            } else {
+                AMD64Address fromAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(fromValue)));
+                if (ValueUtil.isRegister(toValue)) {
+                    if (isXMMRegister(ValueUtil.asRegister(toValue))) {
+                        if (kind == JavaKind.Double) {
+                            asm.movdbl(ValueUtil.asRegister(toValue), fromAddress);
+                        } else {
+                            assert kind == JavaKind.Float : "kind must be float";
+                            asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
+                        }
+                    } else {
+                        asm.movq(ValueUtil.asRegister(fromValue), fromAddress);
+                    }
+                } else {
+                    AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    asm.movq(r13, fromAddress);
+                    asm.movq(toAddress, r13);
+                }
+
+            }
         }
 
         // update states
@@ -1142,6 +1145,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         boolean verifiedInlineSet = false;
         boolean verifiedInlineROSet = false;
+        boolean unverifiedSet = false;
+        boolean unverifiedInlineSet = false;
 
         Label verifiedEntry = new Label();
         // assert crb.compilationResult.getMethods() : "methods shouldn't be null";
@@ -1173,24 +1178,31 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     // VERIFIED_INLINE_ENTRY_RO
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
+                    verifiedInlineSet = true;
+                    verifiedInlineROSet = true;
+                    unverifiedSet = true;
+                    unverifiedInlineSet = true;
                 } else {
                     // TODO: use a workaround at the moment because it doesn't jump to correct
                     // entry point, entry point works though
                     // crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
                     // only add entry point to unpack all inline type arguments
-                    crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                    // crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                    crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    verifiedInlineSet = true;
+                    unverifiedInlineSet = true;
                     // asm.bind(verifiedEntry);
                     // return;
                 }
-                verifiedInlineSet = true;
-                verifiedInlineROSet = true;
             } else if (!installedCodeOwner.isStatic()) {
                 // no additional entry points needed
                 crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 emitEntry(installedCodeOwner, crb, asm, regConfig,
                                 HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null);
+                unverifiedSet = true;
+                unverifiedInlineSet = true;
             }
         }
 
@@ -1204,6 +1216,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             // TODO: needed?
             crb.frameContext.enter(crb, 0);
         } else {
+            if (!unverifiedSet) {
+                crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+            }
+            if (!unverifiedInlineSet) {
+                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+            }
             if (!verifiedInlineSet) {
                 crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY);
             }
