@@ -2319,7 +2319,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
         if (targetMethod.hasScalarizedParameters()) {
-            invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
+            invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod, invokeKind);
         }
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, invokeArgs, returnType, profile));
         Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType);
@@ -2331,11 +2331,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         return invoke;
     }
 
-    private ValueNode[] scalarizedInvokeArgs(ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod) {
+    private ValueNode[] scalarizedInvokeArgs(ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
         ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(invokeArgs.length);
         int signatureIndex = 0;
         if (targetMethod.hasReceiver()) {
             if (targetMethod.hasScalarizedReceiver()) {
+                assert invokeKind == InvokeKind.Special : "Invoke kind should be special if we know that we can scalarize the receiver";
                 ValueNode nonNullReceiver = nullCheckedValue(invokeArgs[0]);
                 ValueNode[] scalarized = genScalarizationCFG(this, nonNullReceiver, targetMethod, signatureIndex);
                 scalarizedArgs.addAll(List.of(scalarized));
