@@ -485,19 +485,27 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 if (spill) {
                     spill = shuffleInlineArgsSpill(rootMethod, crb, asm, state, currentArguments, currentParameterTypes, fromIndex);
                 }
-                JavaKind kind = rootMethod.getSignature().getParameterKind(signatureIndex);
+                JavaKind kind;
+                if (!rootMethod.isStatic()) {
+                    if (signatureIndex == 0) {
+                        kind = JavaKind.Object;
+                    } else {
+                        kind = rootMethod.getSignature().getParameterKind(signatureIndex - 1);
+                    }
+                } else {
+                    kind = rootMethod.getSignature().getParameterKind(signatureIndex);
+                }
                 // boolean isScalarized = signatureIndex == 0 ? rootMethod.hasScalarizedReceiver() :
                 // rootMethod.isScalarizedParameter(signatureIndex - 1);
                 boolean isScalarized = rootMethod.isScalarizedParameter(signatureIndex, true);
 
                 // for receiver only all parameters except receiver are already scalarized so just
                 // move then
-                boolean result = true;
                 if (isScalarized && (!receiverOnly || signatureIndex == 0)) {
                     // parameter which is not scalarized yet
                     AllocatableValue fromArgument = currentArguments[fromIndex];
                     // TODO: unpackInline Helper
-                    result = unpackInlineHelper(rootMethod, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
+                    done &= unpackInlineHelper(rootMethod, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
                     // toIndex -= (signatureIndex == 0 ? rootMethod.getScalarizedReceiver() :
                     // rootMethod.getScalarizedParameter(signatureIndex - 1)).length;
                     toIndex -= rootMethod.getScalarizedParameter(signatureIndex, true).length;
@@ -512,7 +520,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     for (int j = 0; j < types.length; j++) {
                         AllocatableValue fromArgument = currentArguments[fromIndex];
                         AllocatableValue toArgument = expectedArguments[toIndex];
-                        result = moveHelper(crb, asm, fromArgument, toArgument, kind, state);
+                        done &= moveHelper(crb, asm, fromArgument, toArgument, types[types.length - j - 1].getJavaKind(), state);
 
                         toIndex += step;
                         fromIndex += step;
@@ -521,15 +529,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     // parameter which is not sclarized
                     AllocatableValue fromArgument = currentArguments[fromIndex];
                     AllocatableValue toArgument = expectedArguments[toIndex];
-                    result = moveHelper(crb, asm, fromArgument, toArgument, kind, state);
+                    done &= moveHelper(crb, asm, fromArgument, toArgument, kind, state);
 
                     toIndex += step;
                     fromIndex += step;
                 }
-                if (done && result)
-                    done = true;
-                else
-                    done = false;
 
             }
         }
