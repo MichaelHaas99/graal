@@ -1098,8 +1098,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
             crb.frameContext.enter(crb, stackIncrement);
             asm.jmp(verifiedEntry);
-            asm.align(config.codeEntryAlignment);
         }
+        asm.align(config.codeEntryAlignment);
 
     }
 
@@ -1109,56 +1109,101 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
      */
     public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
+// HotSpotProviders providers = getProviders();
+// if (installedCodeOwner != null && !installedCodeOwner.isStatic()) {
+// emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, false, false,
+// null);
+// }
+//
+// asm.align(config.codeEntryAlignment);
+// crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY :
+// HotSpotMarkId.VERIFIED_ENTRY);
+// /*
+// * Just set the new entry points to the same position for the moment. TODO produce a correct
+// * code prefix for the new entry points
+// */
+// crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY :
+// HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+// crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY :
+// HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+// crb.frameContext.enter(crb);
+
+        boolean verifiedInlineSet = false;
+        boolean verifiedInlineROSet = false;
+
         Label verifiedEntry = new Label();
-        if (crb.compilationResult.getEntryBCI() != -1) {
-            crb.recordMark(HotSpotMarkId.OSR_ENTRY);
-            // TODO: needed?
-            crb.frameContext.enter(crb);
-            return;
-        } else {
-            // assert crb.compilationResult.getMethods() : "methods shouldn't be null";
-            if (installedCodeOwner != null) {
-                assert installedCodeOwner != null : "root method should not be null";
-                if (installedCodeOwner.hasScalarizedParameters()) {
-                    // we have parameters that need to be scalarized
-                    if (!installedCodeOwner.isStatic()) {
-                        // additional unverified entry points for receiver
+        // assert crb.compilationResult.getMethods() : "methods shouldn't be null";
+        if (installedCodeOwner != null) {
+            assert installedCodeOwner != null : "root method should not be null";
+            if (installedCodeOwner.hasScalarizedParameters()) {
+                // we have parameters that need to be scalarized
+                if (!installedCodeOwner.isStatic()) {
+                    // additional unverified entry points for receiver
 
-                        // unverified and no parameter scalarized, falls through to
-                        // VERIFIED_INLINE_ENTRY
-                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.INLINE_ENTRY, false, false, verifiedEntry);
+                    // unverified and no parameter scalarized, falls through to
+                    // VERIFIED_INLINE_ENTRY
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.INLINE_ENTRY, false, false, null);
+                    // asm.align(config.codeEntryAlignment);
 
-                        // verified but no parameter scalarized yet, jumps to verified entry
-                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    // verified but no parameter scalarized yet, jumps to verified entry
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
 
-                        // unverified and all parameters except receiver scalarized, falls through
-                        // to
-                        // VERIFIED_INLINE_ENTRY_RO
-                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, true, false, verifiedEntry);
+                    // unverified and all parameters except receiver scalarized, falls through
+                    // to
+                    // VERIFIED_INLINE_ENTRY_RO
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.UNVERIFIED_ENTRY, true, false, null);
+                    // asm.align(config.codeEntryAlignment);
 
-                        // verified and all parameters except receiver scalarized, falls through to
-                        // VERIFIED_INLINE_ENTRY_RO
-                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
-                    } else {
-                        // TODO: use a workaround at the moment because it doesn't jump to correct
-                        // entry point, entry point works though
-                        // crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
-                        // only add entry point to unpack all inline type arguments
-                        emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
-                        // asm.bind(verifiedEntry);
-                        // return;
-                    }
-                } else if (!installedCodeOwner.isStatic()) {
-                    // no additional entry points needed
-                    emitEntry(installedCodeOwner, crb, asm, regConfig, HotSpotMarkId.UNVERIFIED_ENTRY, false, false, verifiedEntry);
+                    // verified and all parameters except receiver scalarized, falls through to
+                    // VERIFIED_INLINE_ENTRY_RO
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
+                } else {
+                    // TODO: use a workaround at the moment because it doesn't jump to correct
+                    // entry point, entry point works though
+                    // crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
+                    // only add entry point to unpack all inline type arguments
+                    crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    // asm.bind(verifiedEntry);
+                    // return;
                 }
+                verifiedInlineSet = true;
+                verifiedInlineROSet = true;
+            } else if (!installedCodeOwner.isStatic()) {
+                // no additional entry points needed
+                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+                emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null);
             }
         }
 
-        // record the normal entry point
-        crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
-        crb.frameContext.enter(crb, 0);
+        // crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY :
+        // HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+        // crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY :
+        // HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+
+        if (crb.compilationResult.getEntryBCI() != -1) {
+            crb.recordMark(HotSpotMarkId.OSR_ENTRY);
+            // TODO: needed?
+            crb.frameContext.enter(crb, 0);
+        } else {
+            if (!verifiedInlineSet) {
+                crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+            }
+            if (!verifiedInlineROSet) {
+                crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+            }
+            // record the normal entry point
+            crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
+            crb.frameContext.enter(crb, 0);
+        }
         asm.bind(verifiedEntry);
+
     }
 
     public void emitCodeSuffix(CompilationResultBuilder crb, AMD64MacroAssembler asm) {
