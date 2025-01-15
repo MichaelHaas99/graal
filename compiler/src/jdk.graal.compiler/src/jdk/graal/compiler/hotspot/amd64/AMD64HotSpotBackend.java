@@ -239,13 +239,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
-            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
-                // needs stack repair
-                // stack increment doesn't include RBP so add it, RA already included
-                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
-                                frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
-            }
+
 
             if (!isStub && config.nmethodEntryBarrier != 0) {
                 emitNmethodEntryBarrier(crb, asm);
@@ -322,7 +316,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
                 if (frameMap.preserveFramePointer()) {
                     // restore the rbp
-                    asm.movq(rbp, frameMap.frameSize());
+                    asm.movq(rbp, new AMD64Address(rsp, frameMap.frameSize()));
+                    // asm.movq(rbp, frameMap.frameSize());
                 }
                 // add the stack increment to the rsp, located directly under the rbp
                 asm.addq(rsp, new AMD64Address(rsp, frameMap.offsetForStackSlot(frameMap.getStackIncrement())));
@@ -617,9 +612,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 if (ValueUtil.isStackSlot(toValue)) {
                     AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
                     // TODO: is new assembly correct?
-                    asm.movq(address, 1);
+                    asm.movl(address, 1);
                 } else {
                     asm.movq(ValueUtil.asRegister(toValue), 1);
+                    // asm.movq(ValueUtil.asRegister(toValue), 1);
                 }
                 continue;
             }
@@ -658,7 +654,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     if (i == types.length - 1 && nullCheck || kind == JavaKind.Object) {
                         if (ValueUtil.isStackSlot(toValue)) {
                             AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
-                            asm.movq(address, 0);
+                            asm.movl(address, 0);
                         } else {
                             asm.xorq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(toValue));
                         }
@@ -1099,10 +1095,19 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             icCheck(rootMethod, crb, asm, regConfig, markId);
         } else {
             int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
-            crb.frameContext.enter(crb, stackIncrement);
+            AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
+            AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
+            int frameSize = frameMap.frameSize();
+            // crb.frameContext.enter(crb, stackIncrement);
+            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
+                // needs stack repair
+                // stack increment doesn't include RBP so add it, RA already included
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                                frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
+            }
             asm.jmp(verifiedEntry);
         }
-        asm.align(config.codeEntryAlignment);
+        // asm.align(config.codeEntryAlignment);
 
     }
 
@@ -1154,6 +1159,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     // verified but no parameter scalarized yet, jumps to verified entry
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    asm.align(config.codeEntryAlignment);
 
                     // unverified and all parameters except receiver scalarized, falls through
                     // to
@@ -1166,6 +1172,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     // VERIFIED_INLINE_ENTRY_RO
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
+                    asm.align(config.codeEntryAlignment);
                     verifiedInlineSet = true;
                     verifiedInlineROSet = true;
                     unverifiedSet = true;
@@ -1179,6 +1186,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    asm.align(config.codeEntryAlignment);
                     verifiedInlineSet = true;
                     unverifiedInlineSet = true;
                     // asm.bind(verifiedEntry);
@@ -1201,8 +1209,17 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         if (crb.compilationResult.getEntryBCI() != -1) {
             crb.recordMark(HotSpotMarkId.OSR_ENTRY);
+            AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
+            AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
+            int frameSize = frameMap.frameSize();
+            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
+                // needs stack repair
+                // stack increment doesn't include RBP so add it, RA already included
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                                frameSize + 0 + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
+            }
             // TODO: needed?
-            crb.frameContext.enter(crb, 0);
+            // crb.frameContext.enter(crb, 0);
         } else {
             if (!unverifiedSet) {
                 crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
@@ -1218,9 +1235,18 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             }
             // record the normal entry point
             crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
-            crb.frameContext.enter(crb, 0);
+            AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
+            AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
+            int frameSize = frameMap.frameSize();
+            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
+                // needs stack repair
+                // stack increment doesn't include RBP so add it, RA already included
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                                frameSize + 0 + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
+            }
+            asm.bind(verifiedEntry);
         }
-        asm.bind(verifiedEntry);
+        crb.frameContext.enter(crb);
 
     }
 
