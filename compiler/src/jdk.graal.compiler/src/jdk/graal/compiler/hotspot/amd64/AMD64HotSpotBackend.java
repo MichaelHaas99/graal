@@ -936,10 +936,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         State[] state;
         // no additional stack slots
         if (spInc == 0) {
-            state = new State[registers.size() + currentArgsOnStack + 1];
+            state = new State[registers.size() + currentArgsOnStack + 2];
         } else {
             // include all registers, the current args and the increased stack space and RA
-            state = new State[registers.size() + currentArgsOnStack + expectedArgsOnStack + 2];
+            state = new State[registers.size() + currentArgsOnStack + expectedArgsOnStack + 3];
         }
 
         // initialize the state, set all locations to writeable
@@ -1000,11 +1000,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     }
 
     public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, int argsOnStack, boolean receiverOnly) {
-        JavaType[] parameterTypes = rootMethod.getScalarizedParameters(false);
+        JavaType[] parameterTypes = rootMethod.getScalarizedParameters(true);
         CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
 
         int RAsize = crb.target.arch.getReturnAddressSize();
         int spInc = (cc.getStackSize() + RAsize);
+        spInc = spInc % 16 == 0 ? spInc : ((spInc / 16) + 1) * 16;
         asm.pop(r13);
         asm.decrementq(rsp, spInc);
         asm.push(r13);
@@ -1168,33 +1169,52 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 if (!installedCodeOwner.isStatic()) {
                     // additional unverified entry points for receiver
 
-                    // unverified and no parameter scalarized, falls through to
-                    // VERIFIED_INLINE_ENTRY
-                    emitEntry(installedCodeOwner, crb, asm, regConfig,
-                                    HotSpotMarkId.INLINE_ENTRY, false, false, null);
-                    // asm.align(config.codeEntryAlignment);
+                    if (installedCodeOwner.hasScalarizedReceiver()) {
+                        // unverified and no parameter scalarized, falls through to
+                        // VERIFIED_INLINE_ENTRY
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.INLINE_ENTRY, false, false, null);
+                        // asm.align(config.codeEntryAlignment);
 
-                    // verified but no parameter scalarized yet, jumps to verified entry
-                    emitEntry(installedCodeOwner, crb, asm, regConfig,
-                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
-                    asm.align(config.codeEntryAlignment);
+                        // verified but no parameter scalarized yet, jumps to verified entry
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                        asm.align(config.codeEntryAlignment);
 
-                    // unverified and all parameters except receiver scalarized, falls through
-                    // to
-                    // VERIFIED_INLINE_ENTRY_RO
-                    emitEntry(installedCodeOwner, crb, asm, regConfig,
-                                    HotSpotMarkId.UNVERIFIED_ENTRY, true, false, null);
-                    // asm.align(config.codeEntryAlignment);
+                        // unverified and all parameters except receiver scalarized, falls through
+                        // to
+                        // VERIFIED_INLINE_ENTRY_RO
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.UNVERIFIED_ENTRY, true, false, null);
+                        // asm.align(config.codeEntryAlignment);
 
-                    // verified and all parameters except receiver scalarized, falls through to
-                    // VERIFIED_INLINE_ENTRY_RO
-                    emitEntry(installedCodeOwner, crb, asm, regConfig,
-                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
-                    asm.align(config.codeEntryAlignment);
-                    verifiedInlineSet = true;
-                    verifiedInlineROSet = true;
-                    unverifiedSet = true;
-                    unverifiedInlineSet = true;
+                        // verified and all parameters except receiver scalarized, falls through to
+                        // VERIFIED_INLINE_ENTRY_RO
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
+                        asm.align(config.codeEntryAlignment);
+                        verifiedInlineSet = true;
+                        verifiedInlineROSet = true;
+                        unverifiedSet = true;
+                        unverifiedInlineSet = true;
+                    } else {
+                        // VERIFIED_INLINE_ENTRY
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.INLINE_ENTRY, false, false, null);
+                        // asm.align(config.codeEntryAlignment);
+
+                        // verified but no parameter scalarized yet, jumps to verified entry
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                        asm.align(config.codeEntryAlignment);
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.UNVERIFIED_ENTRY, true, false, null);
+                        verifiedInlineSet = true;
+                        verifiedInlineROSet = false;
+                        unverifiedSet = true;
+                        unverifiedInlineSet = true;
+                    }
+
                 } else {
                     // TODO: use a workaround at the moment because it doesn't jump to correct
                     // entry point, entry point works though
@@ -1226,6 +1246,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         // HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
 
         if (crb.compilationResult.getEntryBCI() != -1) {
+            asm.align(config.codeEntryAlignment);
             crb.recordMark(HotSpotMarkId.OSR_ENTRY);
             AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
             AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
@@ -1240,6 +1261,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             // TODO: needed?
             // crb.frameContext.enter(crb, 0);
         } else {
+            asm.align(config.codeEntryAlignment);
             if (!unverifiedSet) {
                 crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
             }
