@@ -2380,7 +2380,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         BeginNode trueBegin = b.getGraph().add(new BeginNode());
         BeginNode falseBegin = b.getGraph().add(new BeginNode());
 
-        IfNode ifNode = b.add(new IfNode(b.add(new IsNullNode(arg)), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        IfNode ifNode = b.add(new IfNode(b.add(LogicNegationNode.create(b.add(new IsNullNode(arg)))), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
 
         // get a valid framestate for the merge node
         FrameState framestate = GraphUtil.findLastFrameState(ifNode);
