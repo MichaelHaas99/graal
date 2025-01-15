@@ -13,6 +13,7 @@ import jdk.graal.compiler.test.AddExports;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
+import jdk.internal.vm.annotation.NullRestricted;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.junit.Assert;
@@ -151,6 +152,7 @@ public class TestCallingConvention2 extends JTTTest {
     }
 
     public static MyValue3 testVirtual(MyValue3 value){
+        value.test();
         return value.test();
     }
 
@@ -167,6 +169,135 @@ public class TestCallingConvention2 extends JTTTest {
     @Test
     public void run7() throws Throwable{
         test(DEMO_OPTIONS_WITHOUT_INLINING,getResolvedJavaMethod(MyValue3.class, "testWithParameter"), new MyValue3(), new MyValue3());
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class MyValue2Inline {
+        double d;
+        long l;
+
+        public MyValue2Inline(double d, long l) {
+            this.d = d;
+            this.l = l;
+        }
+
+        static MyValue2Inline setD(MyValue2Inline v, double d) {
+            return new MyValue2Inline(d, v.l);
+        }
+
+        static MyValue2Inline setL(MyValue2Inline v, long l) {
+            return new MyValue2Inline(v.d, l);
+        }
+
+        public static MyValue2Inline createDefault() {
+            return new MyValue2Inline(0, 0);
+        }
+
+        public static MyValue2Inline createWithFieldsInline(double d, long l) {
+            MyValue2Inline v = MyValue2Inline.createDefault();
+            v = MyValue2Inline.setD(v, d);
+            v = MyValue2Inline.setL(v, l);
+            return v;
+        }
+    }
+
+    static interface MyInterface {
+        public long hash();
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    abstract static value class MyAbstract implements MyInterface {
+
+    }
+
+    public static final int  rI = 10;
+    public static final long rL = 20;
+    public static final double rD = 30.0;
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class MyValue2 extends MyAbstract {
+        int x;
+        byte y;
+        @NullRestricted
+        MyValue2Inline v;
+
+        public MyValue2(int x, byte y, MyValue2Inline v) {
+            this.x = x;
+            this.y = y;
+            this.v = v;
+        }
+
+        public static MyValue2 createDefaultInline() {
+            return new MyValue2(0, (byte)0, MyValue2Inline.createDefault());
+        }
+
+        public static MyValue2 createWithFieldsInline(int x, long y, double d) {
+            MyValue2 v = createDefaultInline();
+            v = setX(v, x);
+            v = setY(v, (byte)x);
+            v = setV(v, MyValue2Inline.createWithFieldsInline(d, y));
+            return v;
+        }
+
+        public static MyValue2 createWithFieldsInline(int x, double d) {
+            MyValue2 v = createDefaultInline();
+            v = setX(v, x);
+            v = setY(v, (byte)x);
+            v = setV(v, MyValue2Inline.createWithFieldsInline(d, rL));
+            return v;
+        }
+
+        @DontInline
+        public static MyValue2 createWithFieldsDontInline(int x, double d) {
+            MyValue2 v = createDefaultInline();
+            v = setX(v, x);
+            v = setY(v, (byte)x);
+            v = setV(v, MyValue2Inline.createWithFieldsInline(d, rL));
+            return v;
+        }
+
+        public long hash() {
+            return x + y + (long)v.d + v.l;
+        }
+
+        @DontInline
+        public long hashInterpreted() {
+            return x + y + (long)v.d + v.l;
+        }
+
+        public void print() {
+            System.out.print("x=" + x + ", y=" + y + ", d=" + v.d + ", l=" + v.l);
+        }
+
+        static MyValue2 setX(MyValue2 v, int x) {
+            return new MyValue2(x, v.y, v.v);
+        }
+
+        static MyValue2 setY(MyValue2 v, byte y) {
+            return new MyValue2(v.x, y, v.v);
+        }
+
+        static MyValue2 setV(MyValue2 v, MyValue2Inline vi) {
+            return new MyValue2(v.x, v.y, vi);
+        }
+    }
+
+    public long test10_interp(int i, MyValue2 v, long l) {
+        return v.hash() + i + l;
+    }
+
+    public long test10(int i, MyValue2 v, long l) {
+        return test10_interp(i, v, l);
+    }
+
+    @Test
+    public void testTest10(){
+        MyValue2 v = MyValue2.createWithFieldsInline(rI, rD);
+        long result = test10(rI, v, rL);
+        runTest("test10", 3, v,6L);
     }
 
     private static String getCallingConvention(ResolvedJavaMethod method){
