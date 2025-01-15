@@ -598,7 +598,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 if (ValueUtil.isRegister(fromValue)) {
                     fromReg = ValueUtil.asRegister(fromValue);
                 } else {
-                    AMD64Address fromAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(fromValue)));
+                    AMD64Address fromAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) fromValue));
                     asm.movq(tmp1, fromAddress);
                     fromReg = tmp1;
                 }
@@ -610,7 +610,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             }
             if (i == types.length - 1 && nullCheck) {
                 if (ValueUtil.isStackSlot(toValue)) {
-                    AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                     // TODO: is new assembly correct?
                     asm.movl(address, 1);
                 } else {
@@ -632,7 +632,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     loadSizedValue(asm, dst, fromAddress, kind.getByteCount(), isSigned);
                 }
                 if (ValueUtil.isStackSlot(toValue)) {
-                    AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                     asm.movq(address, dst);
                 }
             } else if (kind == JavaKind.Double) {
@@ -653,7 +653,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     JavaKind kind = types[types.length - i - 1].getJavaKind();
                     if (i == types.length - 1 && nullCheck || kind == JavaKind.Object) {
                         if (ValueUtil.isStackSlot(toValue)) {
-                            AMD64Address address = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                            AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                             asm.movl(address, 0);
                         } else {
                             asm.xorq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(toValue));
@@ -675,6 +675,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
  */
         return done;
 
+    }
+
+    public int stackSlotToOffset(StackSlot stackSlot) {
+        return stackSlot.getRawOffset() + getTarget().wordSize;
     }
 
     private void loadHeapOop(CompilationResultBuilder crb, AMD64MacroAssembler asm, Register dst, AMD64Address fromAddress) {
@@ -875,7 +879,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     // VMRegImpl::stack_slot_size + wordSize); + wordSize because RBP not included
                     // in
                     // their case
-                    AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    AMD64Address toAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                     if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
                         if (kind == JavaKind.Double) {
                             asm.movdbl(toAddress, ValueUtil.asRegister(fromValue));
@@ -888,7 +892,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     }
                 }
             } else {
-                AMD64Address fromAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(fromValue)));
+                AMD64Address fromAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) fromValue));
                 if (ValueUtil.isRegister(toValue)) {
                     if (isXMMRegister(ValueUtil.asRegister(toValue))) {
                         if (kind == JavaKind.Double) {
@@ -901,7 +905,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                         asm.movq(ValueUtil.asRegister(fromValue), fromAddress);
                     }
                 } else {
-                    AMD64Address toAddress = new AMD64Address(rsp, frameMap.offsetForStackSlot(ValueUtil.asStackSlot(toValue)));
+                    AMD64Address toAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                     asm.movq(r13, fromAddress);
                     asm.movq(toAddress, r13);
                 }
@@ -932,10 +936,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         State[] state;
         // no additional stack slots
         if (spInc == 0) {
-            state = new State[registers.size() + currentArgsOnStack];
+            state = new State[registers.size() + currentArgsOnStack + 1];
         } else {
             // include all registers, the current args and the increased stack space and RA
-            state = new State[registers.size() + currentArgsOnStack + expectedArgsOnStack + 1];
+            state = new State[registers.size() + currentArgsOnStack + expectedArgsOnStack + 2];
         }
 
         // initialize the state, set all locations to writeable
@@ -991,7 +995,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         // no register calculate index from offset, every stack slot is 8 byte aligned
         int regNumber = registers.size();
         assert argument instanceof StackSlot : "expected stack slot in calling convention";
-        return regNumber + ((StackSlot) argument).getRawOffset() / getTarget().wordSize;
+        // return regNumber + ((StackSlot) argument).getRawOffset() / getTarget().wordSize;
+        return regNumber + stackSlotToOffset((StackSlot) argument) / getTarget().wordSize;
     }
 
     public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, int argsOnStack, boolean receiverOnly) {
@@ -1102,7 +1107,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
                 // needs stack repair
                 // stack increment doesn't include RBP so add it, RA already included
-                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                int spIncOffset = -getTarget().wordSize * 2;
+                asm.movptr(new AMD64Address(rsp, spIncOffset),
                                 frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
             asm.jmp(verifiedEntry);
@@ -1194,9 +1200,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 }
             } else if (!installedCodeOwner.isStatic()) {
                 // no additional entry points needed
-                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 emitEntry(installedCodeOwner, crb, asm, regConfig,
                                 HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null);
+                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
                 unverifiedSet = true;
                 unverifiedInlineSet = true;
             }
@@ -1215,7 +1221,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
                 // needs stack repair
                 // stack increment doesn't include RBP so add it, RA already included
-                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                int spIncOffset = -getTarget().wordSize * 2;
+                asm.movptr(new AMD64Address(rsp, spIncOffset),
                                 frameSize + 0 + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
             // TODO: needed?
@@ -1241,7 +1248,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
                 // needs stack repair
                 // stack increment doesn't include RBP so add it, RA already included
-                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                int spIncOffset = -getTarget().wordSize * 2;
+                asm.movptr(new AMD64Address(rsp, spIncOffset),
                                 frameSize + 0 + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
             asm.bind(verifiedEntry);
