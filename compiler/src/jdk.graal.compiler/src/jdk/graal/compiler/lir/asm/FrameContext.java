@@ -44,6 +44,10 @@ public interface FrameContext {
         enter(crb);
     }
 
+    default void leave(CompilationResultBuilder crb, boolean stackRepair) {
+        leave(crb);
+    }
+
     /**
      * Emits code to be executed just prior to returning from a method. This may include:
      * <ul>
