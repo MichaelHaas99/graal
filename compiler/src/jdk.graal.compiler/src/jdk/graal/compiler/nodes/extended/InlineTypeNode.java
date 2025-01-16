@@ -88,7 +88,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public LogicNode createIsNullCheck() {
         assert !isNullFree() : "should only be called if node is not null free";
-        return graph().addOrUnique(new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1, graph())));
+        return graph().addOrUnique(new IntegerEqualsNode(isNotNull, ConstantNode.forInt(0, graph())));
     }
 
     public List<ValueNode> getScalarizedInlineObject() {
@@ -142,8 +142,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ProjNode isNotNull = b.add(new ProjWithInputNode(StampFactory.forKind(JavaKind.Int), invoke.asNode(), fields.length + 1, oopOrHub));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
-        // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
-        // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
+// b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
+// b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
         return newInstance;
     }
@@ -210,9 +210,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return this;
     }
 
+    private boolean scalarize = false;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        if (!scalarize)
+            return;
         /*
          * Reference objects can escape into their ReferenceQueue at any safepoint, therefore
          * they're excluded from escape analysis.
