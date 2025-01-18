@@ -210,7 +210,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return this;
     }
 
-    private boolean scalarize = false;
+    private boolean scalarize = true;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -225,7 +225,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
             if (!isNullFree()) {
                 // Because the node can represent a null value, insert a guard before we virtualize
-                tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, false));
+                tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
             }
 
             // virtualize
