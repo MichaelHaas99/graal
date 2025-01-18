@@ -24,8 +24,12 @@
  */
 package jdk.graal.compiler.hotspot.amd64;
 
+import static jdk.graal.compiler.asm.Assembler.guaranteeDifferentRegisters;
+import static jdk.graal.compiler.core.common.GraalOptions.AssemblyGCBarriersSlowPathOnly;
+import static jdk.graal.compiler.core.common.GraalOptions.VerifyAssemblyGCBarriers;
 import static jdk.graal.compiler.core.common.GraalOptions.ZapStackOnMethodEntry;
 import static jdk.vm.ci.amd64.AMD64.r10;
+import static jdk.vm.ci.amd64.AMD64.r11;
 import static jdk.vm.ci.amd64.AMD64.r13;
 import static jdk.vm.ci.amd64.AMD64.r14;
 import static jdk.vm.ci.amd64.AMD64.r15;
@@ -63,6 +67,7 @@ import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import jdk.graal.compiler.hotspot.HotSpotHostBackend;
 import jdk.graal.compiler.hotspot.HotSpotLIRGenerationResult;
 import jdk.graal.compiler.hotspot.HotSpotMarkId;
+import jdk.graal.compiler.hotspot.amd64.g1.AMD64HotSpotG1BarrierSetLIRTool;
 import jdk.graal.compiler.hotspot.amd64.z.AMD64HotSpotZBarrierSetLIRGenerator;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
@@ -72,6 +77,7 @@ import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMap;
 import jdk.graal.compiler.lir.amd64.AMD64Move;
+import jdk.graal.compiler.lir.amd64.g1.AMD64G1BarrierSetLIRGenerator;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
 import jdk.graal.compiler.lir.asm.DataBuilder;
@@ -100,6 +106,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * HotSpot AMD64 specific backend.
@@ -727,11 +734,148 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.Z) {
             ForeignCallLinkage zCallTarget = this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.Z_LOAD_BARRIER);
             emitZBarrier(crb, asm, dst, zCallTarget, fromAddress, false);
+        } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.G1) {
+            emitG1Barrier(crb, asm, dst, fromAddress, false);
         }
         // TODO: others don't need a read barrier?
         // config.gc == HotSpotGraalRuntime.HotSpotGC.Epsilon || config.useG1GC()
-
     }
+
+    public void emitG1Barrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register expectedObject, AMD64Address address, boolean nonNull) {
+        // G1WriteBarrierSetLIRGeneratorTool g1BarrierSet = (G1WriteBarrierSetLIRGeneratorTool)
+        // AMD64HotSpotLIRGenerator.getBarrierSet(config, getProviders());
+        AMD64HotSpotG1BarrierSetLIRTool tool = new AMD64HotSpotG1BarrierSetLIRTool(config, getProviders());
+        AMD64G1BarrierSetLIRGenerator g1BarrierSet = new AMD64G1BarrierSetLIRGenerator(tool);
+
+        // LIRGeneratorTool lirTool = newLIRGenerator(null);
+
+        // masm.pusha();
+        // TODO: emit barrier after we stored the value on stack, no need to push
+        Register temp = r10;
+        Register temp2 = r11;
+        Register temp3 = r13;
+        masm.push(temp);
+        masm.push(temp2);
+        masm.push(temp3);
+
+// masm.push(rbp);
+// masm.subq(rsp, 64);
+// masm.movdbl(new AMD64Address(rsp, 0), xmm0);
+// masm.movdbl(new AMD64Address(rsp, 8), xmm1);
+// masm.movdbl(new AMD64Address(rsp, 16), xmm2);
+// masm.movdbl(new AMD64Address(rsp, 24), xmm3);
+// masm.movdbl(new AMD64Address(rsp, 32), xmm4);
+// masm.movdbl(new AMD64Address(rsp, 40), xmm5);
+// masm.movdbl(new AMD64Address(rsp, 48), xmm6);
+// masm.movdbl(new AMD64Address(rsp, 56), xmm7);
+
+        ForeignCallLinkage callTarget = getForeignCalls().lookupForeignCall(tool.preWriteBarrierDescriptor());
+
+        AMD64Address storeAddress = address;
+
+        Register thread = getProviders().getRegisters().getThreadRegister();
+        Register tmp = temp;
+        Register previousValue = expectedObject.equals(Value.ILLEGAL) ? temp2 : expectedObject;
+
+        guaranteeDifferentRegisters(thread, tmp, previousValue);
+
+        Label done = new Label();
+        Label runtime = new Label();
+
+        AMD64Address markingActive = new AMD64Address(thread, tool.satbQueueMarkingActiveOffset());
+
+        // Is marking active?
+        masm.cmpb(markingActive, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, done);
+
+        // Do we need to load the previous value?
+        if (expectedObject.equals(Value.ILLEGAL)) {
+            tool.loadObject(masm, previousValue, storeAddress);
+        } else {
+            // previousValue contains the value
+        }
+
+        if (!nonNull) {
+            // Is the previous value null?
+            masm.testq(previousValue, previousValue);
+            masm.jcc(AMD64Assembler.ConditionFlag.Equal, done);
+        }
+
+        if (VerifyAssemblyGCBarriers.getValue(crb.getOptions())) {
+            tool.verifyOop(masm, previousValue, tmp, temp3, false, true);
+        }
+
+        if (AssemblyGCBarriersSlowPathOnly.getValue(crb.getOptions())) {
+            masm.jmp(runtime);
+        } else {
+            AMD64Address satbQueueIndex = new AMD64Address(thread, tool.satbQueueIndexOffset());
+            // tmp := *index_adr
+            // tmp == 0?
+            // If yes, goto runtime
+            masm.movq(tmp, satbQueueIndex);
+            masm.cmpq(tmp, 0);
+            masm.jcc(AMD64Assembler.ConditionFlag.Equal, runtime);
+
+            // tmp := tmp - wordSize
+            // *index_adr := tmp
+            // tmp := tmp + *buffer_adr
+            masm.subq(tmp, 8);
+            masm.movptr(satbQueueIndex, tmp);
+            AMD64Address satbQueueBuffer = new AMD64Address(thread, tool.satbQueueBufferOffset());
+            masm.addq(tmp, satbQueueBuffer);
+
+            // Record the previous value
+            masm.movptr(new AMD64Address(tmp, 0), previousValue);
+        }
+        masm.bind(done);
+// masm.movdbl(xmm0, new AMD64Address(rsp, 0));
+// masm.movdbl(xmm1, new AMD64Address(rsp, 8));
+// masm.movdbl(xmm2, new AMD64Address(rsp, 16));
+// masm.movdbl(xmm3, new AMD64Address(rsp, 24));
+// masm.movdbl(xmm4, new AMD64Address(rsp, 32));
+// masm.movdbl(xmm5, new AMD64Address(rsp, 40));
+// masm.movdbl(xmm6, new AMD64Address(rsp, 48));
+// masm.movdbl(xmm7, new AMD64Address(rsp, 56));
+// masm.addq(rsp, 64);
+// masm.pop(rbp);
+
+        masm.pop(temp3);
+        masm.pop(temp2);
+        masm.pop(temp);
+
+        // Out of line slow path
+        crb.getLIR().addSlowPath(null, () -> {
+            masm.bind(runtime);
+            CallingConvention cc = callTarget.getOutgoingCallingConvention();
+            AllocatableValue arg0 = cc.getArgument(0);
+            if (arg0 instanceof StackSlot) {
+                // AMD64Address slot0 = (AMD64Address) crb.asAddress(arg0);
+
+                AMD64Address slot0 = new AMD64Address(rsp, -getTarget().wordSize * 2);
+                masm.movq(slot0, previousValue);
+            } else {
+                GraalError.shouldNotReachHere("must be StackSlot: " + arg0);
+            }
+            AMD64Call.directCall(crb, masm, tool.getCallTarget(callTarget), null, false, null);
+            masm.jmp(done);
+        });
+    }
+
+// public static void emitPreWriteBarrier(LIRGeneratorTool lirTool, Value address, AllocatableValue
+// expectedObject, boolean nonNull) {
+// AllocatableValue temp = lirTool.newVariable(LIRKind.value(AMD64Kind.QWORD));
+// // If the assembly must load the value then it's needs a temporary to store it
+// AllocatableValue temp2 = expectedObject.equals(Value.ILLEGAL) ?
+// lirTool.newVariable(LIRKind.value(AMD64Kind.QWORD)) : Value.ILLEGAL;
+// OptionValues options = lirTool.getResult().getLIR().getOptions();
+// AllocatableValue temp3 = VerifyAssemblyGCBarriers.getValue(options) ?
+// lirTool.newVariable(LIRKind.value(AMD64Kind.QWORD)) : Value.ILLEGAL;
+// ForeignCallLinkage callTarget =
+// lirTool.getForeignCalls().lookupForeignCall(this.barrierSetLIRTool.preWriteBarrierDescriptor());
+// lirTool.getResult().getFrameMapBuilder().callsMethod(callTarget.getOutgoingCallingConvention());
+// lirTool.append(new AMD64G1PreWriteBarrierOp(address, expectedObject, temp, temp2, temp3,
+// callTarget, nonNull, this.barrierSetLIRTool));
+// }
 
     public static void emitXBarrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Label success, Register resultReg, GraalHotSpotVMConfig config, ForeignCallLinkage callTarget,
                     AMD64Address address) {
@@ -1134,8 +1278,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         if (!verified) {
             icCheck(rootMethod, crb, asm, regConfig, markId);
         } else {
-            crb.frameContext.enter(crb);
-            crb.frameContext.leave(crb, false);
+            crb.frameContext.enter(crb, 0);
+            crb.frameContext.leave(crb, true);
             int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
 // AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
 // AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
@@ -1314,7 +1458,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 // asm.movptr(new AMD64Address(rsp, spIncOffset),
 // frameSize + 0 + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
 // }
-            crb.frameContext.enter(crb);
+            crb.frameContext.enter(crb, 0);
             asm.bind(verifiedEntry);
         }
 
