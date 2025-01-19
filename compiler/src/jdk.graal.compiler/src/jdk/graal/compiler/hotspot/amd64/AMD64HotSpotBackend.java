@@ -1291,7 +1291,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             icCheck(rootMethod, crb, asm, regConfig, markId);
         } else {
             crb.frameContext.enter(crb, 0);
-            crb.frameContext.leave(crb, true);
+            crb.frameContext.leave(crb, false);
             int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
 // AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
 // AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
