@@ -252,7 +252,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 int spIncOffset = -getTarget().wordSize * 2;
                 AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
                 asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
-                                frameSize + 0 + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
+                                frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
 
             if (!isStub && config.nmethodEntryBarrier != 0) {
@@ -325,7 +325,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0])) {
+            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0]) && crb.compilationResult.getEntryBCI() != -1) {
                 // needs stack repair
 
                 if (frameMap.preserveFramePointer()) {
