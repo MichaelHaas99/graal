@@ -1079,7 +1079,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                             asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
                         }
                     } else {
-                        asm.movq(ValueUtil.asRegister(fromValue), fromAddress);
+                        asm.movq(ValueUtil.asRegister(toValue), fromAddress);
                     }
                 } else {
                     AMD64Address toAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
