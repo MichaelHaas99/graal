@@ -25,6 +25,7 @@
 package jdk.graal.compiler.nodes;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -569,6 +570,36 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
     public void setUpdatedStart(FixedWithNextNode updatedStart) {
         this.updatedStart = updatedStart;
+    }
+
+    private boolean[] scalarizeParameters = null;
+
+    public void setScalarizeParameters(ResolvedJavaMethod method) {
+        boolean[] result = new boolean[method.getSignature().getParameterCount(!method.isStatic())];
+        for (int i = 0; i < result.length; i++) {
+            // only scalarize if the previous method also has a scalarized parameter
+            result[i] = method.isScalarizedParameter(i, true);
+        }
+        scalarizeParameters = result;
+    }
+
+    public boolean[] getScalarizeParameters() {
+        if (scalarizeParameters == null) {
+            boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
+            Arrays.fill(result, true);
+            scalarizeParameters = result;
+        }
+        return scalarizeParameters;
+    }
+
+    public boolean hasScalarizedParameters() {
+        boolean[] parameters = getScalarizeParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameters[i] && method().isScalarizedParameter(i, true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
