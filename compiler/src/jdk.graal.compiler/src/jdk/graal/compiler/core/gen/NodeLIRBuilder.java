@@ -112,7 +112,6 @@ import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.OpaqueLogicNode;
 import jdk.graal.compiler.nodes.extended.ProjNode;
-import jdk.graal.compiler.nodes.extended.ProjWithInputNode;
 import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -704,11 +703,34 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     public void emitScalarizedInvokeAndMoves(Invoke x, ProjNode oopOrHub, ProjNode[] scalarizedInlineObject, ProjNode isNotNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
-        emitInvoke(x, results);
+        LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
+        // FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
+        CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),
+                        callTarget.signature(), gen);
+        frameMapBuilder.callsMethod(invokeCc);
+
+        Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());
+
+        LabelRef exceptionEdge = null;
+        if (x instanceof InvokeWithExceptionNode) {
+            exceptionEdge = getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge());
+            exceptionEdge.getTargetBlock().setIndirectBranchTarget();
+        }
+        LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
+
+        Value result = invokeCc.getReturn();
+        // TODO: actually wrong to say the scalarized return values are temps
+        emitInvoke(callTarget, parameters, callState, result, results);
+
+        if (isLegal(result)) {
+            setResult(x.asNode(), gen.emitMove(result));
+        }
+
         if (oopOrHub != null) {
             assert isLegal(results[oopOrHub.getIndex()]);
             setResult(oopOrHub, gen.emitMove(results[oopOrHub.getIndex()]));
         }
+
         for (int i = 0; i < scalarizedInlineObject.length; i++) {
             assert isLegal(results[scalarizedInlineObject[i].getIndex()]) : "expected legal register for scalarized inline type";
             setResult(scalarizedInlineObject[i], gen.emitMove(results[scalarizedInlineObject[i].getIndex()]));
@@ -717,20 +739,24 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         if (isNotNull != null) {
             // produce code for the isNotNull information
 
-            assert oopOrHub == ((ProjWithInputNode) isNotNull).getInput() : "is not null info should point to oopOrHub";
+            // assert oopOrHub[i] == ((ProjWithInputNode) isNotNull[i]).getInput() : "is not null
+            // info should point to oopOrHub";
 
             // get oopOrHub value
-            Value value = operand(oopOrHub);
+            Value value = operand(x.asNode());
 
             ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
                             JavaConstant.forInt(1));
             ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
                             JavaConstant.forInt(0));
-            LIRKind kind = gen.getLIRKind(oopOrHub.stamp(NodeView.DEFAULT));
+            LIRKind kind = gen.getLIRKind(x.asNode().stamp(NodeView.DEFAULT));
             Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
 
             Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
             setResult(isNotNull, isNotNullVariable);
+        }
+        if (x instanceof InvokeWithExceptionNode) {
+            gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
         }
 
     }
