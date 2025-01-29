@@ -34,7 +34,6 @@ import static jdk.graal.compiler.bytecode.Bytecodes.POP;
 import static jdk.graal.compiler.bytecode.Bytecodes.POP2;
 import static jdk.graal.compiler.bytecode.Bytecodes.SWAP;
 import static jdk.graal.compiler.debug.GraalError.shouldNotReachHereUnexpectedValue;
-import static jdk.graal.compiler.hotspot.replacements.Log.LOG_PRIMITIVE;
 import static jdk.graal.compiler.nodes.FrameState.TWO_SLOT_MARKER;
 
 import java.util.ArrayList;
@@ -70,7 +69,6 @@ import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
-import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderTool;
@@ -303,6 +301,7 @@ public final class FrameStateBuilder implements SideEffectsState {
     public void initializeForMethodStartScalarized(Assumptions assumptions, boolean eagerResolve, Plugins plugins, List<ValueNode> collectParameterNodes) {
 
         FixedWithNextNode newStartPosition = graph.start();
+        boolean[] scalarizeParameters = graph.getScalarizeParameters();
         // counts the local slots
         int javaIndex = 0;
 
@@ -330,7 +329,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (receiver == null) {
-                if (method.hasScalarizedReceiver()) {
+                if (method.hasScalarizedReceiver() && scalarizeParameters[0]) {
                     JavaType[] receiverTypes = method.getScalarizedReceiver();
                     ParameterNode[] scalarizedValues = new ParameterNode[receiverTypes.length];
                     for (int i = 0; i < receiverTypes.length; i++) {
@@ -338,6 +337,21 @@ public final class FrameStateBuilder implements SideEffectsState {
                         current = graph.addOrUniqueWithInputs(current);
                         scalarizedValues[i] = current;
                         index++;
+// ForeignCallNode foreign = null;
+// if (receiverTypes[i].getJavaKind() == JavaKind.Object) {
+// foreign = graph.add(new ForeignCallNode(LOG_OBJECT, current, ConstantNode.forBoolean(false,
+// graph), ConstantNode.forBoolean(true, graph)));
+// newStartPosition.setNext(foreign);
+// newStartPosition = foreign;
+// } else if (receiverTypes[i].getJavaKind() != JavaKind.Double && receiverTypes[i].getJavaKind() !=
+// JavaKind.Float) {
+// foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(receiverTypes[i].getJavaKind().getTypeChar(), graph), current,
+// ConstantNode.forBoolean(true,
+// graph)));
+// newStartPosition.setNext(foreign);
+// newStartPosition = foreign;
+// }
                     }
                     InlineTypeNode inlineTypeNode = graph.add(InlineTypeNode.createNullFreeWithoutOop(method.getDeclaringClass(), scalarizedValues));
                     newStartPosition.setNext(inlineTypeNode);
@@ -389,32 +403,37 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (param == null) {
-                if (method.isScalarizedParameter(i)) {
+                if (method.isScalarizedParameter(i) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
                     JavaType[] parameterTypes = method.getScalarizedParameter(i);
                     ParameterNode isNotNull = null;
                     if (!method.isParameterNullFree(i)) {
                         isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
-                        ForeignCallNode foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE, ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), isNotNull, ConstantNode.forBoolean(true,
-                                        graph)));
-                        newStartPosition.setNext(foreign);
-                        newStartPosition = foreign;
+// ForeignCallNode foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), isNotNull, ConstantNode.forBoolean(true,
+// graph)));
+// newStartPosition.setNext(foreign);
+// newStartPosition = foreign;
                     }
                     ParameterNode[] scalarizedValues = new ParameterNode[parameterTypes.length];
                     for (int j = 0; j < parameterTypes.length; j++) {
                         ParameterNode current = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, parameterTypes[j], false)));
                         scalarizedValues[j] = current;
-                        ForeignCallNode foreign = null;
-                        if (parameterTypes[j].getJavaKind() == JavaKind.Object) {
-// foreign = graph.add(new ForeignCallNode(LOG_OBJECT, current, ConstantNode.forBoolean(false,
-// graph), ConstantNode.forBoolean(true, graph)));
+// ForeignCallNode foreign = null;
+// if (parameterTypes[j].getJavaKind() == JavaKind.Object) {
+// foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph), current, ConstantNode.forBoolean(true,
+// graph)));
 // newStartPosition.setNext(foreign);
 // newStartPosition = foreign;
-                        } else if (parameterTypes[j].getJavaKind() != JavaKind.Double && parameterTypes[j].getJavaKind() != JavaKind.Float) {
-                            foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE, ConstantNode.forInt(parameterTypes[j].getJavaKind().getTypeChar(), graph), current, ConstantNode.forBoolean(true,
-                                            graph)));
-                            newStartPosition.setNext(foreign);
-                            newStartPosition = foreign;
-                        }
+// } else if (parameterTypes[j].getJavaKind() != JavaKind.Double && parameterTypes[j].getJavaKind()
+// != JavaKind.Float) {
+// foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(parameterTypes[j].getJavaKind().getTypeChar(), graph), current,
+// ConstantNode.forBoolean(true,
+// graph)));
+// newStartPosition.setNext(foreign);
+// newStartPosition = foreign;
+// }
 
                     }
 
@@ -445,6 +464,7 @@ public final class FrameStateBuilder implements SideEffectsState {
 
     public ArrayList<VirtualObjectState> initializeForMethodStartScalarizedVirtual(Assumptions assumptions, boolean eagerResolve, Plugins plugins, List<ValueNode> collectParameterNodes) {
 
+        boolean[] scalarizeParameters = graph.getScalarizeParameters();
         ArrayList<VirtualObjectState> virtualStates = new ArrayList<>();
         // counts the local slots
         int javaIndex = 0;
@@ -473,7 +493,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (receiver == null) {
-                if (method.hasScalarizedReceiver()) {
+                if (method.hasScalarizedReceiver() && scalarizeParameters[0]) {
                     JavaType[] receiverTypes = method.getScalarizedReceiver();
                     ParameterNode[] scalarizedValues = new ParameterNode[receiverTypes.length];
                     for (int i = 0; i < receiverTypes.length; i++) {
@@ -544,7 +564,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (param == null) {
-                if (method.isScalarizedParameter(i)) {
+                if (method.isScalarizedParameter(i) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
                     JavaType[] parameterTypes = method.getScalarizedParameter(i);
                     ParameterNode isNotNull = null;
                     if (!method.isParameterNullFree(i)) {
