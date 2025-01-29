@@ -139,7 +139,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         }
 
         // additional usage for oopOrHub
-        ProjNode isNotNull = b.add(new ProjWithInputNode(StampFactory.forKind(JavaKind.Int), invoke.asNode(), fields.length + 1, oopOrHub));
+        ProjNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int),
+                        invoke.asNode(), fields.length + 1));
+// ProjNode isNotNull = b.add(new ProjWithInputNode(StampFactory.forKind(JavaKind.Int),
+// invoke.asNode(), fields.length + 1, oopOrHub));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
@@ -210,10 +213,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return this;
     }
 
-    private boolean scalarize = true;
+    private boolean scalarize = false;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        // TODO: something causes an error
         if (!scalarize)
             return;
         /*
