@@ -284,7 +284,9 @@ public final class LIR extends LIRGenerator.VariableProvider implements EventCou
      * move operations at the end of a block. Such moves must be inserted before all control flow
      * instructions.
      */
-    public static final int MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END = 3;
+    // TODO: think about a reasonable number for scalarized returns, moves are limited by number of
+    // registers
+    public static final int MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END = 1000;
 
     public static boolean verifyBlock(LIR lir, BasicBlock<?> block) {
         ArrayList<LIRInstruction> ops = lir.getLIRforBlock(block);
