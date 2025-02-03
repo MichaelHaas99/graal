@@ -24,13 +24,13 @@
  */
 package jdk.graal.compiler.phases.common.inlining.info;
 
-import jdk.graal.compiler.phases.common.inlining.info.elem.Inlineable;
 import org.graalvm.collections.EconomicSet;
+
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.phases.common.inlining.info.elem.Inlineable;
 import jdk.graal.compiler.phases.util.Providers;
-
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
@@ -50,7 +50,7 @@ public class ExactInlineInfo extends AbstractInlineInfo {
 
     @Override
     public EconomicSet<Node> inline(CoreProviders providers, String reason) {
-        return inline(invoke, concrete, inlineableElement, true, reason);
+        return inline(invoke, concrete, inlineableElement, !concrete.hasScalarizedReceiver(), reason);
     }
 
     @Override
