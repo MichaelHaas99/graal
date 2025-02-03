@@ -150,7 +150,7 @@ public class InlineTypePlugin implements NodePlugin {
             int off = innerField.getOffset() - fieldType.firstFieldOffset();
 
             // holder has no header so remove the header offset
-            loads[i] = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off)));
+            loads[i] = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setOuterDeclaringClass(fieldType)));
         }
 
         return b.append(InlineTypeNode.createNullFreeWithoutOop(fieldType, loads));
@@ -252,7 +252,7 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder has no header so remove the header offset
-            writeOperations.add(new StoreFlatFieldNode.StoreFieldWrapper(i, innerField.changeOffset(destOff + off)));
+            writeOperations.add(new StoreFlatFieldNode.StoreFieldWrapper(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass(fieldType)));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);
@@ -369,11 +369,19 @@ public class InlineTypePlugin implements NodePlugin {
             // returned fields include a header offset of their holder
             int off = innerField.getOffset() - componentType.firstFieldOffset();
 
-            LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index, boundsCheck, innerField.getJavaKind());
+            LoadIndexedNode load;
+            if (innerField.getJavaKind() == JavaKind.Object) {
+                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forDeclaredType(b.getAssumptions(), innerField.getType(), false).getTrustedStamp(), array, index, boundsCheck,
+                                innerField.getJavaKind());
+            } else {
+                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(innerField.getJavaKind()), array, index, boundsCheck, innerField.getJavaKind());
+            }
+            // LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index,
+            // boundsCheck, innerField.getJavaKind());
             // holder has no header so remove the header offset
             load.setAdditionalOffset(off);
             load.setShift(shift);
-            load.setLocation(innerField);
+            load.setLocation(innerField.setOuterDeclaringClass(componentType));
             loads[i] = b.add(load);
 
         }

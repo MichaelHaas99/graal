@@ -55,6 +55,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -99,7 +100,10 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
 
     public void setLocation(ResolvedJavaField field) {
         this.location = NamedLocationIdentity.getFlatArrayLocation(field);
+        this.field = field;
     }
+
+    private ResolvedJavaField field;
 
 
     /**
@@ -122,7 +126,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         return new LoadIndexedNode(assumptions, array, index, boundsCheck, elementKind);
     }
 
-    protected LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
+    public LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
         super(c, stamp, array, index, boundsCheck, elementKind);
     }
 
@@ -148,6 +152,8 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
 
     @Override
     public boolean inferStamp() {
+        if (isFlatAccess())
+            return false;
         return updateStamp(stamp.improveWith(createStamp(graph().getAssumptions(), array(), elementKind())));
     }
 
@@ -181,6 +187,10 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         }
         ValueNode constant = tryConstantFold(array(), index(), tool.getMetaAccess(), tool.getConstantReflection());
         if (constant != null) {
+            if (array.asJavaConstant() instanceof HotSpotObjectConstant arrayConstant && arrayConstant.getType().isFlatArray()) {
+                constant = LoadFieldNode.asConstant(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), constant, field,
+                                getNodeSourcePosition());
+            }
             return constant;
         }
         if (tool.allUsagesAvailable() && hasNoUsages() && getBoundsCheck() != null) {

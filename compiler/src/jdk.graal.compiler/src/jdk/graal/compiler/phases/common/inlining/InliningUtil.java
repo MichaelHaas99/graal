@@ -306,6 +306,9 @@ public class InliningUtil extends ValueMergeUtil {
         MethodCallTargetNode oldCallTarget = (MethodCallTargetNode) invoke.callTarget();
         MethodCallTargetNode newCallTarget = graph.add(new MethodCallTargetNode(invokeKind, targetMethod, oldCallTarget.arguments().toArray(ValueNode.EMPTY_ARRAY), oldCallTarget.returnStamp(),
                         oldCallTarget.getTypeProfile()));
+        newCallTarget.setTargetMethod(oldCallTarget.targetMethod());
+        newCallTarget.checkForNeededArgsScalarization(targetMethod);
+        newCallTarget.setTargetMethod(targetMethod);
         invoke.asNode().replaceFirstInput(oldCallTarget, newCallTarget);
     }
 
@@ -509,7 +512,7 @@ public class InliningUtil extends ValueMergeUtil {
             }
         }
 
-        if (invoke.next() instanceof InlineTypeNode inlineTypeNode) {
+        if (invoke.next() instanceof InlineTypeNode inlineTypeNode && inlineeMethod.hasScalarizedReturn()) {
             inlineTypeNode.removeOnInlining();
         }
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph, returnAction, mark);
