@@ -236,7 +236,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         ResolvedJavaMethod specialCallTarget = findSpecialCallTarget(invokeKind, receiver(), targetMethod, contextType);
         if (specialCallTarget != null) {
             /*
-             * e.g. Object.toString with a Long receiver will be converted to Long.toString(long l)
+             * e.g. Object.toString with a Long receiver will be converted to Long.toString()
              * therefore we need to scalarize the boxed object
              */
             checkForNeededArgsScalarization(specialCallTarget);
@@ -247,7 +247,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         return false;
     }
 
-    private void checkForNeededArgsScalarization(ResolvedJavaMethod specialCallTarget) {
+    public void checkForNeededArgsScalarization(ResolvedJavaMethod specialCallTarget) {
 
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
         boolean[] scalarizeParameters = new boolean[parameterLength];
