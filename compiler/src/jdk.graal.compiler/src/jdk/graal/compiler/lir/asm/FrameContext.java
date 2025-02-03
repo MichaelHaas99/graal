@@ -40,7 +40,7 @@ public interface FrameContext {
      */
     void enter(CompilationResultBuilder crb);
 
-    default void enter(CompilationResultBuilder crb, int stackIncrement, boolean verifiedEntry) {
+    default void enter(CompilationResultBuilder crb, int stackIncrement, boolean verifiedEntry, boolean dummyFrame) {
         enter(crb);
     }
 
