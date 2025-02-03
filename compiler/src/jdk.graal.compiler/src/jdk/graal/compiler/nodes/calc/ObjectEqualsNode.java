@@ -37,6 +37,7 @@ import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.BoxNode;
@@ -268,7 +269,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             if (result.isContradiction())
                                 return result;
 
-                            newCondition = LogicConstantNode.and(newCondition, result, null);
+                            newCondition = LogicConstantNode.and(newCondition, result, ProfileData.BranchProbabilityData.unknown());
                         }
 
                         if (comparisonResultUnknown)
