@@ -81,6 +81,54 @@ import jdk.vm.ci.code.StackSlot;
  *    %sp--&gt;  +--------------------------------+---------------------------
  *
  * </pre>
+ *
+ * In case the stack had to be extended in an entry point due to scalarization of inline objects the
+ * frame map looks as follows
+ *
+ * <pre>
+ *   Base       Contents
+ *
+ *            :                                :
+ *   caller   | incoming overflow argument n   |
+ *   frame    :     ...                        :
+ *            | incoming overflow argument 0   |
+ *   ---------+--------------------------------+
+ *            | return address                 |
+ *            +--------------------------------+                             -----
+ *            :                                :  -----                        ^
+ *            | incoming overflow argument n   |    ^                          |
+ *            :     ...                        :    | positive                 |
+ *            | incoming overflow argument 0   |    | offsets                  |
+ *   ---------+--------------------------------+---------------------          |
+ *   current  | return address                 |    |            ^             |
+ *   frame    +--------------------------------+    |            |             |
+ *            | preserved rbp                  |    |            |             |
+ *            | iff preserveFramePointer       |    |            |             |
+ *            +--------------------------------+    |            |    -----    |
+ *            | preserved rbp                  |    |            |      ^      |
+ *            | iff not preserveFramePointer   |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            | stack increment                |    |            |      |      |
+ *            | iff stackRepair                |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            | deopt rescue slot              |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            |                                |    |            |      |      |
+ *            : callee save area               :    |            |      |      |
+ *            |                                |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            | spill slot 0                   |    | negative   |      |      |
+ *            :     ...                        :    v offsets    |      |      |
+ *            | spill slot n                   |  -----        total  frame  stack
+ *            +--------------------------------+               frame  size    inc
+ *            | alignment padding              |               size     |      |
+ *            +--------------------------------+  -----          |      |      |
+ *            | outgoing overflow argument n   |    ^            |      |      |
+ *            :     ...                        :    | positive   |      |      |
+ *            | outgoing overflow argument 0   |    | offsets    v      v      v
+ *    %sp--&gt;  +--------------------------------+---------------------------
+ *
+ * </pre>
  */
 public class AMD64HotSpotFrameMap extends AMD64FrameMap {
     /**
