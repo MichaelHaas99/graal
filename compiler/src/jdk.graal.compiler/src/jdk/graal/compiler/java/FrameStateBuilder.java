@@ -80,7 +80,6 @@ import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -298,7 +297,7 @@ public final class FrameStateBuilder implements SideEffectsState {
         }
     }
 
-    public void initializeForMethodStartScalarized(Assumptions assumptions, boolean eagerResolve, Plugins plugins, List<ValueNode> collectParameterNodes) {
+    public void initializeForMethodStartScalarizedNonVirtual(Assumptions assumptions, boolean eagerResolve, Plugins plugins, List<ValueNode> collectParameterNodes) {
 
         FixedWithNextNode newStartPosition = graph.start();
         boolean[] scalarizeParameters = graph.getScalarizeParameters();
@@ -404,7 +403,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             }
             if (param == null) {
                 if (method.isScalarizedParameter(i) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
-                    JavaType[] parameterTypes = method.getScalarizedParameter(i);
+                    JavaType[] parameterTypes = method.getScalarizedParameterNullFree(i);
                     ParameterNode isNotNull = null;
                     if (!method.isParameterNullFree(i)) {
                         isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
@@ -510,11 +509,7 @@ public final class FrameStateBuilder implements SideEffectsState {
 
                     for (int j = 0; j < newEntries.length; j++) {
                         ValueNode entry = scalarizedValues[j];
-                        if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(tool.getMetaAccessExtensionProvider(), j).getStackKind())) {
-                            newEntries[j] = null;
-                        } else {
-                            newEntries[j] = entry;
-                        }
+                        newEntries[j] = entry;
                     }
                     virtualStates.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, null)));
                     receiver = virtual;
@@ -565,7 +560,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             }
             if (param == null) {
                 if (method.isScalarizedParameter(i) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
-                    JavaType[] parameterTypes = method.getScalarizedParameter(i);
+                    JavaType[] parameterTypes = method.getScalarizedParameterNullFree(i);
                     ParameterNode isNotNull = null;
                     if (!method.isParameterNullFree(i)) {
                         isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
@@ -583,11 +578,7 @@ public final class FrameStateBuilder implements SideEffectsState {
 
                     for (int j = 0; j < newEntries.length; j++) {
                         ValueNode entry = scalarizedValues[j];
-                        if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(tool.getMetaAccessExtensionProvider(), j).getStackKind())) {
-                            newEntries[j] = null;
-                        } else {
-                            newEntries[j] = entry;
-                        }
+                        newEntries[j] = entry;
                     }
                     virtualStates.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, isNotNull)));
 

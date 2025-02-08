@@ -1078,13 +1078,19 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         // graphBuilderConfig.eagerResolving() || intrinsicContext != null,
         // graphBuilderConfig.getPlugins(), null);
 
-        // initializeForMethodStartScalarized
+
         FrameStateBuilder startFrameStateNonVirtual = null;
         ArrayList<VirtualObjectState> states = null;
-        if (graph.method().hasScalarizedParameters()) {
+        if (graph.hasScalarizedParameters() && !parsingIntrinsic()) {
+            // create an InlineTypeNode for each scalarized parameter and set it as local in the
+            // framestate
             startFrameStateNonVirtual = new FrameStateBuilder(this, code, graph, graphBuilderConfig.retainLocalVariables());
-            startFrameStateNonVirtual.initializeForMethodStartScalarized(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins(),
+            startFrameStateNonVirtual.initializeForMethodStartScalarizedNonVirtual(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null,
+                            graphBuilderConfig.getPlugins(),
                             null);
+
+            // initialize the locals representing scalarized parameters with virtual objects, only
+            // used to create a correct framestate for the start node
             states = startFrameState.initializeForMethodStartScalarizedVirtual(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null,
                             graphBuilderConfig.getPlugins(), null);
         } else {
@@ -2323,6 +2329,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, invokeArgs, returnType, profile));
         Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType);
+// ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, invoke.asNode(),
+// ConstantNode.forBoolean(false,
+// graph), ConstantNode.forBoolean(true, graph)));
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);
@@ -2338,6 +2347,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             if (targetMethod.hasScalarizedReceiver()) {
                 assert invokeKind == InvokeKind.Special : "Invoke kind should be special if we know that we can scalarize the receiver";
                 ValueNode nonNullReceiver = nullCheckedValue(invokeArgs[0]);
+// ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, nonNullReceiver,
+// ConstantNode.forBoolean(false,
+// graph), ConstantNode.forBoolean(true, graph)));
                 ValueNode[] scalarized = genScalarizationCFG(this, nonNullReceiver, targetMethod, signatureIndex);
                 scalarizedArgs.addAll(List.of(scalarized));
             } else {
@@ -2459,11 +2471,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         for (int i = 0; i < newEntries.length; i++) {
             ValueNode entry = result.getScalarizedInlineObject().get(i);
-            if (entry.asJavaConstant() == JavaConstant.defaultForKind(virtual.entryKind(getMetaAccessExtensionProvider(), i).getStackKind())) {
-                newEntries[i] = null;
-            } else {
-                newEntries[i] = entry;
-            }
+            newEntries[i] = entry;
         }
 
         // create framestate for invoke with virtual object
