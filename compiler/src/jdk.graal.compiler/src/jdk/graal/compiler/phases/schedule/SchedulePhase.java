@@ -88,7 +88,7 @@ import jdk.graal.compiler.nodes.cfg.ControlFlowGraph;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.cfg.HIRLoop;
 import jdk.graal.compiler.nodes.cfg.LocationSet;
-import jdk.graal.compiler.nodes.extended.ProjNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.memory.FloatingReadNode;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.MultiMemoryKill;
@@ -402,7 +402,7 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
 
         private static boolean checkInvokeWithExceptionScalarizedReturn(Node currentNode, HIRBlock earliestBlock, HIRBlock latestBlock, Node currentUsage) {
             // TODO: exit condition if graph is broken
-            if (!((currentNode instanceof ProjNode && (currentUsage == null || currentUsage instanceof VirtualObjectState)) ||
+            if (!((currentNode instanceof ReadMultiValueNode && (currentUsage == null || currentUsage instanceof VirtualObjectState)) ||
                             (currentNode instanceof VirtualObjectState && (currentUsage == null || currentUsage instanceof FrameState))))
                 return false;
 
@@ -414,12 +414,12 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
             NodeFlood flood = currentNode.graph().createNodeFlood();
             flood.add(currentNode);
             for (Node n : flood) {
-                if (n instanceof ProjNode projNode) {
+                if (n instanceof ReadMultiValueNode readMultiValueNode) {
                     // check if the multi read values point to an invoke with exception
-                    if (!(projNode.getMultiNode() instanceof InvokeWithExceptionNode)) {
+                    if (!(readMultiValueNode.getMultiValueNode() instanceof InvokeWithExceptionNode)) {
                         return false;
                     }
-                    flood.add(projNode.getMultiNode());
+                    flood.add(readMultiValueNode.getMultiValueNode());
                 } else if (n instanceof VirtualObjectState virtualObjectState) {
 
                     // expect the object to be a virtual instance
@@ -428,7 +428,7 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
                     }
 
                     // values should only be multi read values
-                    if (virtualObjectState.values().filter(node -> !(node instanceof ProjNode)).count() > 0) {
+                    if (virtualObjectState.values().filter(node -> !(node instanceof ReadMultiValueNode)).count() > 0) {
                         return false;
                     }
 

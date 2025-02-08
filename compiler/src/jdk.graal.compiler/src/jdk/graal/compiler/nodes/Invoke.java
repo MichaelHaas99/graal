@@ -28,7 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import jdk.graal.compiler.graph.Node;
-import jdk.graal.compiler.nodes.extended.ProjNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
@@ -36,6 +36,7 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -152,25 +153,25 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
             return;
         }
 
-        ResolvedJavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
+        JavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
         int oorOrHubIndex = 0;
-        ProjNode oopOrHub = null;
+        ReadMultiValueNode oopOrHub = null;
         int isNotNullIndex = types.length;
-        ProjNode isNotNull = null;
+        ReadMultiValueNode isNotNull = null;
 
-        List<ProjNode> projs = new ArrayList<>(types.length - 1);
+        List<ReadMultiValueNode> projs = new ArrayList<>(types.length - 1);
         for (Node usage : asNode().usages()) {
-            if (usage instanceof ProjNode projNode) {
-                if (projNode.getIndex() == oorOrHubIndex) {
-                    oopOrHub = projNode;
-                } else if (projNode.getIndex() == isNotNullIndex) {
-                    isNotNull = projNode;
+            if (usage instanceof ReadMultiValueNode readMultiValueNode) {
+                if (readMultiValueNode.getIndex() == oorOrHubIndex) {
+                    oopOrHub = readMultiValueNode;
+                } else if (readMultiValueNode.getIndex() == isNotNullIndex) {
+                    isNotNull = readMultiValueNode;
                 } else {
-                    projs.add(projNode);
+                    projs.add(readMultiValueNode);
                 }
             }
         }
 
-        gen.emitScalarizedInvokeAndMoves(this, oopOrHub, projs.toArray(new ProjNode[projs.size()]), isNotNull, types);
+        gen.emitScalarizedInvokeAndMoves(this, oopOrHub, projs.toArray(new ReadMultiValueNode[projs.size()]), isNotNull, types);
     }
 }

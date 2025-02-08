@@ -48,7 +48,7 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ConditionalNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
-import jdk.graal.compiler.nodes.extended.ProjNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.vm.ci.meta.JavaType;
 
@@ -65,7 +65,7 @@ public interface NodeLIRBuilderTool extends NodeValueMap {
 
     void emitInvoke(Invoke i);
 
-    default void emitScalarizedInvokeAndMoves(Invoke i, ProjNode oopOrHub, ProjNode[] scalarizedInlineObject, ProjNode isNotNull, JavaType[] types) {
+    default void emitScalarizedInvokeAndMoves(Invoke i, ReadMultiValueNode oopOrHub, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
         throw new UnsupportedOperationException();
     }
 
