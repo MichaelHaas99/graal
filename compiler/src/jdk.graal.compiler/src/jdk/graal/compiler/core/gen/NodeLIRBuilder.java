@@ -111,7 +111,7 @@ import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.OpaqueLogicNode;
-import jdk.graal.compiler.nodes.extended.ProjNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -700,7 +700,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitScalarizedInvokeAndMoves(Invoke x, ProjNode oopOrHub, ProjNode[] scalarizedInlineObject, ProjNode isNotNull, JavaType[] types) {
+    public void emitScalarizedInvokeAndMoves(Invoke x, ReadMultiValueNode oopOrHub, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
