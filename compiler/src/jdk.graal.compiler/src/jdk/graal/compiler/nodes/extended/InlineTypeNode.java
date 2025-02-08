@@ -128,21 +128,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
 
         // can also represent a hub therefore stamp is of type object
-        ProjNode oopOrHub = b.add(new ProjNode(StampFactory.object(), invoke.asNode(), 0));
+        ReadMultiValueNode oopOrHub = b.add(new ReadMultiValueNode(StampFactory.object(), invoke.asNode(), 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
-        ProjNode[] projs = new ProjNode[fields.length];
+        ReadMultiValueNode[] projs = new ReadMultiValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            projs[i] = b.add(new ProjNode(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
+            projs[i] = b.add(new ReadMultiValueNode(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
 
         }
 
-        // additional usage for oopOrHub
-        ProjNode isNotNull = b.add(new ProjNode(StampFactory.forKind(JavaKind.Int),
+        ReadMultiValueNode isNotNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
-// ProjNode isNotNull = b.add(new ProjWithInputNode(StampFactory.forKind(JavaKind.Int),
-// invoke.asNode(), fields.length + 1, oopOrHub));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
@@ -177,18 +174,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public void removeOnInlining() {
-        assert oopOrHub instanceof ProjNode : "oopOrHub has to be a ProjNode";
-        assert isNotNull instanceof ProjNode : "isNotNull has to be a ProjNode";
-        ValueNode invoke = ((ProjNode) oopOrHub).getMultiNode();
+        assert oopOrHub instanceof ReadMultiValueNode : "oopOrHub has to be a ProjNode";
+        assert isNotNull instanceof ReadMultiValueNode : "isNotNull has to be a ProjNode";
+        ValueNode invoke = ((ReadMultiValueNode) oopOrHub).getMultiValueNode();
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
         replaceAtUsages(invoke);
 
         // remove inputs of ProjNodes to MultiNode
-        ((ProjNode) oopOrHub).delete();
-        ((ProjNode) isNotNull).delete();
+        ((ReadMultiValueNode) oopOrHub).delete();
+        ((ReadMultiValueNode) isNotNull).delete();
         for (ValueNode p : scalarizedInlineObject) {
-            assert p instanceof ProjNode : "scalarized value has to be a ProjNode";
-            ((ProjNode) p).delete();
+            assert p instanceof ReadMultiValueNode : "scalarized value has to be a ProjNode";
+            ((ReadMultiValueNode) p).delete();
         }
 
         // set control flow correctly and delete
@@ -213,7 +210,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return this;
     }
 
-    private boolean scalarize = false;
+    private boolean scalarize = true;
 
     @Override
     public void virtualize(VirtualizerTool tool) {

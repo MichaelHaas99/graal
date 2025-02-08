@@ -15,15 +15,15 @@ import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaType;
 
 /**
- * The {@link ProjNode} represents one returned value from a MultiNode. A MultiNode in this context
- * is a node which returns a nullable scalarized inline object. E.g. an InvokeNode which has a
- * scalarized return can return multiple values in registers.
+ * The {@link ReadMultiValueNode} represents one returned value from a MultiValueNode. A
+ * MultiValueNode in this context is a node which returns a nullable scalarized inline object. E.g.
+ * an InvokeNode which has a scalarized return can return multiple values in registers.
  */
-@NodeInfo(nameTemplate = "ProjNode")
-public class ProjNode extends FloatingNode implements LIRLowerable, Canonicalizable {
-    public static final NodeClass<ProjNode> TYPE = NodeClass.create(ProjNode.class);
+@NodeInfo(nameTemplate = "ReadMultiValue#{p#index}")
+public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable {
+    public static final NodeClass<ReadMultiValueNode> TYPE = NodeClass.create(ReadMultiValueNode.class);
 
-    @Input ValueNode multiNode;
+    @Input ValueNode multiValueNode;
 
     private final int index;
 
@@ -31,26 +31,22 @@ public class ProjNode extends FloatingNode implements LIRLowerable, Canonicaliza
         return index;
     }
 
-    public boolean pointsToOopOrHub() {
-        return index == 0;
+    public ValueNode getMultiValueNode() {
+        return multiValueNode;
     }
 
-    public ValueNode getMultiNode() {
-        return multiNode;
+    public ReadMultiValueNode(Stamp stamp, ValueNode multiValueNode, int index) {
+        this(TYPE, stamp, multiValueNode, index);
     }
 
-    public ProjNode(Stamp stamp, ValueNode multiNode, int index) {
-        this(TYPE, stamp, multiNode, index);
-    }
-
-    public ProjNode(NodeClass<? extends FloatingNode> c, Stamp stamp, ValueNode multiNode, int index) {
+    public ReadMultiValueNode(NodeClass<? extends FloatingNode> c, Stamp stamp, ValueNode multiValueNode, int index) {
         super(c, stamp);
-        this.multiNode = multiNode;
+        this.multiValueNode = multiValueNode;
         this.index = index;
     }
 
-    public ProjNode(JavaType type, Assumptions assumptions, ValueNode multiNode, int index) {
-        this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiNode, index);
+    public ReadMultiValueNode(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index) {
+        this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiValueNode, index);
     }
 
     public void delete() {
