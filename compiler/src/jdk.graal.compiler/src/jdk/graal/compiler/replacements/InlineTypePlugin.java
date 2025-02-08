@@ -429,7 +429,6 @@ public class InlineTypePlugin implements NodePlugin {
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
             genFlatArrayCheck(b, array, trueBegin, falseBegin);
 
-            int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
 
 
             // true branch - flat array
@@ -440,6 +439,7 @@ public class InlineTypePlugin implements NodePlugin {
             if (isInlineTypeArray) {
 
                 // produce code that stores the flat inline type
+                int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
                 ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 nullCheckedValue, shift);
                 trueEnd = b.add(new EndNode());
