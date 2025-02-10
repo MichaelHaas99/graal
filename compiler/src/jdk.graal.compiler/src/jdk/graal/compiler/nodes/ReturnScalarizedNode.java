@@ -4,11 +4,14 @@ import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 
 import java.util.List;
 
+import jdk.graal.compiler.core.common.LIRKind;
+import jdk.graal.compiler.core.common.calc.Condition;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
+import jdk.graal.compiler.lir.Variable;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
@@ -20,6 +23,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -33,11 +37,19 @@ import jdk.vm.ci.meta.Value;
 public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static final NodeClass<ReturnScalarizedNode> TYPE = NodeClass.create(ReturnScalarizedNode.class);
 
+    @OptionalInput private ValueNode existingOop;
+
     @OptionalInput private NodeInputList<ValueNode> scalarizedInlineObject;
 
     public ReturnScalarizedNode(ValueNode result, List<ValueNode> scalarizedInlineObject) {
         super(TYPE, result);
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
+    }
+
+    public void setExistingOop(ValueNode newExistingOop) {
+        assert newExistingOop != null;
+        updateUsages(null, newExistingOop);
+        this.existingOop = newExistingOop;
     }
 
     public ValueNode getField(int index) {
@@ -119,16 +131,38 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             stackKinds[i] = valueNode.getStackKind();
             operands[i] = gen.operand(valueNode);
         }
-        gen.getLIRGeneratorTool().emitScalarizedReturn(result.getStackKind(), gen.operand(result), stackKinds, operands);
+
+        if (existingOop != null) {
+            LIRKind kind = (LIRKind) gen.operand(result).getValueKind();
+            Value nullValue = gen.getLIRGeneratorTool().emitConstant(kind, JavaConstant.NULL_POINTER);
+            Variable existingOopOrHub = gen.getLIRGeneratorTool().emitConditionalMove(kind.getPlatformKind(), gen.operand(existingOop), nullValue, Condition.EQ, false, gen.operand(result),
+                            gen.operand(existingOop));
+            gen.getLIRGeneratorTool().emitScalarizedReturn(result.getStackKind(), existingOopOrHub, stackKinds, operands);
+        } else {
+            gen.getLIRGeneratorTool().emitScalarizedReturn(result.getStackKind(),
+                            gen.operand(result), stackKinds, operands);
+        }
+
     }
+
+    private boolean virtualize = true;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        if (!virtualize)
+            return;
         ValueNode alias = tool.getAlias(result);
         if (alias instanceof VirtualObjectNode) {
             // make sure oop stays virtual and instead return hub with bit zero set
-            TypeReference type = StampTool.typeReferenceOrNull(result);
+            TypeReference type = StampTool.typeReferenceOrNull(alias);
             assert type != null && type.isExact() : "type should not be null for constant hub node in scalarized return";
+
+            if (tool.getExistingOop((VirtualObjectNode) alias) != null) {
+                // TODO: set it with effects
+                setExistingOop(tool.getExistingOop((VirtualObjectNode) alias));
+                // tool.replaceFirstInput(existingOop, tool.getExistingOop((VirtualObjectNode)
+                // alias));
+            }
 
             // get hub
             ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),

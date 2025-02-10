@@ -125,6 +125,7 @@ import jdk.graal.compiler.nodes.GraphState.GuardsStage;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoweredCallTargetNode;
 import jdk.graal.compiler.nodes.MergeNode;
@@ -144,7 +145,6 @@ import jdk.graal.compiler.nodes.calc.FloatingIntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.calc.IntegerConvertNode;
 import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
-import jdk.graal.compiler.nodes.calc.IntegerTestNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
@@ -228,7 +228,6 @@ import jdk.graal.compiler.replacements.nodes.CStringConstant;
 import jdk.graal.compiler.replacements.nodes.LogNode;
 import jdk.graal.compiler.serviceprovider.GraalServices;
 import jdk.graal.compiler.serviceprovider.LibGraalService;
-import jdk.graal.compiler.word.WordCastNode;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -1244,9 +1243,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             // use oopOrHub for check if already buffered
             // true case: oop or null -> just return
             // false case: scalarized -> reconstruct
-            WordCastNode oopOrHubWord = graph.addOrUnique(WordCastNode.addressToWord(inlineTypeNode.getOopOrHub(), tool.getWordTypes().getWordKind()));
-            graph.addBeforeFixed(inlineTypeNode, oopOrHubWord);
-            check = graph.addOrUnique(new IntegerTestNode(oopOrHubWord, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
+            LogicNode notNull = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(inlineTypeNode.createIsNullCheck())));
+            LogicNode oopExists = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(inlineTypeNode.getOopOrHub()))));
+            check = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(LogicNode.and(notNull, oopExists, ProfileData.BranchProbabilityData.unknown()))));
 
         } else if (!inlineTypeNode.isNullFree()) {
             // check if the scalarized object is null
