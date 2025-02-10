@@ -13,9 +13,7 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.BeginNode;
-import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.EndNode;
-import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
@@ -27,14 +25,10 @@ import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
-import jdk.graal.compiler.nodes.calc.IntegerTestNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
-import jdk.graal.compiler.word.WordCastNode;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
 
 /**
  * Similar to {@link CommitAllocationNode} but also stores oopOrHub inputs to avoid unnecessary
@@ -80,18 +74,15 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
 
             ValueNode oopOrHub = oopsOrHubs.get(i);
 
-            // cast oop to word for comparison
-            WordCastNode oopOrHubWord = graph.addOrUnique(WordCastNode.addressToWord(oopOrHub, tool.getWordTypes().getWordKind()));
-            previous.setNext(oopOrHubWord);
+            // if oop is null, it is not yet buffered
 
-            // already buffered if bit zero is not set
-            LogicNode isAlreadyBuffered = graph.addOrUnique(new IntegerTestNode(oopOrHubWord, ConstantNode.forIntegerKind(tool.getWordTypes().getWordKind(), 1, graph)));
-
+            LogicNode isAlreadyBuffered = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(oopOrHub))));
             BeginNode trueBegin = graph.add(new BeginNode());
             BeginNode falseBegin = graph.add(new BeginNode());
 
             IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-            oopOrHubWord.setNext(ifNode);
+
+            previous.setNext(ifNode);
 
             // true branch - inline object is already buffered (null or an oop)
 
@@ -161,9 +152,6 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
              * n.b. the node source position of virtualObject will have been set when it was
              * created.
              */
-            LogicNode isInit = LogicNegationNode.create(new IsNullNode(oopsOrHubs.get(i)));
-            tool.addNode(isInit);
-            tool.addNode(new FixedGuardNode(isInit, DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None));
             tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i),
                             oopsOrHubs.get(i));
             pos += entryCount;

@@ -111,6 +111,11 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public ValueNode getExistingOop(VirtualObjectNode virtualObject) {
+        return state.getObjectState(virtualObject).getOopOrHub();
+    }
+
+    @Override
     public boolean setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value, JavaKind theAccessKind, long offset) {
         ObjectState obj = state.getObjectState(virtual);
         assert obj.isVirtual() : "not virtual: " + obj;

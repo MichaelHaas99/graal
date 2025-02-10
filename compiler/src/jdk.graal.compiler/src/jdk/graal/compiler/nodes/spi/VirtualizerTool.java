@@ -102,6 +102,8 @@ public interface VirtualizerTool extends CoreProviders {
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
+    ValueNode getExistingOop(VirtualObjectNode virtualObject);
+
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 
     MonitorIdNode removeLock(VirtualObjectNode virtualObject);
