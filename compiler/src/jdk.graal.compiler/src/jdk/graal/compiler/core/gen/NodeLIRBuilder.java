@@ -130,6 +130,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -722,13 +723,40 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         // TODO: actually wrong to say the scalarized return values are temps
         emitInvoke(callTarget, parameters, callState, result, results);
 
-        if (isLegal(result)) {
-            setResult(x.asNode(), gen.emitMove(result));
+        if (isNotNull != null) {
+            // produce code for the isNotNull information
+
+            // get oopOrHub value
+            Value value = result;
+
+            ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                            JavaConstant.forInt(1));
+            ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                            JavaConstant.forInt(0));
+            LIRKind kind = (LIRKind) result.getValueKind();
+            Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
+
+            Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
+            setResult(isNotNull, isNotNullVariable);
         }
 
+        if (isLegal(result)) {
+            // if the klass pointer is returned we need to zero out the register
+
+            // see if (return_value_is_used()) { in ad_x86.cpp
+
+            ValueKind<?> kind = result.getValueKind();
+            Variable scratch = gen.emitMove(result);
+            Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
+            ConstantValue intOne = new ConstantValue(kind,
+                            JavaConstant.forLong(1));
+            // rax = klassPointer? null : rax
+            Variable existingOop = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
+            setResult(x.asNode(), existingOop);
+        }
         if (oopOrHub != null) {
             assert isLegal(results[oopOrHub.getIndex()]);
-            setResult(oopOrHub, gen.emitMove(results[oopOrHub.getIndex()]));
+            setResult(oopOrHub, operand(x.asNode()));
         }
 
         for (int i = 0; i < scalarizedInlineObject.length; i++) {
@@ -736,25 +764,6 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             setResult(scalarizedInlineObject[i], gen.emitMove(results[scalarizedInlineObject[i].getIndex()]));
         }
 
-        if (isNotNull != null) {
-            // produce code for the isNotNull information
-
-            // assert oopOrHub[i] == ((ProjWithInputNode) isNotNull[i]).getInput() : "is not null
-            // info should point to oopOrHub";
-
-            // get oopOrHub value
-            Value value = operand(x.asNode());
-
-            ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
-                            JavaConstant.forInt(1));
-            ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
-                            JavaConstant.forInt(0));
-            LIRKind kind = gen.getLIRKind(x.asNode().stamp(NodeView.DEFAULT));
-            Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
-
-            Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
-            setResult(isNotNull, isNotNullVariable);
-        }
         if (x instanceof InvokeWithExceptionNode) {
             gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
         }
