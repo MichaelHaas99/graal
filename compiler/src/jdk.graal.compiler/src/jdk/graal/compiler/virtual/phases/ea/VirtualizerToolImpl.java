@@ -34,22 +34,28 @@ import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.UnpackEndianHalfNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.CoreProvidersDelegate;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 
@@ -107,12 +113,38 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
+        // createNullCheck(virtualObject);
         return state.getObjectState(virtualObject).getEntry(index);
     }
 
     @Override
     public ValueNode getExistingOop(VirtualObjectNode virtualObject) {
         return state.getObjectState(virtualObject).getOopOrHub();
+    }
+
+    @Override
+    public ValueNode getIsNotNull(VirtualObjectNode virtualObject) {
+        return state.getObjectState(virtualObject).getIsNotNull();
+    }
+
+    @Override
+    public void createNullCheck(VirtualObjectNode virtualObject) {
+        if (isNullFree(virtualObject))
+            return;
+        ValueNode isNotNull = state.getObjectState(virtualObject).getIsNotNull();
+        if (isNotNull != null) {
+            LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(0));
+            ensureAdded(check);
+            addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true));
+        }
+    }
+
+    public boolean isNullFree(VirtualObjectNode virtualObject) {
+        ValueNode isNotNull = state.getObjectState(virtualObject).getIsNotNull();
+        boolean result = isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
+        assert StampTool.isPointerNonNull(virtualObject) == result : "stamp and null check should indicate the same";
+        return result;
+
     }
 
     @Override
@@ -299,6 +331,12 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public void applyRunnable(Node node, Runnable action) {
+        effects.applyRunnable(node, action);
+        // effects.replaceFirstInput(current, oldInput, replacement);
+    }
+
+    @Override
     public void addNode(ValueNode node) {
         if (node instanceof FloatingNode) {
             effects.addFloatingNode(node, "VirtualizerTool.addNode");
@@ -318,12 +356,12 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized) {
-        createVirtualObject(virtualObject, entryState, locks, sourcePosition, ensureVirtualized, null);
+        createVirtualObject(virtualObject, entryState, locks, sourcePosition, ensureVirtualized, null, null);
     }
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized,
-                    ValueNode oopOrHub) {
+                    ValueNode oopOrHub, ValueNode isNotNull) {
         VirtualUtil.trace(options, debug, "{{%s}} ", current);
         if (!virtualObject.isAlive()) {
             effects.addFloatingNode(virtualObject, "newVirtualObject");
@@ -338,7 +376,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             closure.virtualObjects.add(virtualObject);
             virtualObject.setObjectId(id);
         }
-        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oopOrHub));
+        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oopOrHub, isNotNull));
         closure.addVirtualAlias(virtualObject, virtualObject);
         PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment(debug);
         effects.addVirtualizationDelta(1);

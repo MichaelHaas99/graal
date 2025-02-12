@@ -39,7 +39,6 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -53,6 +52,11 @@ public abstract class VirtualObjectNode extends ValueNode implements LIRLowerabl
 
     protected VirtualObjectNode(NodeClass<? extends VirtualObjectNode> c, ResolvedJavaType type, boolean hasIdentity) {
         super(c, StampFactory.objectNonNull(TypeReference.createExactTrusted(type)));
+        this.hasIdentity = hasIdentity;
+    }
+
+    protected VirtualObjectNode(NodeClass<? extends VirtualObjectNode> c, ResolvedJavaType type, boolean hasIdentity, boolean nonNull) {
+        super(c, nonNull ? StampFactory.objectNonNull(TypeReference.createExactTrusted(type)) : StampFactory.object(TypeReference.createExactTrusted(type)));
         this.hasIdentity = hasIdentity;
     }
 

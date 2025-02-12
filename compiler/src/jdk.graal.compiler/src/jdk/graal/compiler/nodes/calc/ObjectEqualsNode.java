@@ -49,6 +49,7 @@ import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -185,7 +186,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
         }
 
-        if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant())) {
+        if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant()) && tool.isNullFree(virtual)) {
             // one of them is virtual and has identity or the other is null: they can never be the
             // same
             // objects
@@ -228,6 +229,27 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                     } else {
                         boolean comparisonResultUnknown = false;
                         LogicNode newCondition = LogicConstantNode.tautology(graph);
+
+                        if (xAlias instanceof VirtualObjectNode xNode && yAlias instanceof VirtualObjectNode yNode) {
+                            ValueNode xIsNotNull = tool.getIsNotNull(xNode);
+                            ValueNode yIsNotNull = tool.getIsNotNull(yNode);
+                            if (!StampTool.isPointerNonNull(xNode) && !StampTool.isPointerNonNull(yNode)) {
+                                assert xIsNotNull != null && yIsNotNull != null : "nullable scalarized object expected existingOop and isNotNull information to be set";
+                                newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, yIsNotNull),
+                                                ProfileData.BranchProbabilityData.unknown());
+                            } else if (StampTool.isPointerNonNull(xNode) && StampTool.isPointerNonNull(yNode)) {
+                                // nothing to do
+                            } else if (!StampTool.isPointerNonNull(xNode)) {
+                                // x may be null, y is not so therefore x needs to be non null
+                                newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1)),
+                                                ProfileData.BranchProbabilityData.unknown());
+                            } else {
+                                // y may be null, x is not so therefore y needs to be non null
+                                newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1)),
+                                                ProfileData.BranchProbabilityData.unknown());
+                            }
+                        }
+
                         for (int i = 0; i < xVirtual.entryCount(); i++) {
                             ValueNode xFieldNode = tool.getEntry(xVirtual, i);
                             ValueNode yFieldNode = tool.getEntry(yVirtual, i);
@@ -269,7 +291,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             if (result.isContradiction())
                                 return result;
 
-                            newCondition = LogicConstantNode.and(newCondition, result, ProfileData.BranchProbabilityData.unknown());
+                            newCondition = LogicNode.andWithoutGraphAdd(newCondition, result,
+                                            ProfileData.BranchProbabilityData.unknown());
                         }
 
                         if (comparisonResultUnknown)
@@ -335,6 +358,21 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             return;
 
         }
+
+// ValueNode xAlias = tool.getAlias(x);
+// ValueNode yAlias = tool.getAlias(y);
+// if (xAlias instanceof VirtualObjectNode xNode && yAlias instanceof VirtualObjectNode yNode) {
+// if (tool.getIsNotNull(xNode) != null && tool.getIsNotNull(yNode) != null) {
+// node = LogicNode.andWithoutGraphAdd((LogicNode) node, new
+// IntegerEqualsNode(tool.getIsNotNull(xNode), tool.getIsNotNull(yNode)),
+// ProfileData.BranchProbabilityData.unknown());
+// } else if (tool.getIsNotNull(xNode) == null && tool.getIsNotNull(yNode) == null) {
+// // nothing to do
+// } else {
+// return;
+// }
+// }
+
         tool.ensureAdded(node);
         tool.replaceWithValue(node);
     }

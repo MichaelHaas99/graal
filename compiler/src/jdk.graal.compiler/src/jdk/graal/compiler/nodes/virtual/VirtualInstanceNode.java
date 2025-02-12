@@ -31,6 +31,7 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -47,6 +48,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
         this(type, type.getInstanceFields(true), hasIdentity);
     }
 
+
     public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
         this(TYPE, type, fields, hasIdentity);
     }
@@ -57,6 +59,16 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     protected VirtualInstanceNode(NodeClass<? extends VirtualInstanceNode> c, ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
         super(c, type, hasIdentity);
+        this.type = type;
+        this.fields = fields;
+    }
+
+    public VirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity, boolean nonNull) {
+        this(TYPE, type, type.getInstanceFields(true), hasIdentity, nonNull);
+    }
+
+    protected VirtualInstanceNode(NodeClass<? extends VirtualInstanceNode> c, ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity, boolean nonNull) {
+        super(c, type, hasIdentity, nonNull);
         this.type = type;
         this.fields = fields;
     }
@@ -116,7 +128,13 @@ public class VirtualInstanceNode extends VirtualObjectNode {
 
     @Override
     public VirtualInstanceNode duplicate() {
-        VirtualInstanceNode node = new VirtualInstanceNode(type, fields, super.hasIdentity());
+        VirtualInstanceNode node;
+        if (StampTool.isPointerNonNull(this)) {
+            node = new VirtualInstanceNode(type, fields, super.hasIdentity());
+        } else {
+            node = new VirtualInstanceNode(type, super.hasIdentity, false);
+        }
+
         node.setNodeSourcePosition(this.getNodeSourcePosition());
         return node;
     }

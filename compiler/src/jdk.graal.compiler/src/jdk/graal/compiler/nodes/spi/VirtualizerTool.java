@@ -70,7 +70,8 @@ public interface VirtualizerTool extends CoreProviders {
      * same as {@link #createVirtualObject} but with the possibility to specify an already existing
      * oop
      */
-    void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oopOrHub);
+    void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oopOrHub,
+                    ValueNode isNotNull);
 
     /**
      * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still
@@ -103,6 +104,12 @@ public interface VirtualizerTool extends CoreProviders {
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
     ValueNode getExistingOop(VirtualObjectNode virtualObject);
+
+    ValueNode getIsNotNull(VirtualObjectNode virtualObject);
+
+    void createNullCheck(VirtualObjectNode virtualObject);
+
+    boolean isNullFree(VirtualObjectNode virtualObject);
 
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 
@@ -140,6 +147,8 @@ public interface VirtualizerTool extends CoreProviders {
      * @param replacement the new input value.
      */
     void replaceFirstInput(Node oldInput, Node replacement);
+
+    void applyRunnable(Node node, Runnable action);
 
     /**
      * Adds the given node to the graph. This action will only be performed when, and if, the
