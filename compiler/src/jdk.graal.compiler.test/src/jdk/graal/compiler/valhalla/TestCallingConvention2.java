@@ -14,6 +14,7 @@ import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.internal.vm.annotation.NullRestricted;
+import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.junit.Assert;
@@ -116,7 +117,7 @@ public class TestCallingConvention2 extends JTTTest {
 
     @ImplicitlyConstructible
     @LooselyConsistentValue
-    public value class MyValue3 {
+    public static value class MyValue3 {
         char c='0';
         byte bb = (byte) 3;
         short s =4;
@@ -130,8 +131,10 @@ public class TestCallingConvention2 extends JTTTest {
         float f5=13.0f;
         double f6=15.0f;
 
+        @DontInline
         MyValue3 test(){
-            return this;
+            //return this;
+            throw new NullPointerException();
         }
 
         MyValue3 testWithParameter(MyValue3 value){
@@ -142,24 +145,39 @@ public class TestCallingConvention2 extends JTTTest {
 
 
 
-    public static MyValue3 testMyValue3(MyValue3 value, MyValue3 value2, MyValue3 value3){
-        return value;
+    public static MyValue3 testMyValue3( MyValue3 value, MyValue3 value2, MyValue3 value3){
+        return value3;
     }
+
+    private static final MyValue3 staticMyValue3 = new MyValue3();
 
     @Test
     public void run4() throws Throwable{
-        runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testMyValue3", new MyValue3(), new MyValue3(), new MyValue3());
+        resetCodeCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,EnumSet.allOf(DeoptimizationReason.class), "testMyValue3",staticMyValue3, staticMyValue3, staticMyValue3);
     }
 
     public static MyValue3 testVirtual(MyValue3 value){
-        value.test();
+        //value.test();
         return value.test();
     }
 
     @Test
     public void run5() throws Throwable{
-        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"testVirtual", new MyValue3());
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
+        resetCodeCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
     }
+
+    @Test
+    public void run10() throws Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod(MyValue3.class, "test"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+        Object a = getCode(getResolvedJavaMethod("testVirtual"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING).executeVarargs(new MyValue3());
+        System.out.println(a);
+        //runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
+    }
+
 
     @Test
     public void run6() throws Throwable{
