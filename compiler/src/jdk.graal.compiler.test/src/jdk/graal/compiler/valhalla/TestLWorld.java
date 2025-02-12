@@ -4,9 +4,11 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.EnumSet;
 
+import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.core.phases.HighTier;
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
 import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
+import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.code.InstalledCode;
@@ -824,4 +826,82 @@ public class TestLWorld extends JTTTest {
         //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
         InstalledCode c = getCode(getResolvedJavaMethod("randomTestMethod"), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
     }
+
+    public long test5(MyValue1 arg, boolean deopt) {
+        Object vt1 = MyValue1.createWithFieldsInline(rI, rL);
+        Object vt2 = MyValue1.createWithFieldsDontInline(rI, rL);
+        Object vt3 = arg;
+        Object vt4 = valueField1;
+        if (deopt) {
+            // uncommon trap
+            GraalDirectives.deoptimize();
+        }
+        return ((MyValue1)vt1).hash() + ((MyValue1)vt2).hash() +
+                ((MyValue1)vt3).hash() + ((MyValue1)vt4).hash();
+    }
+
+    @Test
+    public void run33() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("test5"), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        c.executeVarargs(this, testValue1, false);
+        c.executeVarargs(this, testValue1, true);
+    }
+
+    static class InterfaceBox {
+        WrapperInterface content;
+
+        @ForceInline
+        InterfaceBox(WrapperInterface content) {
+            this.content = content;
+        }
+
+        @ForceInline
+        static InterfaceBox box_sharp(long val) {
+            return new InterfaceBox(LongWrapper.wrap(val));
+        }
+
+        @ForceInline
+        static InterfaceBox box(long val) {
+            return new InterfaceBox(WrapperInterface.wrap(val));
+        }
+    }
+
+    public long test109() {
+        long res = 0;
+        for (int i = 0; i < lArr.length; i++) {
+            res += InterfaceBox.box(lArr[i]).content.value();
+        }
+        return res;
+    }
+
+    @Test
+    public void run34() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("test109"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+        c.executeVarargs(this);
+    }
+
+    public void test23_inline(Object[] oa, Object o, int index) {
+        oa[index] = o;
+    }
+
+    public long test23() {
+        MyValue2 v = MyValue2.createDefaultInline();
+        return v.hash();
+    }
+
+    @Test
+    public void run35() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("test23"), null, true, true, getInitialOptions());
+        //c.executeVarargs(this);
+    }
+
 }
