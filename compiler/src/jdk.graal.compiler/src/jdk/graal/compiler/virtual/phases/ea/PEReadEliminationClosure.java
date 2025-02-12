@@ -41,10 +41,13 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
+import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
+import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
@@ -54,6 +57,7 @@ import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
@@ -72,6 +76,8 @@ import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -136,7 +142,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
-        }
+        } /*
+           * else if (node instanceof IsNullNode) { deleted = processIsNullNode((IsNullNode) node,
+           * state, effects, lastFixedNode); }
+           */
 
         if (deleted) {
             effects.addLog(cfg.graph.getOptimizationLog(),
@@ -165,6 +174,17 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
+            ObjectState obj = getObjectState(state, unproxiedObject);
+            if (obj != null) {
+                assert !obj.isVirtual() : object;
+                if (!StampTool.isPointerNonNull(object)) {
+                    if (obj.getIsNotNull() != null && !(obj.getIsNotNull().isJavaConstant() && obj.getIsNotNull().asJavaConstant().asInt() == 1)) {
+                        LogicNode check = new IntegerEqualsNode(obj.getIsNotNull(), ConstantNode.forInt(0));
+                        effects.ensureFloatingAdded(check);
+                        effects.addFixedNodeBefore(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true), load);
+                    }
+                }
+            }
             // perform the read elimination
             effects.replaceAtUsages(load, cachedValue, load);
             addScalarAlias(load, cachedValue);
@@ -364,6 +384,17 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         }
     }
+
+/*
+ * private boolean processIsNullNode(IsNullNode isNullNode, PEReadEliminationBlockState state,
+ * GraphEffectList effects, FixedWithNextNode lastFixedNode) { ValueNode unproxiedObject =
+ * GraphUtil.unproxify(isNullNode.getValue()); ObjectState obj = getObjectState(state,
+ * unproxiedObject); if (obj != null) { assert !obj.isVirtual() : unproxiedObject; if
+ * (!StampTool.isPointerNonNull(isNullNode.getValue())) { if (obj.getIsNotNull() != null) {
+ * LogicNode check = IntegerEqualsNode.create(obj.getIsNotNull(), ConstantNode.forInt(0),
+ * NodeView.DEFAULT); effects.ensureAdded(check, lastFixedNode); effects.replaceAtUsages(isNullNode,
+ * check, lastFixedNode); addScalarAlias(isNullNode, check); return true; } } } return false; }
+ */
 
     @Override
     protected PEReadEliminationBlockState cloneState(PEReadEliminationBlockState other) {

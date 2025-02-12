@@ -56,6 +56,7 @@ public class ObjectState {
     private boolean ensureVirtualized;
 
     private ValueNode oopOrHub;
+    private ValueNode isNotNull;
 
     private EscapeObjectState cachedState;
 
@@ -72,9 +73,10 @@ public class ObjectState {
         }
     }
 
-    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oopOrHub) {
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oopOrHub, ValueNode isNotNull) {
         this(entries, locks, ensureVirtualized);
         this.oopOrHub = oopOrHub;
+        this.isNotNull = isNotNull;
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
@@ -82,6 +84,15 @@ public class ObjectState {
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
+    }
+
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oopOrHub, ValueNode isNotNull) {
+        assert checkIllegalValues(entries);
+        this.entries = entries;
+        this.locks = locks;
+        this.ensureVirtualized = ensureVirtualized;
+        this.oopOrHub = oopOrHub;
+        this.isNotNull = isNotNull;
     }
 
     public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
@@ -98,6 +109,7 @@ public class ObjectState {
         cachedState = other.cachedState;
         ensureVirtualized = other.ensureVirtualized;
         oopOrHub = other.oopOrHub;
+        isNotNull = other.isNotNull;
     }
 
     public ObjectState cloneState() {
@@ -160,7 +172,7 @@ public class ObjectState {
                         newEntries[i] = null;
                     }
                 }
-                cachedState = new VirtualObjectState(virtual, newEntries);
+                cachedState = new VirtualObjectState(virtual, newEntries, isNotNull);
             } else {
                 cachedState = new MaterializedObjectState(virtual, materializedValue);
             }
@@ -232,6 +244,10 @@ public class ObjectState {
 
     public ValueNode getOopOrHub() {
         return oopOrHub;
+    }
+
+    public ValueNode getIsNotNull() {
+        return isNotNull;
     }
 
     public boolean hasLocks() {

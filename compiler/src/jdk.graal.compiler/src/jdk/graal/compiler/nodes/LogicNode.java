@@ -33,7 +33,6 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ProfileData.BranchProbabilityData;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
-
 import jdk.vm.ci.meta.TriState;
 
 @NodeInfo(allowedUsageTypes = {Condition}, size = SIZE_1)
@@ -53,6 +52,15 @@ public abstract class LogicNode extends FloatingNode implements IndirectInputCha
         StructuredGraph graph = a.graph();
         LogicNode notAorNotB = graph.addOrUniqueWithInputs(ShortCircuitOrNode.create(a, !negateA, b, !negateB, shortCircuitProbability));
         return graph.addOrUniqueWithInputs(LogicNegationNode.create(notAorNotB));
+    }
+
+    public static LogicNode andWithoutGraphAdd(LogicNode a, LogicNode b, BranchProbabilityData shortCircuitProbability) {
+        return andWithoutGraphAdd(a, false, b, false, shortCircuitProbability);
+    }
+
+    public static LogicNode andWithoutGraphAdd(LogicNode a, boolean negateA, LogicNode b, boolean negateB, BranchProbabilityData shortCircuitProbability) {
+        LogicNode notAorNotB = ShortCircuitOrNode.create(a, !negateA, b, !negateB, shortCircuitProbability);
+        return LogicNegationNode.create(notAorNotB);
     }
 
     public static LogicNode or(LogicNode a, LogicNode b, BranchProbabilityData shortCircuitProbability) {

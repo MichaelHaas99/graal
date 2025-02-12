@@ -82,6 +82,7 @@ import jdk.graal.compiler.nodes.spi.NodeWithState;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.EnsureVirtualizedNode;
@@ -1321,6 +1322,54 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     valueIndex++;
                 }
 
+                int additionalPhisCount = 0;
+                for (int i = 0; i < states.length; i++) {
+                    int object = getObject.applyAsInt(i);
+                    if (object != -1) {
+                        if (states[i].getObjectState(object).getIsNotNull() != null) {
+                            additionalPhisCount = 2;
+                            break;
+                        }
+                    }
+                }
+                PhiNode[] additionalPhis = getValuePhis(virtual, additionalPhisCount);
+                ValueNode oop = states[0].getObjectState(getObject.applyAsInt(0)).getOopOrHub();
+                ValueNode isNotNull = states[0].getObjectState(getObject.applyAsInt(0)).getIsNotNull();
+
+                int additionalPhisIndex = 0;
+                while (additionalPhisIndex < additionalPhisCount) {
+                    ValueNode value = additionalPhisIndex == 0 ? states[0].getObjectState(getObject.applyAsInt(0)).getOopOrHub()
+                                    : states[0].getObjectState(getObject.applyAsInt(0)).getIsNotNull();
+                    if (value == null) {
+                        if (additionalPhisIndex == 0) {
+                            ValueNode intermediateOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
+                            tool.ensureAdded(intermediateOop);
+                            value = intermediateOop;
+                        } else {
+                            ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
+                            tool.ensureAdded(intermediateIsNotNull);
+                            value = intermediateIsNotNull;
+                        }
+                    }
+
+                    for (int i = 1; i < states.length; i++) {
+                        if (additionalPhis[additionalPhisIndex] == null) {
+                            int object = getObject.applyAsInt(i);
+                            if (object != -1) {
+                                ValueNode field = additionalPhisIndex == 0 ? states[i].getObjectState(object).getOopOrHub() : states[i].getObjectState(object).getIsNotNull();
+                                if (value != field) {
+                                    additionalPhis[additionalPhisIndex] = createValuePhi(value.stamp(NodeView.DEFAULT).unrestricted());
+                                }
+                            }
+                        }
+                    }
+
+                    if (additionalPhis[additionalPhisIndex] != null && !additionalPhis[additionalPhisIndex].stamp(NodeView.DEFAULT).isCompatible(value.stamp(NodeView.DEFAULT))) {
+                        additionalPhis[additionalPhisIndex] = createValuePhi(value.stamp(NodeView.DEFAULT).unrestricted());
+                    }
+                    additionalPhisIndex++;
+                }
+
                 boolean materialized = false;
                 for (int i = 0; i < values.length; i++) {
                     PhiNode phi = phis[i];
@@ -1346,7 +1395,63 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         values[i] = phi;
                     }
                 }
-                newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual));
+
+                for (int i = 0; i < additionalPhisCount; i++) {
+                    PhiNode phi = additionalPhis[i];
+                    if (phi != null) {
+                        mergeEffects.addFloatingNode(phi, "virtualMergePhi");
+
+                        for (int i2 = 0; i2 < states.length; i2++) {
+                            int object = getObject.applyAsInt(i2);
+                            if (object == -1) {
+                                setPhiInput(phi, i2, phi);
+                            } else {
+                                ObjectState state = states[i2].getObjectState(object);
+                                if (!state.isVirtual()) {
+                                    break;
+                                }
+                                if (i == 0) {
+                                    if (state.getOopOrHub() == null) {
+                                        ValueNode intermediateOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
+                                        tool.ensureAdded(intermediateOop);
+                                        setPhiInput(phi, i2, intermediateOop);
+                                    } else {
+                                        setPhiInput(phi, i2, state.getOopOrHub());
+                                    }
+                                } else {
+                                    if (state.getIsNotNull() == null) {
+                                        ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
+                                        tool.ensureAdded(intermediateIsNotNull);
+                                        setPhiInput(phi, i2, intermediateIsNotNull);
+                                    } else {
+                                        setPhiInput(phi, i2, state.getIsNotNull());
+                                    }
+                                }
+                            }
+                        }
+                        if (i == 0) {
+                            oop = phi;
+                        } else {
+                            isNotNull = phi;
+                        }
+                    }
+                }
+
+                if (additionalPhisCount > 0) {
+                    if (oop == null) {
+                        ValueNode intermediateOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
+                        tool.ensureAdded(intermediateOop);
+                        oop = intermediateOop;
+                    }
+                    if (isNotNull == null) {
+                        ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
+                        tool.ensureAdded(intermediateIsNotNull);
+                        isNotNull = intermediateIsNotNull;
+                    }
+                    newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual, oop, isNotNull));
+                } else {
+                    newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual));
+                }
                 return materialized;
             } else {
                 // not compatible: materialize in all predecessors
@@ -1486,6 +1591,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                     if (compatible) {
                         VirtualObjectNode virtual = getValueObjectVirtual(phi, virtualObjs[0]);
+                        // use a nullable virtual instance if it exists
+                        for (int i = 0; i < virtualObjs.length; i++) {
+                            if (!StampTool.isPointerNonNull(getValueObjectVirtual(phi, virtualObjs[i]))) {
+                                virtual = getValueObjectVirtual(phi, virtualObjs[i]);
+                                break;
+                            }
+                        }
                         mergeEffects.addFloatingNode(virtual, "valueObjectNode");
                         mergeEffects.deleteNode(phi);
                         if (virtual.getObjectId() == -1) {

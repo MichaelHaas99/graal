@@ -27,11 +27,13 @@ package jdk.graal.compiler.nodes;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.ValueProxy;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-
+import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.TriState;
 
 @NodeInfo
@@ -58,6 +60,13 @@ public abstract class UnaryOpLogicNode extends LIRLowerableLogicNode implements 
         if (fold != TriState.UNKNOWN) {
             tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
         }
+        if (alias instanceof VirtualObjectNode && !StampTool.isPointerNonNull(alias)) {
+            // replace the null check with a check of the isNotNull information
+            LogicNode check = IntegerEqualsNode.create(tool.getIsNotNull((VirtualObjectNode) alias), ConstantNode.forInt(0, graph()), NodeView.DEFAULT);
+            tool.ensureAdded(check);
+            tool.replaceWithValue(check);
+        }
+
     }
 
     /**
