@@ -220,35 +220,37 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                 ResolvedJavaType type = xVirtual.type();
                 if (type.equals(yVirtual.type())) {
                     MetaAccessProvider metaAccess = tool.getMetaAccess();
+
+                    // make sure nullable scalarized inline objects are handled correctly
+                    LogicNode newCondition = LogicConstantNode.tautology(graph);
+                    ValueNode xIsNotNull = tool.getIsNotNull(xVirtual);
+                    ValueNode yIsNotNull = tool.getIsNotNull(yVirtual);
+                    if (!StampTool.isPointerNonNull(xVirtual) && !StampTool.isPointerNonNull(yVirtual)) {
+                        assert xIsNotNull != null && yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
+                        newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, yIsNotNull),
+                                        ProfileData.BranchProbabilityData.unknown());
+                    } else if (StampTool.isPointerNonNull(xVirtual) && StampTool.isPointerNonNull(yVirtual)) {
+                        // nothing to do both are non-null
+                    } else if (!StampTool.isPointerNonNull(xVirtual)) {
+                        // x may be null, y is not therefore x needs to be non-null
+                        assert xIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
+                        newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1)),
+                                        ProfileData.BranchProbabilityData.unknown());
+                    } else {
+                        // y may be null, x is not therefore y needs to be non-null
+                        assert yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
+                        newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(yIsNotNull, ConstantNode.forInt(1)),
+                                        ProfileData.BranchProbabilityData.unknown());
+                    }
+
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
                         // both are virtual without identity: check contents
                         assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1 : Assertions.errorMessageContext("x", xVirtual, "y", yVirtual);
                         assert xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0).getStackKind() == JavaKind.Int ||
                                         xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0) == JavaKind.Long : Assertions.errorMessage(x, y, xVirtual);
-                        return new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
+                        return LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0)), ProfileData.BranchProbabilityData.unknown());
                     } else {
                         boolean comparisonResultUnknown = false;
-                        LogicNode newCondition = LogicConstantNode.tautology(graph);
-
-                        if (xAlias instanceof VirtualObjectNode xNode && yAlias instanceof VirtualObjectNode yNode) {
-                            ValueNode xIsNotNull = tool.getIsNotNull(xNode);
-                            ValueNode yIsNotNull = tool.getIsNotNull(yNode);
-                            if (!StampTool.isPointerNonNull(xNode) && !StampTool.isPointerNonNull(yNode)) {
-                                assert xIsNotNull != null && yIsNotNull != null : "nullable scalarized object expected existingOop and isNotNull information to be set";
-                                newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, yIsNotNull),
-                                                ProfileData.BranchProbabilityData.unknown());
-                            } else if (StampTool.isPointerNonNull(xNode) && StampTool.isPointerNonNull(yNode)) {
-                                // nothing to do
-                            } else if (!StampTool.isPointerNonNull(xNode)) {
-                                // x may be null, y is not so therefore x needs to be non null
-                                newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1)),
-                                                ProfileData.BranchProbabilityData.unknown());
-                            } else {
-                                // y may be null, x is not so therefore y needs to be non null
-                                newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1)),
-                                                ProfileData.BranchProbabilityData.unknown());
-                            }
-                        }
 
                         for (int i = 0; i < xVirtual.entryCount(); i++) {
                             ValueNode xFieldNode = tool.getEntry(xVirtual, i);
