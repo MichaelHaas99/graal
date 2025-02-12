@@ -1283,7 +1283,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             // false case: scalarized -> reconstruct
             LogicNode notNull = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(inlineTypeNode.createIsNullCheck())));
             LogicNode oopExists = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(inlineTypeNode.getOopOrHub()))));
-            check = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(LogicNode.and(notNull, oopExists, ProfileData.BranchProbabilityData.unknown()))));
+            check = graph.addOrUnique(LogicNode.and(notNull, oopExists, ProfileData.BranchProbabilityData.unknown()));
 
         } else if (!inlineTypeNode.isNullFree()) {
             // check if the scalarized object is null

@@ -33,6 +33,7 @@ import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -45,10 +46,12 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * {@link #oopOrHub} is set at runtime, no oop exists and the object needs to be reconstructed by
  * the scalarized field values, if needed. If an oop exists it is up to the compiler to either use
  * the oop or the scalarized field values. The isNotNull information indicates if the inline object
- * is null or not, and can be used e.g. for the debugInfo (in C2 it is called isInit).
+ * is null or not, and can be used e.g. for null checks or for the debugInfo (in C2 it is called
+ * isInit).
  *
  * An {@link Invoke} is responsible for setting the {@link #isNotNull} output correctly based on the
- * {@link #oopOrHub}, because the information doesn't exist as return value.
+ * {@link #oopOrHub}, because the information doesn't exist as return value. It also has set the
+ * tagged hub to a null pointer.
  *
  * For a null-restricted flat field only the {@link #scalarizedInlineObject} will be set.
  *
@@ -105,7 +108,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public boolean isNullFree() {
-        return isNotNull == null;
+        return isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
     }
 
     public boolean hasOopOrHub() {
@@ -211,6 +214,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     private boolean scalarize = true;
+    private boolean insertGuardBeforeVirtualize = false;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -224,21 +228,46 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(type) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
-            if (!isNullFree()) {
-                // Because the node can represent a null value, insert a guard before we virtualize
-                tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
+            ValueNode oop = this.oopOrHub;
+            ValueNode notNull = this.isNotNull;
+            if (insertGuardBeforeVirtualize) {
+                if (!isNullFree()) {
+                    // Because the node can represent a null value, insert a guard before we
+                    // virtualize
+                    tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
+                    if (oopOrHub == null) {
+                        notNull = null;
+                    } else {
+                        notNull = ConstantNode.forInt(1, graph());
+                        tool.ensureAdded(notNull);
+                    }
+                }
+
             }
 
             // virtualize
-            VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false);
+            VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false, isNullFree() || insertGuardBeforeVirtualize);
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
                 state[i] = getField(i);
             }
 
-            // create virtual object and hand over oopOrHub
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oopOrHub);
+            // make sure both values are either null or set
+            // after an invoke we already have both
+            // a parameter only includes the isNotNull information so use the null pointer constant
+            if (oop == null && notNull != null) {
+                oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
+                tool.ensureAdded(oop);
+            }
+            if (oop != null && notNull == null) {
+                notNull = ConstantNode.forInt(1, graph());
+                tool.ensureAdded(notNull);
+            }
+
+            // create virtual object and hand over existing oop
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, notNull);
+            tool.isNullFree(virtualObject);
             tool.replaceWithVirtual(virtualObject);
         }
     }

@@ -205,9 +205,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         List<ValueNode> values = new ArrayList<>(8);
         List<List<MonitorIdNode>> locks = new ArrayList<>();
         List<ValueNode> oopsOrHubs = new ArrayList<>(8);
+        List<ValueNode> isNotNulls = new ArrayList<>(8);
         List<ValueNode> otherAllocations = new ArrayList<>(2);
         List<Boolean> ensureVirtual = new ArrayList<>(2);
-        materializeWithCommit(fixed, virtual, objects, locks, values, oopsOrHubs, ensureVirtual, otherAllocations, materializeEffects);
+        materializeWithCommit(fixed, virtual, objects, locks, values, oopsOrHubs, isNotNulls, ensureVirtual, otherAllocations, materializeEffects);
         /*
          * because all currently virtualized allocations will be materialized in 1 commit alloc node
          * with barriers, we ignore other allocations as we only process new instance and commit
@@ -228,7 +229,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 }
                 if (!objects.isEmpty()) {
                     CommitAllocationNode commit;
-                    if (fixed.predecessor() instanceof CommitAllocationNode && oopsOrHubs.isEmpty() || fixed.predecessor() instanceof CommitAllocationOrReuseOopNode) {
+                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && oopsOrHubs.isEmpty() ||
+                                    fixed.predecessor() instanceof CommitAllocationOrReuseOopNode && !oopsOrHubs.isEmpty()) {
                         commit = (CommitAllocationNode) fixed.predecessor();
                     } else {
                         try (DebugCloseable context = graph.withNodeSourcePosition(NodeSourcePosition.placeholder(graph.method()))) {
@@ -270,6 +272,9 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     }
                     for (ValueNode oopOrHub : oopsOrHubs) {
                         ((CommitAllocationOrReuseOopNode) commit).getOopsOrHubs().add(graph.addOrUniqueWithInputs(oopOrHub));
+                    }
+                    for (ValueNode isNotNull : isNotNulls) {
+                        ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(graph.addOrUniqueWithInputs(isNotNull));
                     }
                     commit.getEnsureVirtual().addAll(ensureVirtual);
 
@@ -332,7 +337,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     }
 
     private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<List<MonitorIdNode>> locks, List<ValueNode> values,
-                    List<ValueNode> oopsOrHubs,
+                    List<ValueNode> oopsOrHubs, List<ValueNode> isNotNulls,
                     List<Boolean> ensureVirtual, List<ValueNode> otherAllocations, GraphEffectList materializeEffects) {
         ObjectState obj = getObjectState(virtual);
 
@@ -346,6 +351,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
             locks.add(LockState.asList(obj.getLocks()));
             if (obj.getOopOrHub() != null)
                 oopsOrHubs.add(obj.getOopOrHub());
+            if (obj.getIsNotNull() != null)
+                isNotNulls.add(obj.getIsNotNull());
             ensureVirtual.add(obj.getEnsureVirtualized());
             int pos = values.size();
             while (values.size() < pos + entries.length) {

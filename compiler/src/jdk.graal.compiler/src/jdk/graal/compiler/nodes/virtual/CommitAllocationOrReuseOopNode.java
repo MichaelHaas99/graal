@@ -13,6 +13,7 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.BeginNode;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -25,6 +26,7 @@ import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
@@ -42,6 +44,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
     public static final NodeClass<CommitAllocationOrReuseOopNode> TYPE = NodeClass.create(CommitAllocationOrReuseOopNode.class);
 
     @Input NodeInputList<ValueNode> oopsOrHubs = new NodeInputList<>(this);
+    @Input NodeInputList<ValueNode> isNotNulls = new NodeInputList<>(this);
 
     public CommitAllocationOrReuseOopNode() {
         super(TYPE);
@@ -51,9 +54,14 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
         return oopsOrHubs;
     }
 
+    public List<ValueNode> getIsNotNulls() {
+        return isNotNulls;
+    }
+
     @Override
     public boolean verifyNode() {
         assertTrue(virtualObjects.size() == oopsOrHubs.size(), "values size doesn't match oopsOrHubs size");
+        assertTrue(virtualObjects.size() == isNotNulls.size(), "values size doesn't match isNotNulls size");
         return super.verifyNode();
     }
 
@@ -73,10 +81,14 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
         for (int i = 0; i < oopsOrHubs.size(); i++) {
 
             ValueNode oopOrHub = oopsOrHubs.get(i);
+            ValueNode isNotNull = isNotNulls.get(i);
 
-            // if oop is null, it is not yet buffered
+            // if isNotNull is 1 and oop is not null it is already
 
-            LogicNode isAlreadyBuffered = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(oopOrHub))));
+            LogicNode notNull = graph.addOrUnique(new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1, graph())));
+            LogicNode oopExists = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(oopOrHub))));
+            LogicNode isAlreadyBuffered = graph.addOrUnique(LogicNode.and(notNull, oopExists, ProfileData.BranchProbabilityData.unknown()));
+
             BeginNode trueBegin = graph.add(new BeginNode());
             BeginNode falseBegin = graph.add(new BeginNode());
 
@@ -153,7 +165,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
              * created.
              */
             tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i),
-                            oopsOrHubs.get(i));
+                            oopsOrHubs.get(i), isNotNulls.get(i));
             pos += entryCount;
         }
         tool.delete();
