@@ -648,6 +648,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 for (int i = 0; i < types.length; i++) {
                     JavaKind kind = types[types.length - i - 1].getJavaKind();
                     if (i == types.length - 1 && nullCheck || kind == JavaKind.Object) {
+                        toValue = toValues[toIndex - i];
                         if (ValueUtil.isStackSlot(toValue)) {
                             AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                             asm.movq(address, 0);
@@ -1099,7 +1100,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return spInc;
     }
 
-    private void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId) {
+    private void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
         HotSpotProviders providers = getProviders();
         if (rootMethod != null && !rootMethod.isStatic()) {
             JavaType[] parameterTypes = {providers.getMetaAccess().lookupJavaType(Object.class)};
@@ -1109,6 +1110,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             int before;
             if (config.icSpeculatedKlassOffset == Integer.MAX_VALUE) {
                 crb.recordMark(markId);
+                if (additionalMarkId != null) {
+                    crb.recordMark(additionalMarkId);
+                }
 
                 // c1_LIRAssembler_x86.cpp: const Register IC_Klass = rax;
                 Register inlineCacheKlass = rax;
@@ -1149,6 +1153,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
                 int startICCheck = asm.position();
                 crb.recordMark(markId);
+                if (additionalMarkId != null) {
+                    crb.recordMark(additionalMarkId);
+                }
 
                 AMD64Address icSpeculatedKlass = new AMD64Address(data, config.icSpeculatedKlassOffset);
 
@@ -1175,13 +1182,13 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
     private void emitEntry(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, boolean receiverOnly,
                     boolean verified, Label verifiedEntry, HotSpotMarkId additionalMarkId) {
-        asm.align(config.codeEntryAlignment);
+        // asm.align(config.codeEntryAlignment);
         crb.recordMark(markId);
         if (additionalMarkId != null) {
             crb.recordMark(additionalMarkId);
         }
         if (!verified) {
-            icCheck(rootMethod, crb, asm, regConfig, markId);
+            icCheck(rootMethod, crb, asm, regConfig, markId, additionalMarkId);
         } else {
             crb.frameContext.enter(crb, 0, true);
             crb.frameContext.leave(crb, false);
