@@ -38,6 +38,7 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.graph.Node.NodeIntrinsicFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
@@ -45,12 +46,15 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.UnaryOpLogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ConditionalNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.AnchoringNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -252,5 +256,29 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable {
             }
         }
         return super.implies(thisNegated, other);
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+        TriState fold = tryFold(alias.stamp(NodeView.DEFAULT));
+        if (fold != TriState.UNKNOWN) {
+            tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
+        } else if (alias instanceof VirtualObjectNode && !StampTool.isPointerNonNull(alias)) {
+            Stamp nonNull = StampFactory.objectNonNull().improveWith(alias.stamp(NodeView.DEFAULT));
+            fold = tryFold(nonNull);
+            if (fold != TriState.UNKNOWN) {
+                // the optimized condition is only true if the nullable virtual object is really not
+                // null
+                LogicNode result;
+                if (fold.isTrue()) {
+                    result = new IntegerEqualsNode(tool.getIsNotNull((VirtualObjectNode) alias), ConstantNode.forInt(1));
+                    tool.addNode(result);
+                } else {
+                    result = LogicConstantNode.forBoolean(false, graph());
+                }
+                tool.replaceWithValue(result);
+            }
+        }
     }
 }
