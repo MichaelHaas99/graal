@@ -68,7 +68,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
     @OptionalInput ValueNode oopOrHub;
-    @Input NodeInputList<ValueNode> scalarizedInlineObject;
+    @OptionalInput NodeInputList<ValueNode> scalarizedInlineObject;
     @OptionalInput ValueNode isNotNull;
 
     private final ResolvedJavaType type;
@@ -79,6 +79,22 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
         this.type = type;
         this.isNotNull = isNotNull;
+    }
+
+    public void setFieldValue(ResolvedJavaField field, ValueNode value) {
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
+        int index = -1;
+        // on average fields.length == ~6, so a linear search is fast enough
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i].equals(field)) {
+                index = i;
+            }
+        }
+
+        if (index != -1) {
+            scalarizedInlineObject.set(index, value);
+        }
+
     }
 
     public ValueNode getOopOrHub() {
@@ -115,6 +131,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return oopOrHub != null;
     }
 
+    public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode isNotNull) {
+        return new InlineTypeNode(type, oopOrHub, new ValueNode[type.getInstanceFields(true).length], isNotNull);
+    }
+
     public static InlineTypeNode createNullFree(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject) {
         return new InlineTypeNode(type, oopOrHub, scalarizedInlineObject, null);
     }
@@ -145,7 +165,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                         invoke.asNode(), fields.length + 1));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
-// b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
+// b.append(new ForeignCallNode(LOG_OBJECT, oopOrHub, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
         return newInstance;
