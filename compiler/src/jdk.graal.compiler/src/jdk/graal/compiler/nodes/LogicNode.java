@@ -71,6 +71,14 @@ public abstract class LogicNode extends FloatingNode implements IndirectInputCha
         return a.graph().unique(new ShortCircuitOrNode(a, negateA, b, negateB, shortCircuitProbability));
     }
 
+    public static LogicNode orWithoutGraphAdd(LogicNode a, LogicNode b, BranchProbabilityData shortCircuitProbability) {
+        return orWithoutGraphAdd(a, false, b, false, shortCircuitProbability);
+    }
+
+    public static LogicNode orWithoutGraphAdd(LogicNode a, boolean negateA, LogicNode b, boolean negateB, BranchProbabilityData shortCircuitProbability) {
+        return new ShortCircuitOrNode(a, negateA, b, negateB, shortCircuitProbability);
+    }
+
     public final boolean isTautology() {
         if (this instanceof LogicConstantNode) {
             LogicConstantNode logicConstantNode = (LogicConstantNode) this;
