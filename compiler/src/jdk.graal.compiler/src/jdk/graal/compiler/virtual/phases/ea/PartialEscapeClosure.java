@@ -1317,6 +1317,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     valueIndex++;
                 }
 
+                // TODO: refactor code
                 int additionalPhisCount = 0;
                 for (int i = 0; i < states.length; i++) {
                     int object = getObject.applyAsInt(i);

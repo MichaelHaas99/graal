@@ -107,6 +107,7 @@ import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.extended.JavaReadNode;
 import jdk.graal.compiler.nodes.extended.JavaWriteNode;
@@ -162,6 +163,7 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
+import jdk.graal.compiler.nodes.virtual.CommitAllocationOrReuseOopNode;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -1015,12 +1017,39 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             computeAllocationEmissionOrder(commit, emissionOrder);
 
             List<AbstractNewObjectNode> recursiveLowerings = new ArrayList<>();
+            List<InlineTypeNode> recursiveInlineTypeLowerings = new ArrayList<>();
             ValueNode[] allocations = new ValueNode[commit.getVirtualObjects().size()];
             BitSet omittedValues = new BitSet();
             for (int objIndex : emissionOrder) {
                 VirtualObjectNode virtual = commit.getVirtualObjects().get(objIndex);
                 try (DebugCloseable nsp = graph.withNodeSourcePosition(virtual)) {
                     int entryCount = virtual.entryCount();
+
+                    if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
+                        assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
+                        InlineTypeNode inlineTypeNode = InlineTypeNode.createWithoutValues(virtual.type(), reuseAlloc.getOopsOrHubs().get(objIndex), reuseAlloc.getIsNotNulls().get(objIndex));
+                        graph.add(inlineTypeNode);
+                        recursiveInlineTypeLowerings.add(inlineTypeNode);
+                        graph.addBeforeFixed(commit, inlineTypeNode);
+                        allocations[objIndex] = inlineTypeNode;
+                        int valuePos = valuePositions[objIndex];
+                        for (int i = 0; i < entryCount; i++) {
+                            ValueNode value = commit.getValues().get(valuePos);
+                            if (value instanceof VirtualObjectNode) {
+                                value = allocations[commit.getVirtualObjects().indexOf(value)];
+                            }
+                            if (value == null) {
+                                omittedValues.set(valuePos);
+                            } else {
+                                ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
+                                inlineTypeNode.setFieldValue(field, value);
+                            }
+                            valuePos++;
+                        }
+                        continue;
+
+                    }
+
                     AbstractNewObjectNode newObject;
                     if (virtual instanceof VirtualInstanceNode) {
                         newObject = graph.add(new NewInstanceNode(virtual.type(), true));
@@ -1088,6 +1117,14 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             ValueNode value = commit.getValues().get(valuePos);
                             assert value instanceof VirtualObjectNode : Assertions.errorMessageContext("value", value);
                             ValueNode allocValue = allocations[commit.getVirtualObjects().indexOf(value)];
+                            if (newObject instanceof InlineTypeNode inlineTypeNode) {
+                                assert virtual instanceof VirtualArrayNode : Assertions.errorMessageContext("virtual", virtual);
+                                VirtualInstanceNode virtualInstance = (VirtualInstanceNode) virtual;
+                                ResolvedJavaField field = virtualInstance.field(i);
+                                inlineTypeNode.setFieldValue(field, value);
+                                valuePos++;
+                                continue;
+                            }
                             if (!(allocValue.isConstant() && allocValue.asConstant().isDefaultForKind())) {
                                 JavaKind entryKind = virtual.entryKind(metaAccessExtensionProvider, i);
                                 assert entryKind == JavaKind.Object : Assertions.errorMessageContext("entryKind", entryKind);
@@ -1122,6 +1159,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             graph.removeFixed(commit);
 
             for (AbstractNewObjectNode recursiveLowering : recursiveLowerings) {
+                recursiveLowering.lower(tool);
+            }
+            for (InlineTypeNode recursiveLowering : recursiveInlineTypeLowerings) {
                 recursiveLowering.lower(tool);
             }
         }
