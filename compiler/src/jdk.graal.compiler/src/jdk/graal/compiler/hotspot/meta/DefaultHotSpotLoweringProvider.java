@@ -106,6 +106,7 @@ import jdk.graal.compiler.hotspot.replacements.ObjectCloneSnippets;
 import jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets;
 import jdk.graal.compiler.hotspot.replacements.ObjectSnippets;
 import jdk.graal.compiler.hotspot.replacements.RegisterFinalizerSnippets;
+import jdk.graal.compiler.hotspot.replacements.ReturnResultDeciderSnippets;
 import jdk.graal.compiler.hotspot.replacements.UnsafeCopyMemoryNode;
 import jdk.graal.compiler.hotspot.replacements.UnsafeSetMemoryNode;
 import jdk.graal.compiler.hotspot.replacements.UnsafeSnippets;
@@ -153,6 +154,7 @@ import jdk.graal.compiler.nodes.calc.FloatingIntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.calc.IntegerConvertNode;
 import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
+import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.NarrowNode;
@@ -181,6 +183,7 @@ import jdk.graal.compiler.nodes.extended.OSRLocalNode;
 import jdk.graal.compiler.nodes.extended.OSRLockNode;
 import jdk.graal.compiler.nodes.extended.OSRMonitorEnterNode;
 import jdk.graal.compiler.nodes.extended.OSRStartNode;
+import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.StoreHubNode;
 import jdk.graal.compiler.nodes.gc.G1ArrayRangePostWriteBarrierNode;
 import jdk.graal.compiler.nodes.gc.G1ArrayRangePreWriteBarrierNode;
@@ -307,6 +310,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected IsNullFreeArraySnippets.Templates isNullFreeArraySnippets;
     protected FlatArrayComponentSizeSnippets.Templates flatArrayComponentSizeSnippets;
     protected DelayedRawComparisonSnippets.Templates delayedRawcomparisonSnippets;
+    protected ReturnResultDeciderSnippets.Templates returnResultDeciderSnippets;
     protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
     protected HotSpotG1WriteBarrierSnippets.Templates g1WriteBarrierSnippets;
     protected LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
@@ -364,6 +368,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         isNullFreeArraySnippets = new IsNullFreeArraySnippets.Templates(options, providers, target);
         flatArrayComponentSizeSnippets = new FlatArrayComponentSizeSnippets.Templates(options, providers);
         delayedRawcomparisonSnippets = new DelayedRawComparisonSnippets.Templates(options, providers);
+        returnResultDeciderSnippets = new ReturnResultDeciderSnippets.Templates(options, providers);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, runtime, providers, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, runtime, providers);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers);
@@ -651,6 +656,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerFlatArrayComponentSize((FlatArrayComponentSizeNode) n, tool, graph);
         } else if (n instanceof DelayedRawComparisonNode) {
             lowerDelayRawComparison((DelayedRawComparisonNode) n, tool, graph);
+        } else if (n instanceof ReturnResultDeciderNode) {
+            lowerReturnResultDecider((ReturnResultDeciderNode) n, tool);
         } else {
             return false;
         }
@@ -862,6 +869,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (!node.isAccessKindConstant())
             return;
         delayedRawcomparisonSnippets.lower(node, tool);
+    }
+
+    protected void lowerReturnResultDecider(ReturnResultDeciderNode node, LoweringTool tool) {
+        returnResultDeciderSnippets.lower(node, tool);
     }
 
     private void lowerKlassLayoutHelperNode(KlassLayoutHelperNode n, LoweringTool tool) {
@@ -1278,12 +1289,16 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
         LogicNode check = null;
         if (inlineTypeNode.hasOopOrHub()) {
-            // use oopOrHub for check if already buffered
+            // use existing oop instead of an allocation
             // true case: oop or null -> just return
             // false case: scalarized -> reconstruct
-            LogicNode notNull = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(inlineTypeNode.createIsNullCheck())));
-            LogicNode oopExists = graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(inlineTypeNode.getOopOrHub()))));
-            check = graph.addOrUnique(LogicNode.and(notNull, oopExists, ProfileData.BranchProbabilityData.unknown()));
+
+            // in case it is not null and the oop is null it is not already buffered, so just negate
+            // the condition
+            LogicNode notNull = graph.addOrUnique(new IntegerEqualsNode(inlineTypeNode.getIsNotNull(), ConstantNode.forInt(1, graph)));
+            LogicNode oopIsNull = graph.addOrUnique(new IsNullNode(inlineTypeNode.getOopOrHub()));
+            check = graph.addOrUniqueWithInputs(
+                            LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
 
         } else if (!inlineTypeNode.isNullFree()) {
             // check if the scalarized object is null
@@ -1343,7 +1358,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
             // merge
             MergeNode merge = graph.add(new MergeNode());
-            merge.setStateAfter(framestate);
+            merge.setStateAfter(framestate.duplicate());
 
             ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(inlineTypeNode.stamp(NodeView.DEFAULT), merge,
                             inlineTypeNode.getOopOrHub() == null ? ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph) : inlineTypeNode.getOopOrHub(), newObj));
