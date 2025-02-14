@@ -71,10 +71,6 @@ public class ReturnNode extends MemoryMapControlSinkNode implements LIRLowerable
 
     private boolean verifyReturn(TargetDescription target) {
         if (graph().method() != null) {
-            if (graph().method().hasScalarizedReturn())
-                // in case we have a nullable scalarized inline object the result input is null and
-                // created during LIR
-                return true;
             JavaKind actual = result == null ? JavaKind.Void : result.getStackKind();
             JavaKind expected = graph().method().getSignature().getReturnKind().getStackKind();
             if (actual == target.wordJavaKind && expected == JavaKind.Object) {

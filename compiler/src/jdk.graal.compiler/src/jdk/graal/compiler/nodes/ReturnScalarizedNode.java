@@ -5,17 +5,14 @@ import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.graal.compiler.core.common.LIRKind;
-import jdk.graal.compiler.core.common.calc.Condition;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
-import jdk.graal.compiler.lir.ConstantValue;
-import jdk.graal.compiler.lir.Variable;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
@@ -26,7 +23,6 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -42,16 +38,17 @@ import jdk.vm.ci.meta.Value;
 public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static final NodeClass<ReturnScalarizedNode> TYPE = NodeClass.create(ReturnScalarizedNode.class);
 
-    @OptionalInput private ValueNode existingOop;
-    @OptionalInput private ValueNode isNotNull;
-    private boolean doLirCheck = false;
-    private ResolvedJavaType PEAResolvedJavaType;
 
     @OptionalInput private NodeInputList<ValueNode> scalarizedInlineObject;
 
     public ReturnScalarizedNode(ValueNode result, List<ValueNode> scalarizedInlineObject) {
         super(TYPE, result);
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
+    }
+
+    public void setResult(ValueNode newResult) {
+        updateUsages(this.result, newResult);
+        this.result = newResult;
     }
 
     public ValueNode getField(int index) {
@@ -108,7 +105,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
         // merge
         MergeNode merge = b.append(new MergeNode());
-        merge.setStateAfter(framestate);
+        merge.setStateAfter(framestate.duplicate());
 
         // produces phi nodes
         ValuePhiNode[] phis = new ValuePhiNode[fields.length];
@@ -134,27 +131,8 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             operands[i] = gen.operand(valueNode);
         }
 
-        if (doLirCheck) {
-            /*
-             * if(scalarized inline object is not null){ if(existingOop is not null) return
-             * existingOop; else return taggedHub; }else{ return null; }
-             */
-            LIRKind kind = LIRKind.fromJavaKind(gen.getLIRGeneratorTool().target().arch, JavaKind.Object);
-
-            Value nullPointerValue = gen.getLIRGeneratorTool().emitConstant(kind, JavaConstant.NULL_POINTER);
-            ConstantValue intOne = new ConstantValue(kind,
-                            JavaConstant.forInt(1));
-            Value hub = gen.getLIRGeneratorTool().emitConstant(kind, gen.getLIRGeneratorTool().getConstantReflection().asObjectHub(PEAResolvedJavaType));
-            Value taggedHub = gen.getLIRGeneratorTool().getArithmetic().emitOr(hub, intOne);
-            Variable oopOrHub = gen.getLIRGeneratorTool().emitConditionalMove(kind.getPlatformKind(), gen.operand(existingOop), nullPointerValue, Condition.EQ, false, taggedHub,
-                            gen.operand(existingOop));
-            Variable realResult = gen.getLIRGeneratorTool().emitConditionalMove(kind.getPlatformKind(), gen.operand(isNotNull), intOne, Condition.EQ, false, oopOrHub,
-                            nullPointerValue);
-            gen.getLIRGeneratorTool().emitScalarizedReturn(JavaKind.Object, realResult, stackKinds, operands);
-        } else {
-            gen.getLIRGeneratorTool().emitScalarizedReturn(result.getStackKind(),
-                            gen.operand(result), stackKinds, operands);
-        }
+        gen.getLIRGeneratorTool().emitScalarizedReturn(result.getStackKind(),
+                        gen.operand(result), stackKinds, operands);
 
     }
 
@@ -170,68 +148,43 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             TypeReference type = StampTool.typeReferenceOrNull(alias);
             assert type != null && type.isExact() : "type should not be null for constant hub node in scalarized return";
 
-            if (!StampTool.isPointerNonNull(alias)) {
-                // nullable scalarized inline object
+            if (!StampTool.isPointerNonNull(alias) || !tool.hasNoExistingOop(virtualObjectNode)) {
+                // nullable scalarized inline object or non-null scalarized inline object including
+                // oop
                 ValueNode existingOop = tool.getExistingOop((VirtualObjectNode) alias);
                 ValueNode isNotNull = tool.getIsNotNull((VirtualObjectNode) alias);
                 assert existingOop != null && isNotNull != null : "nullable scalarized object expected existingOop and isNotNull information to be set";
 
-                Runnable setExistingOop = () -> {
-                    updateUsages(this.existingOop, existingOop);
-                    this.existingOop = existingOop;
-                };
-                tool.applyRunnable(this, setExistingOop);
+                // get hub
+                ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
+                                tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
+                tool.addNode(hub);
 
-                Runnable setIsNotNull = () -> {
-                    updateUsages(this.isNotNull, isNotNull);
-                    this.isNotNull = isNotNull;
-                };
-                tool.applyRunnable(this, setIsNotNull);
+                ValueNode returnResultDecider = new ReturnResultDeciderNode(isNotNull, existingOop, hub);
+                tool.ensureAdded(returnResultDecider);
+                tool.replaceFirstInput(result, returnResultDecider);
 
-// if (tool.getExistingOop((VirtualObjectNode) alias) != null) {
-// // virtual object includes an existing oop (maybe also just null constant) so update the input
-// Runnable setExistingOop = () -> {
-// updateUsages(this.existingOop, tool.getExistingOop((VirtualObjectNode) alias));
-// this.existingOop = tool.getExistingOop((VirtualObjectNode) alias);
-// };
-// tool.applyRunnable(this, setExistingOop);
-//
-// }
-// if (tool.getIsNotNull((VirtualObjectNode) alias) != null) {
-// Runnable setIsNotNull = () -> {
-// updateUsages(this.isNotNull, tool.getIsNotNull((VirtualObjectNode) alias));
-// this.isNotNull = tool.getIsNotNull((VirtualObjectNode) alias);
-// };
-// tool.applyRunnable(this, setIsNotNull);
-//
-// }
-                PEAResolvedJavaType = type.getType();
-                doLirCheck = true;
-                Runnable deleteFirstInput = () -> {
-                    updateUsages(this.result, null);
-                    this.result = null;
-                };
-                tool.applyRunnable(this, deleteFirstInput);
-
-                // the nullable virtual inline object contains correct for both cases (null and
-                // non-null). Therefore use its values to replace the input list.
+                // The nullable virtual inline object contains correct values for both cases (null
+                // and non-null). Therefore use its values to replace the input list.
                 // At a later stage this will remove the CFG which was created for the scalarized
                 // return.
-                ResolvedJavaField[] fields = PEAResolvedJavaType.getInstanceFields(true);
-                List<ValueNode> list = new ArrayList<>(scalarizedInlineObject.size());
-                for (int i = 0; i < fields.length; i++) {
-                    int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(fields[i]);
-                    ValueNode enty = tool.getEntry(virtualObjectNode, fieldIndex);
-                    list.add(enty);
+                if (!StampTool.isPointerNonNull(virtualObjectNode)) {
+                    ResolvedJavaField[] fields = type.getType().getInstanceFields(true);
+                    List<ValueNode> list = new ArrayList<>(scalarizedInlineObject.size());
+                    for (int i = 0; i < fields.length; i++) {
+                        int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(fields[i]);
+                        ValueNode enty = tool.getEntry(virtualObjectNode, fieldIndex);
+                        list.add(enty);
+                    }
+                    Runnable updateList = () -> {
+                        scalarizedInlineObject.clear();
+                        scalarizedInlineObject.addAll(list);
+                    };
+                    tool.applyRunnable(this, updateList);
                 }
-                Runnable updateList = () -> {
-                    scalarizedInlineObject.clear();
-                    scalarizedInlineObject.addAll(list);
-                };
-                tool.applyRunnable(this, updateList);
                 return;
-            }
 
+            }
 
             // get hub
             ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
@@ -246,4 +199,5 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             tool.replaceFirstInput(result, taggedHub);
         }
     }
+
 }
