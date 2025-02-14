@@ -113,8 +113,13 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
-        // createNullCheck(virtualObject);
         return state.getObjectState(virtualObject).getEntry(index);
+    }
+
+    @Override
+    public boolean hasNoExistingOop(VirtualObjectNode virtualObject) {
+        ValueNode oop = getExistingOop(virtualObject);
+        return oop == null || oop.isNullConstant();
     }
 
     @Override
@@ -385,6 +390,26 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             assert virtualObject.getNodeSourcePosition() == null || virtualObject.getNodeSourcePosition() == sourcePosition : "unexpected source pos!";
             virtualObject.setNodeSourcePosition(sourcePosition);
         }
+    }
+
+    @Override
+    public VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from) {
+        if (StampTool.isPointerNonNull(from))
+            return from;
+        VirtualInstanceNode virtualObject = new VirtualInstanceNode(from.type(), from.type().isIdentity());
+        effects.addFloatingNode(virtualObject, "newVirtualObject");
+        int id = virtualObject.getObjectId();
+        if (id == -1) {
+            id = closure.virtualObjects.size();
+            closure.virtualObjects.add(virtualObject);
+            virtualObject.setObjectId(id);
+        }
+        ObjectState state = this.state.getObjectState(from).cloneState();
+        ValueNode constOne = ConstantNode.forInt(1);
+        ensureAdded(constOne);
+        state.setIsNotNull(constOne);
+        this.state.addObject(id, state);
+        return virtualObject;
     }
 
     @Override
