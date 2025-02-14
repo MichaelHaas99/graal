@@ -271,10 +271,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                         commit.addLocks(monitorIds);
                     }
                     for (ValueNode oopOrHub : oopsOrHubs) {
-                        ((CommitAllocationOrReuseOopNode) commit).getOopsOrHubs().add(graph.addOrUniqueWithInputs(oopOrHub));
+                        ((CommitAllocationOrReuseOopNode) commit).getOopsOrHubs().add(oopOrHub != null ? graph.addOrUniqueWithInputs(oopOrHub) : null);
                     }
                     for (ValueNode isNotNull : isNotNulls) {
-                        ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(graph.addOrUniqueWithInputs(isNotNull));
+                        ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(isNotNull != null ? graph.addOrUniqueWithInputs(isNotNull) : null);
                     }
                     commit.getEnsureVirtual().addAll(ensureVirtual);
 
@@ -349,10 +349,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         if (representation instanceof AllocatedObjectNode) {
             objects.add((AllocatedObjectNode) representation);
             locks.add(LockState.asList(obj.getLocks()));
-            if (obj.getOopOrHub() != null)
-                oopsOrHubs.add(obj.getOopOrHub());
-            if (obj.getIsNotNull() != null)
-                isNotNulls.add(obj.getIsNotNull());
+            oopsOrHubs.add(obj.getOopOrHub());
+            isNotNulls.add(obj.getIsNotNull());
             ensureVirtual.add(obj.getEnsureVirtualized());
             int pos = values.size();
             while (values.size() < pos + entries.length) {
@@ -363,7 +361,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
                     ObjectState entryObj = getObjectState(entryVirtual);
                     if (entryObj.isVirtual()) {
-                        materializeWithCommit(fixed, entryVirtual, objects, locks, values, ensureVirtual, otherAllocations, materializeEffects);
+                        materializeWithCommit(fixed, entryVirtual, objects, locks, values, oopsOrHubs, isNotNulls, ensureVirtual, otherAllocations, materializeEffects);
                         entryObj = getObjectState(entryVirtual);
                     }
                     values.set(pos + i, entryObj.getMaterializedValue());

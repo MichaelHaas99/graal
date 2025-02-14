@@ -174,6 +174,9 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
+
+            // make sure to insert a null check in case the virtual object is nullable and no proxy
+            // is in between
             ObjectState obj = getObjectState(state, unproxiedObject);
             if (obj != null) {
                 assert !obj.isVirtual() : object;
