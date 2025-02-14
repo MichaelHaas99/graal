@@ -221,26 +221,33 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                 if (type.equals(yVirtual.type())) {
                     MetaAccessProvider metaAccess = tool.getMetaAccess();
 
+                    // node indicating the result of field comparison
+                    LogicNode fieldComparison = LogicConstantNode.tautology(graph);
+
+                    // node indicating the result of isNotNull comparison
+                    LogicNode isNotNullComparison = LogicConstantNode.tautology();
+
                     // make sure nullable scalarized inline objects are handled correctly
-                    LogicNode newCondition = LogicConstantNode.tautology(graph);
                     ValueNode xIsNotNull = tool.getIsNotNull(xVirtual);
                     ValueNode yIsNotNull = tool.getIsNotNull(yVirtual);
+
+                    LogicNode orWithFieldComparison = LogicConstantNode.contradiction();
                     if (!StampTool.isPointerNonNull(xVirtual) && !StampTool.isPointerNonNull(yVirtual)) {
                         assert xIsNotNull != null && yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
-                        newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, yIsNotNull),
-                                        ProfileData.BranchProbabilityData.unknown());
+                        isNotNullComparison = new IntegerEqualsNode(xIsNotNull, yIsNotNull);
+
+                        // needs to make field comparison true, in case both are null
+                        orWithFieldComparison = new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(0));
                     } else if (StampTool.isPointerNonNull(xVirtual) && StampTool.isPointerNonNull(yVirtual)) {
                         // nothing to do both are non-null
                     } else if (!StampTool.isPointerNonNull(xVirtual)) {
                         // x may be null, y is not therefore x needs to be non-null
                         assert xIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
-                        newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1)),
-                                        ProfileData.BranchProbabilityData.unknown());
+                        isNotNullComparison = new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1));
                     } else {
                         // y may be null, x is not therefore y needs to be non-null
                         assert yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
-                        newCondition = LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(yIsNotNull, ConstantNode.forInt(1)),
-                                        ProfileData.BranchProbabilityData.unknown());
+                        isNotNullComparison = new IntegerEqualsNode(yIsNotNull, ConstantNode.forInt(1));
                     }
 
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
@@ -248,7 +255,11 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1 : Assertions.errorMessageContext("x", xVirtual, "y", yVirtual);
                         assert xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0).getStackKind() == JavaKind.Int ||
                                         xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0) == JavaKind.Long : Assertions.errorMessage(x, y, xVirtual);
-                        return LogicNode.andWithoutGraphAdd(newCondition, new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0)), ProfileData.BranchProbabilityData.unknown());
+                        fieldComparison = LogicNode.andWithoutGraphAdd(fieldComparison, new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0)),
+                                        ProfileData.BranchProbabilityData.unknown());
+                        // return LogicNode.andWithoutGraphAdd(isNotNullComparison, new
+                        // IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual,
+                        // 0)), ProfileData.BranchProbabilityData.unknown());
                     } else {
                         boolean comparisonResultUnknown = false;
 
@@ -270,8 +281,23 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                     result = IntegerEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                     tool.getOptions(), null, xFieldNode, yFieldNode, NodeView.DEFAULT);
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
+// ForeignCallNode logx = new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph), xFieldNode,
+// ConstantNode.forBoolean(true,
+// graph));
+// ForeignCallNode logy = new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph), yFieldNode,
+// ConstantNode.forBoolean(true,
+// graph));
+// ForeignCallNode logx = new ForeignCallNode(LOG_OBJECT, xFieldNode, ConstantNode.forBoolean(true,
+// graph), ConstantNode.forBoolean(true, graph));
+// ForeignCallNode logy = new ForeignCallNode(LOG_OBJECT, yFieldNode, ConstantNode.forBoolean(true,
+// graph), ConstantNode.forBoolean(true, graph));
+// tool.addNode(logx);
+// tool.addNode(logy);
                                     result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                     tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                    // result = LogicConstantNode.tautology();
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
                                     ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,
                                                     tool.getConstantReflection());
@@ -293,15 +319,19 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             if (result.isContradiction())
                                 return result;
 
-                            newCondition = LogicNode.andWithoutGraphAdd(newCondition, result,
+                            fieldComparison = LogicNode.andWithoutGraphAdd(fieldComparison, result,
                                             ProfileData.BranchProbabilityData.unknown());
                         }
 
                         if (comparisonResultUnknown)
                             return null;
 
-                        return newCondition;
+                        // comparison = LogicNode.orWithoutGraphAdd(comparison, orComparison,
+                        // ProfileData.BranchProbabilityData.unknown());
+                        // return comparison;
                     }
+                    return LogicNode.andWithoutGraphAdd(isNotNullComparison, LogicNode.orWithoutGraphAdd(orWithFieldComparison, fieldComparison, ProfileData.BranchProbabilityData.unknown()),
+                                    ProfileData.BranchProbabilityData.unknown());
                 }
             } else {
                 // both are virtual with identity: check if they refer to the same object
