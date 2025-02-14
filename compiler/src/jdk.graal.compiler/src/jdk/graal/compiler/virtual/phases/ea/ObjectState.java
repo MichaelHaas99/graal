@@ -250,6 +250,10 @@ public class ObjectState {
         return isNotNull;
     }
 
+    public ValueNode setIsNotNull(ValueNode isNotNull) {
+        return this.isNotNull = isNotNull;
+    }
+
     public boolean hasLocks() {
         return locks != null;
     }

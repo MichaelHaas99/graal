@@ -73,6 +73,8 @@ public interface VirtualizerTool extends CoreProviders {
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oopOrHub,
                     ValueNode isNotNull);
 
+    VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from);
+
     /**
      * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still
      * virtual, the materialized value of the given value is aliased with a virtual object that was
@@ -102,6 +104,8 @@ public interface VirtualizerTool extends CoreProviders {
     }
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
+
+    boolean hasNoExistingOop(VirtualObjectNode virtualObject);
 
     ValueNode getExistingOop(VirtualObjectNode virtualObject);
 
