@@ -147,7 +147,9 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
                 int entryIndex = virtual.entryIndexForOffset(tool.getMetaAccess(), off, accessKind());
 
                 if (entryIndex != -1) {
-                    tool.createNullCheck(virtual);
+                    if (!StampTool.isPointerNonNull(virtual)) {
+                        tool.createNullCheck(virtual);
+                    }
                     ValueNode entry = tool.getEntry(virtual, entryIndex);
                     JavaKind entryKind = virtual.entryKind(tool.getMetaAccessExtensionProvider(), entryIndex);
 
