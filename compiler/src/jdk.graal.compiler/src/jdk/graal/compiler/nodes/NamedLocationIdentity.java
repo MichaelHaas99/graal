@@ -156,11 +156,18 @@ public class NamedLocationIdentity extends LocationIdentity implements FormatWit
      * element need to be distinct. This is achieved by also considering the offset of the field.
      */
     public static LocationIdentity getFlatArrayLocation(ResolvedJavaField field) {
-        String name = "Array: " + JavaKind.Object.getJavaName() + " " + field.getOffset();
+        String name = FLAT_ARRAY_BASE_STRING + field.getOffset();
+        return FLAT_ARRAY_LOCATIONS.computeIfAbsent(name, NamedLocationIdentity::mutable);
+
+    }
+
+    public static LocationIdentity getFlatArrayDefaultLocation() {
+        String name = FLAT_ARRAY_BASE_STRING + "0";
         return FLAT_ARRAY_LOCATIONS.computeIfAbsent(name, NamedLocationIdentity::mutable);
 
     }
 
     private static final ConcurrentHashMap<String, LocationIdentity> FLAT_ARRAY_LOCATIONS = new ConcurrentHashMap<>();
+    private static final String FLAT_ARRAY_BASE_STRING = "Array: " + JavaKind.Object.getJavaName() + " ";
 
 }

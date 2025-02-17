@@ -194,7 +194,8 @@ public class BoxingSnippets implements Snippets {
                                     BoxingSnippets.class,
                                     kind.getJavaName() + "ValueOf",
                                     trueField,
-                                    falseField));
+                                    falseField,
+                                    NamedLocationIdentity.getFlatArrayDefaultLocation()));
                 } else {
                     GraalError.guarantee(!mustHaveCacheField || cacheLocation != null, "Must have a cache location for kind %s", kind);
                     if (cacheLocation != null) {
@@ -204,20 +205,23 @@ public class BoxingSnippets implements Snippets {
                                         LocationIdentity.INIT_LOCATION,
                                         accessedLocation,
                                         cacheLocation,
-                                        NamedLocationIdentity.getArrayLocation(JavaKind.Object)));
+                                        NamedLocationIdentity.getArrayLocation(JavaKind.Object),
+                                        NamedLocationIdentity.getFlatArrayDefaultLocation()));
                     } else {
                         boxSnippets.put(kind, snippet(providers,
                                         BoxingSnippets.class,
                                         kind.getJavaName() + "ValueOf",
                                         LocationIdentity.INIT_LOCATION,
                                         accessedLocation,
-                                        NamedLocationIdentity.getArrayLocation(JavaKind.Object)));
+                                        NamedLocationIdentity.getArrayLocation(JavaKind.Object),
+                                        NamedLocationIdentity.getFlatArrayDefaultLocation()));
                     }
                 }
                 unboxSnippets.put(kind, snippet(providers,
                                 BoxingSnippets.class,
                                 kind.getJavaName() + "Value",
-                                accessedLocation));
+                                accessedLocation,
+                                NamedLocationIdentity.getFlatArrayDefaultLocation()));
             }
             SnippetCounter.Group group = factory.createSnippetCounterGroup("Boxing");
             valueOfCounter = new SnippetCounter(group, "valueOf", "box intrinsification");
