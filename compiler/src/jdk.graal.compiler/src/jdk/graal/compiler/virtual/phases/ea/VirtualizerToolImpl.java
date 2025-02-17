@@ -124,7 +124,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public ValueNode getExistingOop(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).getOopOrHub();
+        return state.getObjectState(virtualObject).getExistingOop();
     }
 
     @Override
@@ -134,22 +134,13 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void createNullCheck(VirtualObjectNode virtualObject) {
-        if (isNullFree(virtualObject))
+        if (StampTool.isPointerNonNull(virtualObject))
             return;
         ValueNode isNotNull = state.getObjectState(virtualObject).getIsNotNull();
-        if (isNotNull != null) {
-            LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(0));
-            ensureAdded(check);
-            addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true));
-        }
-    }
-
-    public boolean isNullFree(VirtualObjectNode virtualObject) {
-        ValueNode isNotNull = state.getObjectState(virtualObject).getIsNotNull();
-        boolean result = isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
-        assert StampTool.isPointerNonNull(virtualObject) == result : "stamp and null check should indicate the same";
-        return result;
-
+        assert isNotNull != null : "nullable scalarized inline object expect isNotNull information to be set";
+        LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1));
+        ensureAdded(check);
+        addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false));
     }
 
     @Override
@@ -333,12 +324,6 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     @Override
     public void replaceFirstInput(Node oldInput, Node replacement) {
         effects.replaceFirstInput(current, oldInput, replacement);
-    }
-
-    @Override
-    public void applyRunnable(Node node, Runnable action) {
-        effects.applyRunnable(node, action);
-        // effects.replaceFirstInput(current, oldInput, replacement);
     }
 
     @Override

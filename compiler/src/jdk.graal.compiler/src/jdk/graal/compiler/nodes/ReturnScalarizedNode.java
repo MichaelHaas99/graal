@@ -2,7 +2,6 @@ package jdk.graal.compiler.nodes;
 
 import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.ObjectStamp;
@@ -136,7 +135,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
     }
 
-    private boolean virtualize = true;
+    private boolean virtualize = false;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -160,7 +159,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                                 tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
                 tool.addNode(hub);
 
-                ValueNode returnResultDecider = new ReturnResultDeciderNode(isNotNull, existingOop, hub);
+                ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), isNotNull, existingOop, hub);
                 tool.ensureAdded(returnResultDecider);
                 tool.replaceFirstInput(result, returnResultDecider);
 
@@ -170,17 +169,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 // return.
                 if (!StampTool.isPointerNonNull(virtualObjectNode)) {
                     ResolvedJavaField[] fields = type.getType().getInstanceFields(true);
-                    List<ValueNode> list = new ArrayList<>(scalarizedInlineObject.size());
                     for (int i = 0; i < fields.length; i++) {
                         int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(fields[i]);
-                        ValueNode enty = tool.getEntry(virtualObjectNode, fieldIndex);
-                        list.add(enty);
+                        ValueNode entry = tool.getEntry(virtualObjectNode, fieldIndex);
+                        tool.replaceFirstInput(scalarizedInlineObject.get(i), entry);
                     }
-                    Runnable updateList = () -> {
-                        scalarizedInlineObject.clear();
-                        scalarizedInlineObject.addAll(list);
-                    };
-                    tool.applyRunnable(this, updateList);
                 }
                 return;
 
