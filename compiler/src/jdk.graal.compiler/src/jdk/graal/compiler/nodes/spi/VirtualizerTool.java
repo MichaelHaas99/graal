@@ -113,8 +113,6 @@ public interface VirtualizerTool extends CoreProviders {
 
     void createNullCheck(VirtualObjectNode virtualObject);
 
-    boolean isNullFree(VirtualObjectNode virtualObject);
-
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 
     MonitorIdNode removeLock(VirtualObjectNode virtualObject);
@@ -151,8 +149,6 @@ public interface VirtualizerTool extends CoreProviders {
      * @param replacement the new input value.
      */
     void replaceFirstInput(Node oldInput, Node replacement);
-
-    void applyRunnable(Node node, Runnable action);
 
     /**
      * Adds the given node to the graph. This action will only be performed when, and if, the
