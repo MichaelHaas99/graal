@@ -381,7 +381,7 @@ public class InlineTypePlugin implements NodePlugin {
             // holder has no header so remove the header offset
             load.setAdditionalOffset(off);
             load.setShift(shift);
-            load.setLocation(innerField.setOuterDeclaringClass(componentType));
+            load.setLocation(innerField.changeOffset(off).setOuterDeclaringClass(componentType));
             loads[i] = b.add(load);
 
         }
@@ -409,8 +409,8 @@ public class InlineTypePlugin implements NodePlugin {
             // produce checks for all store indexed nodes
             array = genNullCheck(b, array);
             boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
-            storeCheck = genStoreCheck(b, storeCheck, array, value);
             index = createPositiveIndex(b.getGraph(), index, boundsCheck);
+            storeCheck = genStoreCheck(b, storeCheck, array, value);
 
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
@@ -425,9 +425,10 @@ public class InlineTypePlugin implements NodePlugin {
 
             // runtime check necessary
 
-            BeginNode trueBegin = b.getGraph().add(new BeginNode());
+            // BeginNode trueBegin = b.getGraph().add(new BeginNode());
+            BeginNode trueBegin = null;
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
-            genFlatArrayCheck(b, array, trueBegin, falseBegin);
+            IfNode ifNode = genFlatArrayCheck(b, array, trueBegin, falseBegin);
 
 
 
@@ -435,6 +436,9 @@ public class InlineTypePlugin implements NodePlugin {
             EndNode trueEnd;
             // we store the value in a flat array we need to do a null check before loading the
             // fields
+            trueBegin = b.append(new BeginNode());
+            ifNode.setTrueSuccessor(trueBegin);
+
             ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
             if (isInlineTypeArray) {
 
@@ -453,7 +457,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                ForeignCallNode store = b.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, index, value));
+                ForeignCallNode store = b.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, index, nullCheckedValue));
                 if (hasNoNext(trueBegin))
                     trueBegin.setNext(store);
                 trueEnd = b.add(new EndNode());
@@ -509,12 +513,12 @@ public class InlineTypePlugin implements NodePlugin {
         return returnValue;
     }
 
-    private void genFlatArrayCheck(GraphBuilderContext b, ValueNode array, BeginNode trueBegin, BeginNode falseBegin) {
+    private IfNode genFlatArrayCheck(GraphBuilderContext b, ValueNode array, BeginNode trueBegin, BeginNode falseBegin) {
         IsFlatArrayNode isFlatArrayNode = b.add(new IsFlatArrayNode(array));
         LogicNode condition = b.add(new IntegerEqualsNode(isFlatArrayNode, ConstantNode.forConstant(JavaConstant.INT_1, b.getMetaAccess(), b.getGraph())));
 
         // TODO: insert profiling data
-        b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        return b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
     private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value) {
@@ -522,14 +526,7 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value, BeginNode begin) {
-        if (!StampTool.isPointerNonNull(value)) {
-            LogicNode condition = b.add(IsNullNode.create(value));
-            FixedNode guardingNode = b.add(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, InvalidateReprofile, true));
-            if (hasNoNext(begin))
-                begin.setNext(guardingNode);
-            return b.add(PiNode.create(value, StampFactory.objectNonNull(), guardingNode));
-        }
-        return value;
+        return b.nullCheckedValue(value);
     }
 
     private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value) {
