@@ -349,7 +349,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         if (representation instanceof AllocatedObjectNode) {
             objects.add((AllocatedObjectNode) representation);
             locks.add(LockState.asList(obj.getLocks()));
-            oopsOrHubs.add(obj.getOopOrHub());
+            oopsOrHubs.add(obj.getExistingOop());
             isNotNulls.add(obj.getIsNotNull());
             ensureVirtual.add(obj.getEnsureVirtualized());
             int pos = values.size();

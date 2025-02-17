@@ -1250,7 +1250,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         StructuredGraph graph = inlineTypeNode.graph();
 
         LogicNode check = null;
-        if (inlineTypeNode.hasOopOrHub()) {
+        if (!inlineTypeNode.hasNoExistingOop()) {
             // use existing oop instead of an allocation
             // true case: oop or null -> just return
             // false case: scalarized -> reconstruct
@@ -1258,7 +1258,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             // in case it is not null and the oop is null it is not already buffered, so just negate
             // the condition
             LogicNode notNull = graph.addOrUnique(new IntegerEqualsNode(inlineTypeNode.getIsNotNull(), ConstantNode.forInt(1, graph)));
-            LogicNode oopIsNull = graph.addOrUnique(new IsNullNode(inlineTypeNode.getOopOrHub()));
+            LogicNode oopIsNull = graph.addOrUnique(new IsNullNode(inlineTypeNode.getExistingOop()));
             check = graph.addOrUniqueWithInputs(
                             LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
 
@@ -1272,6 +1272,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         FixedNode next = inlineTypeNode.next();
         inlineTypeNode.setNext(null);
 
+        // TODO: avoid branch if the check is a logical constant
         if (check != null) {
             FrameState framestate = GraphUtil.findLastFrameState(inlineTypeNode);
 
@@ -1323,7 +1324,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             merge.setStateAfter(framestate.duplicate());
 
             ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(inlineTypeNode.stamp(NodeView.DEFAULT), merge,
-                            inlineTypeNode.getOopOrHub() == null ? ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph) : inlineTypeNode.getOopOrHub(), newObj));
+                            inlineTypeNode.getExistingOop() == null ? ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph) : inlineTypeNode.getExistingOop(), newObj));
 
             // replace inline type node with phi node
             inlineTypeNode.replaceAtUsages(phi);

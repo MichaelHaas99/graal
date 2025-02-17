@@ -27,8 +27,8 @@ public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowera
     @Input ValueNode existingOop;
     @Input ValueNode hub;
 
-    public ReturnResultDeciderNode(ValueNode isNotNull, ValueNode existingOop, ValueNode hub) {
-        super(TYPE, StampFactory.forKind(JavaKind.Object));
+    public ReturnResultDeciderNode(JavaKind resultKind, ValueNode isNotNull, ValueNode existingOop, ValueNode hub) {
+        super(TYPE, StampFactory.forKind(resultKind));
         this.isNotNull = isNotNull;
         this.existingOop = existingOop;
         this.hub = hub;
