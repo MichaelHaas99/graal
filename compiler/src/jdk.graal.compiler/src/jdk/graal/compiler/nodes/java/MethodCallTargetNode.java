@@ -239,7 +239,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
              * e.g. Object.toString with a Long receiver will be converted to Long.toString()
              * therefore we need to scalarize the boxed object
              */
-            checkForNeededArgsScalarization(specialCallTarget);
+            checkForNeededArgsScalarization(specialCallTarget, false);
             this.setTargetMethod(specialCallTarget);
             setInvokeKind(InvokeKind.Special);
             return true;
@@ -247,13 +247,13 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         return false;
     }
 
-    public void checkForNeededArgsScalarization(ResolvedJavaMethod specialCallTarget) {
-
+    public void checkForNeededArgsScalarization(ResolvedJavaMethod specialCallTarget, boolean scalarizeIfEqual) {
+        boolean scalarize = this.targetMethod == specialCallTarget && scalarizeIfEqual;
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
         boolean[] scalarizeParameters = new boolean[parameterLength];
         int argumentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {
-            scalarizeParameters[i] = !targetMethod.isScalarizedParameter(i, true) && specialCallTarget.isScalarizedParameter(i, true);
+            scalarizeParameters[i] = (!targetMethod.isScalarizedParameter(i, true) || scalarize) && specialCallTarget.isScalarizedParameter(i, true);
         }
         ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
         for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
@@ -442,7 +442,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
 
                 // after de-virtualization we maybe need to scalarize the receiver
                 callTargetResult.setTargetMethod(targetMethod);
-                callTargetResult.checkForNeededArgsScalarization(singleImplementorMethod);
+                callTargetResult.checkForNeededArgsScalarization(singleImplementorMethod, false);
                 callTargetResult.setTargetMethod(singleImplementorMethod);
 
                 // Virtual calls can be further de-virtualized.
