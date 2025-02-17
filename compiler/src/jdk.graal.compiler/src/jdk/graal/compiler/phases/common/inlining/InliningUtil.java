@@ -307,7 +307,7 @@ public class InliningUtil extends ValueMergeUtil {
         MethodCallTargetNode newCallTarget = graph.add(new MethodCallTargetNode(invokeKind, targetMethod, oldCallTarget.arguments().toArray(ValueNode.EMPTY_ARRAY), oldCallTarget.returnStamp(),
                         oldCallTarget.getTypeProfile()));
         newCallTarget.setTargetMethod(oldCallTarget.targetMethod());
-        newCallTarget.checkForNeededArgsScalarization(targetMethod);
+        newCallTarget.checkForNeededArgsScalarization(targetMethod, false);
         newCallTarget.setTargetMethod(targetMethod);
         invoke.asNode().replaceFirstInput(oldCallTarget, newCallTarget);
     }

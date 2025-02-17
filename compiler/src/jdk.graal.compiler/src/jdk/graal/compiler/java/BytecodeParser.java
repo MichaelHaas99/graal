@@ -1081,6 +1081,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         FrameStateBuilder startFrameStateNonVirtual = null;
         ArrayList<VirtualObjectState> states = null;
+        graph.setScalarizeParameters(getMethod());
         if (graph.hasScalarizedParameters() && !parsingIntrinsic()) {
             // create an InlineTypeNode for each scalarized parameter and set it as local in the
             // framestate
