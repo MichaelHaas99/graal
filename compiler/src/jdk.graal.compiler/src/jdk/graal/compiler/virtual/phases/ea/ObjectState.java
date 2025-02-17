@@ -55,7 +55,7 @@ public class ObjectState {
     private LockState locks;
     private boolean ensureVirtualized;
 
-    private ValueNode oopOrHub;
+    private ValueNode existingOop;
     private ValueNode isNotNull;
 
     private EscapeObjectState cachedState;
@@ -73,9 +73,9 @@ public class ObjectState {
         }
     }
 
-    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oopOrHub, ValueNode isNotNull) {
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode existingOop, ValueNode isNotNull) {
         this(entries, locks, ensureVirtualized);
-        this.oopOrHub = oopOrHub;
+        this.existingOop = existingOop;
         this.isNotNull = isNotNull;
     }
 
@@ -86,12 +86,12 @@ public class ObjectState {
         this.ensureVirtualized = ensureVirtualized;
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oopOrHub, ValueNode isNotNull) {
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode existingOop, ValueNode isNotNull) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
-        this.oopOrHub = oopOrHub;
+        this.existingOop = existingOop;
         this.isNotNull = isNotNull;
     }
 
@@ -108,7 +108,7 @@ public class ObjectState {
         locks = other.locks;
         cachedState = other.cachedState;
         ensureVirtualized = other.ensureVirtualized;
-        oopOrHub = other.oopOrHub;
+        existingOop = other.existingOop;
         isNotNull = other.isNotNull;
     }
 
@@ -242,8 +242,8 @@ public class ObjectState {
         return locks;
     }
 
-    public ValueNode getOopOrHub() {
-        return oopOrHub;
+    public ValueNode getExistingOop() {
+        return existingOop;
     }
 
     public ValueNode getIsNotNull() {

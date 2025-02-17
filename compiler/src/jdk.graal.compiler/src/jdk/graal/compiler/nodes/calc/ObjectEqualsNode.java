@@ -186,7 +186,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
         }
 
-        if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant()) && tool.isNullFree(virtual)) {
+        // TODO: return isNotNull info with check for null case
+        if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant()) && StampTool.isPointerNonNull(virtual)) {
             // one of them is virtual and has identity or the other is null: they can never be the
             // same
             // objects
