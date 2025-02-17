@@ -12,22 +12,38 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
+import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.FrameState;
+import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
+import jdk.graal.compiler.nodes.LogicConstantNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
+import jdk.graal.compiler.nodes.MergeNode;
+import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.ProfileData;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
+import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
+import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.spi.Canonicalizable;
-import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
+import jdk.graal.compiler.nodes.memory.WriteNode;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.Simplifiable;
+import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
@@ -40,42 +56,42 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@link InlineTypeNode} represents a (nullable) scalarized inline object. It takes an optional
- * object {@link #oopOrHub} (in C2 it is called Oop) and the scalarized field values
+ * object {@link #existingOop} (in C2 it is called Oop) and the scalarized field values
  * {@link #scalarizedInlineObject} as well as an isNotNull information as input. If the object
- * represents a null value then the input {@link #oopOrHub} will be null at runtime. If the bit 0 of
- * {@link #oopOrHub} is set at runtime, no oop exists and the object needs to be reconstructed by
- * the scalarized field values, if needed. If an oop exists it is up to the compiler to either use
- * the oop or the scalarized field values. The isNotNull information indicates if the inline object
- * is null or not, and can be used e.g. for null checks or for the debugInfo (in C2 it is called
- * isInit).
+ * represents a null value then the input {@link #existingOop} will be null at runtime. If the bit 0
+ * of {@link #existingOop} is set at runtime, no oop exists and the object needs to be reconstructed
+ * by the scalarized field values, if needed. If an oop exists it is up to the compiler to either
+ * use the oop or the scalarized field values. The isNotNull information indicates if the inline
+ * object is null or not, and can be used e.g. for null checks or for the debugInfo (in C2 it is
+ * called isInit).
  *
  * An {@link Invoke} is responsible for setting the {@link #isNotNull} output correctly based on the
- * {@link #oopOrHub}, because the information doesn't exist as return value. It also has set the
+ * {@link #existingOop}, because the information doesn't exist as return value. It also has set the
  * tagged hub to a null pointer.
  *
  * For a null-restricted flat field only the {@link #scalarizedInlineObject} will be set.
  *
  * For a scalarized method parameter, the {@link #scalarizedInlineObject} and the {@link #isNotNull}
- * fields will be directly set by passed parameters. The {@link #oopOrHub} will stay empty.
+ * fields will be directly set by passed parameters. The {@link #existingOop} will stay empty.
  *
  * For a nullable flat field, the {@link #scalarizedInlineObject} and the {@link #isNotNull}
  * information can be loaded directly from the flat field.
  *
  */
 @NodeInfo(nameTemplate = "InlineTypeNode")
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Canonicalizable {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @OptionalInput ValueNode oopOrHub;
+    @OptionalInput ValueNode existingOop;
     @OptionalInput NodeInputList<ValueNode> scalarizedInlineObject;
     @OptionalInput ValueNode isNotNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode existingOop, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), isNotNull == null));
-        this.oopOrHub = oopOrHub;
+        this.existingOop = existingOop;
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
         this.type = type;
         this.isNotNull = isNotNull;
@@ -97,8 +113,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    public ValueNode getOopOrHub() {
-        return oopOrHub;
+    public ValueNode getExistingOop() {
+        return existingOop;
     }
 
     public ValueNode getIsNotNull() {
@@ -127,8 +143,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
     }
 
-    public boolean hasOopOrHub() {
-        return oopOrHub != null;
+    public boolean isNull() {
+        return isNotNull != null && isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0;
+    }
+
+    public boolean hasNoExistingOop() {
+        return existingOop == null || existingOop.isNullConstant();
     }
 
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode isNotNull) {
@@ -150,8 +170,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
 
-        // can also represent a hub therefore stamp is of type object
-        ReadMultiValueNode oopOrHub = b.add(new ReadMultiValueNode(StampFactory.object(), invoke.asNode(), 0));
+        // can also represent an oop or a null pointer
+        ReadMultiValueNode existingOop = b.add(new ReadMultiValueNode(returnType, b.getAssumptions(), invoke.asNode(), 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ReadMultiValueNode[] projs = new ReadMultiValueNode[fields.length];
@@ -164,7 +184,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ReadMultiValueNode isNotNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oopOrHub, projs, isNotNull));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, existingOop, projs, isNotNull));
 // b.append(new ForeignCallNode(LOG_OBJECT, oopOrHub, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
@@ -197,14 +217,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public void removeOnInlining() {
-        assert oopOrHub instanceof ReadMultiValueNode : "oopOrHub has to be a ProjNode";
+        assert existingOop instanceof ReadMultiValueNode : "oopOrHub has to be a ProjNode";
         assert isNotNull instanceof ReadMultiValueNode : "isNotNull has to be a ProjNode";
-        ValueNode invoke = ((ReadMultiValueNode) oopOrHub).getMultiValueNode();
+        ValueNode invoke = ((ReadMultiValueNode) existingOop).getMultiValueNode();
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
         replaceAtUsages(invoke);
 
         // remove inputs of ProjNodes to MultiNode
-        ((ReadMultiValueNode) oopOrHub).delete();
+        ((ReadMultiValueNode) existingOop).delete();
         ((ReadMultiValueNode) isNotNull).delete();
         for (ValueNode p : scalarizedInlineObject) {
             assert p instanceof ReadMultiValueNode : "scalarized value has to be a ProjNode";
@@ -216,6 +236,134 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
+    public static LogicNode createIsAlreadyBufferedCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode existingOop) {
+        assert isNotNull == null && existingOop == null || isNotNull != null && existingOop != null : "both should be either null or not null";
+        if (isNotNull == null && existingOop == null) {
+            return graph.addOrUnique(LogicConstantNode.contradiction());
+        }
+        LogicNode notNull = graph.addOrUnique(IntegerEqualsNode.create(isNotNull, ConstantNode.forInt(1, graph), NodeView.DEFAULT));
+        LogicNode oopIsNull = graph.addOrUnique(IsNullNode.create(existingOop));
+        LogicNode check = graph.addOrUniqueWithInputs(
+                        LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
+        return check;
+
+    }
+
+    public static ValueNode insertLoweredGraph(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
+                    ResolvedJavaType type) {
+        StructuredGraph graph = addBefore.graph();
+        if (newInstanceNode == null) {
+            assert type != null : "type for lowering inline type expected";
+            newInstanceNode = graph.add(new NewInstanceNode(type, true));
+        }
+
+        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
+        if (isAlreadyBuffered.isTautology())
+            return existingOop;
+        if (isAlreadyBuffered.isContradiction()) {
+            graph.addBeforeFixed(addBefore, newInstanceNode);
+            for (WriteNode w : writes) {
+                graph.addBeforeFixed(addBefore, w);
+            }
+            if (addMembar) {
+                // all fields implicitly final therefore use constructor freeze
+                MembarNode memBar = graph.add(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE, LocationIdentity.init()));
+                graph.addBeforeFixed(addBefore, memBar);
+            }
+            return newInstanceNode;
+        }
+
+        FrameState framestate = GraphUtil.findLastFrameState(addBefore);
+
+        BeginNode trueBegin = graph.add(new BeginNode());
+        BeginNode falseBegin = graph.add(new BeginNode());
+        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
+
+        // true branch - inline object is already buffered (oop or null) or is null
+
+        EndNode trueEnd = graph.add(new EndNode());
+        trueBegin.setNext(trueEnd);
+
+        // false branch - inline object is not buffered
+
+        EndNode falseEnd = graph.add(new EndNode());
+
+        falseBegin.setNext(newInstanceNode);
+        newInstanceNode.setNext(falseEnd);
+        FixedWithNextNode previous = newInstanceNode;
+        for (WriteNode w : writes) {
+            previous.setNext(w);
+            w.setNext(falseEnd);
+            previous = w;
+        }
+        if (addMembar) {
+            // all fields implicitly final therefore use constructor freeze
+            MembarNode memBar = graph.add(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE, LocationIdentity.init()));
+            previous.setNext(memBar);
+            memBar.setNext(falseEnd);
+        }
+
+        // merge
+        MergeNode merge = graph.add(new MergeNode());
+        merge.setStateAfter(framestate.duplicate());
+
+        merge.addForwardEnd(trueEnd);
+        merge.addForwardEnd(falseEnd);
+        merge.setNext(addBefore);
+        ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.object(TypeReference.create(graph.getAssumptions(), type)), merge,
+                        existingOop, newInstanceNode));
+        return phi;
+
+    }
+
+    public static void insertLateInitWrites(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes) {
+        StructuredGraph graph = addBefore.graph();
+        FrameState framestate = GraphUtil.findLastFrameState(addBefore);
+
+        BeginNode trueBegin = graph.add(new BeginNode());
+        BeginNode falseBegin = graph.add(new BeginNode());
+
+        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
+        if (isAlreadyBuffered.isTautology())
+            return;
+        if (isAlreadyBuffered.isContradiction()) {
+            for (WriteNode w : writes) {
+                graph.addBeforeFixed(addBefore, w);
+            }
+            return;
+        }
+        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
+
+        // true branch - inline object is already buffered (oop or null) or is null
+
+        EndNode trueEnd = graph.add(new EndNode());
+        trueBegin.setNext(trueEnd);
+
+        // false branch - inline object is not buffered
+
+        EndNode falseEnd = graph.add(new EndNode());
+
+        FixedWithNextNode previous = falseBegin;
+        for (WriteNode w : writes) {
+            previous.setNext(w);
+            w.setNext(falseEnd);
+            previous = w;
+        }
+
+        if (falseBegin.next() == null)
+            falseBegin.setNext(falseEnd);
+
+        // merge
+        MergeNode merge = graph.add(new MergeNode());
+        merge.setStateAfter(framestate.duplicate());
+
+        merge.addForwardEnd(trueEnd);
+        merge.addForwardEnd(falseEnd);
+        merge.setNext(addBefore);
+    }
+
     /**
      * Needed for replacement with a {@link CommitAllocationNode}
      */
@@ -224,16 +372,34 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return LocationIdentity.init();
     }
 
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        // TODO: produces error in TestCallingConvention test49
-// if (tool.allUsagesAvailable() && hasNoUsages()) {
-// return null;
+// @Override
+// public Node canonical(CanonicalizerTool tool) {
+// // TODO: produces error in TestCallingConvention test49
+//// if (tool.allUsagesAvailable() && hasNoUsages()) {
+//// return null;
+//// }
+// return this;
 // }
-        return this;
+
+    // comment to see inline type node getting materialized to null for test6_verifier
+    @Override
+    public void simplify(SimplifierTool tool) {
+        if (isNull()) {
+            List<Node> inputSnapshot = inputs().snapshot();
+            List<Node> usages = this.usages().snapshot();
+
+            ValueNode nullPointer = graph().addOrUnique(ConstantNode.forConstant(JavaConstant.NULL_POINTER, null));
+            tool.addToWorkList(usages);
+            this.replaceAtUsages(nullPointer);
+            graph().removeFixed(this);
+            for (Node input : inputSnapshot) {
+                tool.removeIfUnused(input);
+            }
+        }
+
     }
 
-    private boolean scalarize = true;
+    private boolean scalarize = false;
     private boolean insertGuardBeforeVirtualize = false;
 
     @Override
@@ -248,14 +414,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(type) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
-            ValueNode oop = this.oopOrHub;
+            ValueNode oop = this.existingOop;
             ValueNode notNull = this.isNotNull;
             if (insertGuardBeforeVirtualize) {
                 if (!isNullFree()) {
                     // Because the node can represent a null value, insert a guard before we
                     // virtualize
                     tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
-                    if (oopOrHub == null) {
+                    if (existingOop == null) {
                         notNull = null;
                     } else {
                         notNull = ConstantNode.forInt(1, graph());
@@ -287,7 +453,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
             // create virtual object and hand over existing oop
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, notNull);
-            tool.isNullFree(virtualObject);
             tool.replaceWithVirtual(virtualObject);
         }
     }
