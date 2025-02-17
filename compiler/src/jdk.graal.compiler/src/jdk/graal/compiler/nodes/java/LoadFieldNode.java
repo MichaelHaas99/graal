@@ -46,7 +46,6 @@ import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
-import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -212,20 +211,16 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
+        if (alias instanceof VirtualObjectNode virtualObjectNode) {
             int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(field());
             if (fieldIndex != -1) {
-                tool.createNullCheck((VirtualObjectNode) alias);
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
-                    if (tool.isNullFree((VirtualObjectNode) alias)) {
-                        tool.replaceWith(entry);
-                    } else {
-                        ValueNode replacement = new FixedValueAnchorNode(entry);
-                        tool.addNode(replacement);
-                        tool.replaceWith(replacement);
+                    if (!StampTool.isPointerNonNull(virtualObjectNode)) {
+                        tool.createNullCheck(virtualObjectNode);
                     }
-
+                    // TODO: is fixed value anchor necessary for nullable scalarized inline objects?
+                    tool.replaceWith(entry);
                 } else {
                     assert stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Int && (entry.stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Long || entry.getStackKind() == JavaKind.Double ||
                                     entry.getStackKind() == JavaKind.Illegal) : "Can only allow different stack kind two slot marker writes on one stot fields.";
