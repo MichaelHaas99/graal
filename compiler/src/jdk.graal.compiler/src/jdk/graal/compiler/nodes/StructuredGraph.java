@@ -576,30 +576,28 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     private boolean scalarizationIsSet = false;
 
     public void setScalarizeParameters(ResolvedJavaMethod method) {
-        // to avoid overriding it in buildRootMethod, when it was already set during inlining
-        if (scalarizationIsSet) {
-            return;
-        }
         boolean[] result = new boolean[method.getSignature().getParameterCount(!method.isStatic())];
         for (int i = 0; i < result.length; i++) {
             // only scalarize if the previous method also has a scalarized parameter
             result[i] = method.isScalarizedParameter(i, true);
         }
         scalarizeParameters = result;
-        scalarizationIsSet = true;
     }
 
-// public void dontScalarizeParameters() {
-// boolean[] result = new
-// boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
-// Arrays.fill(result, false);
-// scalarizeParameters = result;
-// }
+    /**
+     * Disallow scalrization of inline type parameters e.g. for method handles, parameters stay
+     * boxed although we have ResolvedMethodHandleCallTargetNode.
+     */
+    public void dontScalarizeParameters() {
+        boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
+        Arrays.fill(result, false);
+        scalarizeParameters = result;
+    }
 
     public boolean[] getScalarizeParameters() {
         if (scalarizeParameters == null) {
             boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
-            Arrays.fill(result, false);
+            Arrays.fill(result, true);
             scalarizeParameters = result;
         }
         return scalarizeParameters;

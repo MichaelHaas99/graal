@@ -162,6 +162,7 @@ import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.Replacements;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationOrReuseOopNode;
@@ -1079,12 +1080,12 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                                     WriteNode write = new WriteNode(address, LocationIdentity.init(), arrayImplicitStoreConvert(graph, storageKind, value, commit, virtual, valuePos), barrierType,
                                                     MemoryOrderMode.PLAIN);
                                     // graph.addAfterFixed(newObject, graph.add(write));
-                                    writes.add(graph.add(write));
+                                    writes.add(write);
                                 }
                             }
                             valuePos++;
                         }
-                        allocations[objIndex] = InlineTypeNode.insertLoweredGraph(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOopsOrHubs().get(objIndex), writes, false, newObject,
+                        allocations[objIndex] = InlineTypeUtil.insertLoweredGraph(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOopsOrHubs().get(objIndex), writes, false, newObject,
                                         virtual.type());
                         continue;
 
@@ -1146,7 +1147,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     }
                 }
             }
-            HashMap<InlineTypeNode, List<WriteNode>> lazyWrites = new HashMap<>();
+            HashMap<InlineTypeNode, List<WriteNode>> lateWrites = new HashMap<>();
             for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
                 VirtualObjectNode virtual = commit.getVirtualObjects().get(objIndex);
                 try (DebugCloseable nsp = graph.withNodeSourcePosition(virtual)) {
@@ -1189,8 +1190,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                                     barrierType = barrierSet.postAllocationInitBarrier(barrierType);
                                     WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, JavaKind.Object, allocValue), barrierType, MemoryOrderMode.PLAIN);
                                     if (newObject instanceof InlineTypeNode inlineTypeNode) {
-                                        lazyWrites.computeIfAbsent(inlineTypeNode, k -> new ArrayList<>());
-                                        lazyWrites.get(inlineTypeNode).add(graph.add(write));
+                                        lateWrites.computeIfAbsent(inlineTypeNode, k -> new ArrayList<>());
+                                        lateWrites.get(inlineTypeNode).add(write);
                                     } else {
                                         graph.addBeforeFixed(commit, graph.add(write));
                                     }
@@ -1202,8 +1203,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     }
                 }
             }
-            for (InlineTypeNode inlineTypeNode : lazyWrites.keySet()) {
-                InlineTypeNode.insertLateInitWrites(commit, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop(), lazyWrites.get(inlineTypeNode));
+            for (InlineTypeNode inlineTypeNode : lateWrites.keySet()) {
+                InlineTypeUtil.insertLateInitWrites(commit, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop(), lateWrites.get(inlineTypeNode));
             }
 
             finishAllocatedObjects(tool, commit, commit, allocations);

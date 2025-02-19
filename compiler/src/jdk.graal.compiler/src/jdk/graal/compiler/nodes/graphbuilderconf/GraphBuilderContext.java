@@ -185,7 +185,13 @@ public interface GraphBuilderContext extends GraphBuilderTool {
      * @param forceInlineEverything specifies if all invocations encountered in the scope of
      *            handling the replaced invoke are to be force inlined
      */
-    Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything);
+    default Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything) {
+        return handleReplacedInvoke(invokeKind, targetMethod, args, forceInlineEverything, false);
+    }
+
+    default Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything, boolean fromMethodHandle) {
+        throw GraalError.unimplementedOverride();
+    }
 
     void handleReplacedInvoke(CallTargetNode callTarget, JavaKind resultType);
 

@@ -32,8 +32,8 @@ import static jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider.GE
 import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.word.LocationIdentity.any;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -111,42 +111,35 @@ import jdk.graal.compiler.hotspot.stubs.ForeignCallSnippets;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
 import jdk.graal.compiler.nodes.AbstractDeoptimizeNode;
-import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeadEndNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
-import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.EnsureRuntimeHubUsageNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GetObjectAddressNode;
+import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.GraphState.GuardsStage;
-import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
-import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoweredCallTargetNode;
-import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
-import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.SafepointNode;
 import jdk.graal.compiler.nodes.StartNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.UnwindNode;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.AddNode;
 import jdk.graal.compiler.nodes.calc.CompareNode;
 import jdk.graal.compiler.nodes.calc.FloatingIntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.calc.IntegerConvertNode;
 import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
-import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
@@ -160,6 +153,7 @@ import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
+import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
@@ -213,11 +207,7 @@ import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.StampProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
-import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
-import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.DefaultJavaLoweringProvider;
@@ -1248,129 +1238,38 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
     private void lowerInlineTypeNode(InlineTypeNode inlineTypeNode, LoweringTool tool) {
         StructuredGraph graph = inlineTypeNode.graph();
+        if (graph.getGuardsStage() != GraphState.GuardsStage.FIXED_DEOPTS)
+            return;
+        NewInstanceNode newObject = graph.add(new NewInstanceNode(inlineTypeNode.getType(), true));
+        List<WriteNode> writes = new ArrayList<>();
+        int entryCount = inlineTypeNode.getScalarizedInlineObject().size();
+        ResolvedJavaField[] fields = inlineTypeNode.getType().getInstanceFields(true);
+        for (int i = 0; i < entryCount; i++) {
 
-        LogicNode check = null;
-        if (!inlineTypeNode.hasNoExistingOop()) {
-            // use existing oop instead of an allocation
-            // true case: oop or null -> just return
-            // false case: scalarized -> reconstruct
+            ValueNode value = inlineTypeNode.getField(i);
 
-            // in case it is not null and the oop is null it is not already buffered, so just negate
-            // the condition
-            LogicNode notNull = graph.addOrUnique(new IntegerEqualsNode(inlineTypeNode.getIsNotNull(), ConstantNode.forInt(1, graph)));
-            LogicNode oopIsNull = graph.addOrUnique(new IsNullNode(inlineTypeNode.getExistingOop()));
-            check = graph.addOrUniqueWithInputs(
-                            LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
-
-        } else if (!inlineTypeNode.isNullFree()) {
-            // check if the scalarized object is null
-            // true case: null -> just return
-            // false case: scalarized -> reconstruct
-            check = graph.addOrUnique(inlineTypeNode.createIsNullCheck());
+            AddressNode address = null;
+            BarrierType barrierType = null;
+            ResolvedJavaField field = fields[i];
+            long offset = fieldOffset(field);
+            if (offset >= 0) {
+                address = createOffsetAddress(graph, newObject, offset);
+                barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
+            }
+            if (address != null) {
+                WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, field.getJavaKind(), value), barrierType,
+                                MemoryOrderMode.PLAIN);
+                // graph.addAfterFixed(newObject, graph.add(write));
+                writes.add(write);
+            }
         }
 
-        FixedNode next = inlineTypeNode.next();
-        inlineTypeNode.setNext(null);
-
-        // TODO: avoid branch if the check is a logical constant
-        if (check != null) {
-            FrameState framestate = GraphUtil.findLastFrameState(inlineTypeNode);
-
-            BeginNode trueBegin = graph.add(new BeginNode());
-            BeginNode falseBegin = graph.add(new BeginNode());
-
-            IfNode ifNode = graph.add(new IfNode(check, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-            ((FixedWithNextNode) inlineTypeNode.predecessor()).setNext(ifNode);
-
-            // true branch - inline object is already buffered (oop or null) or is null
-
-            EndNode trueEnd = graph.add(new EndNode());
-            trueBegin.setNext(trueEnd);
-
-            // false branch - inline object is not buffered
-
-            EndNode falseEnd = graph.add(new EndNode());
-
-            // Use a CommitAllocation node so that no FrameState is required when creating
-            // the new instance.
-            CommitAllocationNode commit = graph.add(new CommitAllocationNode());
-            falseBegin.setNext(commit);
-            VirtualObjectNode virtualObj = new VirtualInstanceNode(inlineTypeNode.getType(), false);
-            virtualObj.setObjectId(0);
-            graph.add(virtualObj);
-
-            AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
-            commit.getVirtualObjects().add(virtualObj);
-            newObj.setCommit(commit);
-
-            /*
-             * The commit values follow the same ordering as the declared fields returned by JVMCI.
-             * Since the new object's fields are copies of the old one's, the values are given by a
-             * load of the corresponding field in the old object.
-             */
-            List<ValueNode> commitValues = commit.getValues();
-            commitValues.addAll(inlineTypeNode.getScalarizedInlineObject());
-
-            commit.addLocks(Collections.emptyList());
-            commit.getEnsureVirtual().add(false);
-            assert commit.verify();
-            commit.setNext(falseEnd);
-
-            if (falseBegin.next() == null)
-                falseBegin.setNext(falseEnd);
-
-            // merge
-            MergeNode merge = graph.add(new MergeNode());
-            merge.setStateAfter(framestate.duplicate());
-
-            ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(inlineTypeNode.stamp(NodeView.DEFAULT), merge,
-                            inlineTypeNode.getExistingOop() == null ? ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph) : inlineTypeNode.getExistingOop(), newObj));
-
-            // replace inline type node with phi node
-            inlineTypeNode.replaceAtUsages(phi);
-            inlineTypeNode.safeDelete();
-
-            merge.addForwardEnd(trueEnd);
-            merge.addForwardEnd(falseEnd);
-            merge.setNext(next);
-
-            commit.lower(tool);
-        } else {
-            // scalarized reconstruct
-
-            // Use a CommitAllocation node so that no FrameState is required when creating
-            // the new instance.
-            CommitAllocationNode commit = graph.add(new CommitAllocationNode());
-            ((FixedWithNextNode) inlineTypeNode.predecessor()).setNext(commit);
-
-            VirtualObjectNode virtualObj = new VirtualInstanceNode(inlineTypeNode.getType(), false);
-            virtualObj.setObjectId(0);
-            graph.add(virtualObj);
-
-            AllocatedObjectNode newObj = graph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
-            commit.getVirtualObjects().add(virtualObj);
-            newObj.setCommit(commit);
-
-            /*
-             * The commit values follow the same ordering as the declared fields returned by JVMCI.
-             * Since the new object's fields are copies of the old one's, the values are given by a
-             * load of the corresponding field in the old object.
-             */
-            List<ValueNode> commitValues = commit.getValues();
-            commitValues.addAll(inlineTypeNode.getScalarizedInlineObject());
-
-            commit.addLocks(Collections.emptyList());
-            commit.getEnsureVirtual().add(false);
-
-            assert commit.verify();
-
-            commit.setNext(next);
-            inlineTypeNode.replaceAtUsages(newObj);
-            inlineTypeNode.safeDelete();
-
-            commit.lower(tool);
-        }
-
+        ValueNode replacement = InlineTypeUtil.insertLoweredGraph(inlineTypeNode, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop(), writes, true, newObject, inlineTypeNode.getType());
+        FixedValueAnchorNode anchor = graph.add(new FixedValueAnchorNode(replacement));
+        graph.addBeforeFixed(inlineTypeNode, anchor);
+        inlineTypeNode.replaceAtUsages(anchor);
+        graph.removeFixed(inlineTypeNode);
+        newObject.lower(tool);
     }
 
     @Override

@@ -38,7 +38,6 @@ import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
-import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.MacroNode;
 import jdk.graal.compiler.replacements.nodes.MethodHandleNode;
@@ -87,8 +86,7 @@ public class MethodHandlePlugin implements NodePlugin {
             };
             Invoke invoke = MethodHandleNode.tryResolveTargetInvoke(adder, this::createInvoke, methodHandleAccess, intrinsicMethod, method, b.bci(), invokeReturnStamp, args);
             if (invoke == null) {
-                // additionally scalarize args that are of inline objects
-                MacroInvokable methodHandleNode = createMethodHandleNode(b, method, InlineTypeUtil.scalarizeInvokeArgs(b, args, method, invokeKind), intrinsicMethod, invokeKind, invokeReturnStamp);
+                MacroInvokable methodHandleNode = createMethodHandleNode(b, method, args, intrinsicMethod, invokeKind, invokeReturnStamp);
                 if (invokeReturnStamp.getTrustedStamp().getStackKind() == JavaKind.Void) {
                     b.add(methodHandleNode.asNode());
                 } else {
@@ -119,21 +117,22 @@ public class MethodHandlePlugin implements NodePlugin {
                 if (recursionDepth > maxRecursionDepth) {
                     return false;
                 }
+
+                // also make sure that inline objects are not scalarized on the new call target
                 Invokable newInvokable = b.handleReplacedInvoke(invoke.getInvokeKind(),
                                 targetMethod, argumentsList.toArray(new ValueNode[argumentsList.size()]),
-                                inlineEverything);
+                                inlineEverything, true);
+
                 if (newInvokable != null) {
                     if (newInvokable instanceof Invoke newInvoke && !newInvoke.callTarget().equals(callTarget) && newInvoke.asFixedNode().isAlive()) {
                         // In the case where the invoke is not inlined, replace its call target with
                         // the special ResolvedMethodHandleCallTargetNode.
-                        callTarget = b.append(callTarget);
 
-                        newInvoke.callTarget().replaceAndDelete(callTarget);
-                        // nothing scalarized yet so need to scalarize all inline object parameters
-                        callTarget.checkForNeededArgsScalarization(callTarget.targetMethod(), true);
+                        newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
-                        macroInvokable.addMethodHandleInfo(callTarget);
+                        assert invoke.isAlive() : "invoke should be alive to scalarize parameters before its position";
+                        macroInvokable.addMethodHandleInfo(b.append(callTarget));
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
                     }

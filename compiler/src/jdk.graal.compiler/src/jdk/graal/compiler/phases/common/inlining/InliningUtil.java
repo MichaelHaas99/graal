@@ -108,6 +108,7 @@ import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.phases.common.inlining.info.InlineInfo;
 import jdk.graal.compiler.phases.common.util.EconomicSetNodeEventListener;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
@@ -307,9 +308,7 @@ public class InliningUtil extends ValueMergeUtil {
         MethodCallTargetNode oldCallTarget = (MethodCallTargetNode) invoke.callTarget();
         MethodCallTargetNode newCallTarget = graph.add(new MethodCallTargetNode(invokeKind, targetMethod, oldCallTarget.arguments().toArray(ValueNode.EMPTY_ARRAY), oldCallTarget.returnStamp(),
                         oldCallTarget.getTypeProfile()));
-        newCallTarget.setTargetMethod(oldCallTarget.targetMethod());
-        newCallTarget.checkForNeededArgsScalarization(targetMethod, false);
-        newCallTarget.setTargetMethod(targetMethod);
+        InlineTypeUtil.handleDevirtualizationOnCallTarget(newCallTarget, oldCallTarget.targetMethod(), targetMethod, false);
         invoke.asNode().replaceFirstInput(oldCallTarget, newCallTarget);
     }
 

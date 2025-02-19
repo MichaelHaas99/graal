@@ -12,38 +12,22 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
-import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.FrameState;
-import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
-import jdk.graal.compiler.nodes.LogicConstantNode;
-import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
-import jdk.graal.compiler.nodes.MergeNode;
-import jdk.graal.compiler.nodes.NodeView;
-import jdk.graal.compiler.nodes.ProfileData;
-import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
-import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
-import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.memory.WriteNode;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
@@ -95,6 +79,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
         this.type = type;
         this.isNotNull = isNotNull;
+        assert isNotNull == null && existingOop == null || isNotNull != null && existingOop != null : "both should be either null or not null";
     }
 
     public void setFieldValue(ResolvedJavaField field, ValueNode value) {
@@ -164,7 +149,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] scalarizedInlineObject, ValueNode isNotNull) {
-        return new InlineTypeNode(type, null, scalarizedInlineObject, isNotNull);
+        return new InlineTypeNode(type, ConstantNode.forConstant(JavaConstant.NULL_POINTER, null), scalarizedInlineObject, isNotNull);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
@@ -236,134 +221,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    public static LogicNode createIsAlreadyBufferedCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode existingOop) {
-        assert isNotNull == null && existingOop == null || isNotNull != null && existingOop != null : "both should be either null or not null";
-        if (isNotNull == null && existingOop == null) {
-            return graph.addOrUnique(LogicConstantNode.contradiction());
-        }
-        LogicNode notNull = graph.addOrUnique(IntegerEqualsNode.create(isNotNull, ConstantNode.forInt(1, graph), NodeView.DEFAULT));
-        LogicNode oopIsNull = graph.addOrUnique(IsNullNode.create(existingOop));
-        LogicNode check = graph.addOrUniqueWithInputs(
-                        LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
-        return check;
-
-    }
-
-    public static ValueNode insertLoweredGraph(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
-                    ResolvedJavaType type) {
-        StructuredGraph graph = addBefore.graph();
-        if (newInstanceNode == null) {
-            assert type != null : "type for lowering inline type expected";
-            newInstanceNode = graph.add(new NewInstanceNode(type, true));
-        }
-
-        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
-        if (isAlreadyBuffered.isTautology())
-            return existingOop;
-        if (isAlreadyBuffered.isContradiction()) {
-            graph.addBeforeFixed(addBefore, newInstanceNode);
-            for (WriteNode w : writes) {
-                graph.addBeforeFixed(addBefore, w);
-            }
-            if (addMembar) {
-                // all fields implicitly final therefore use constructor freeze
-                MembarNode memBar = graph.add(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE, LocationIdentity.init()));
-                graph.addBeforeFixed(addBefore, memBar);
-            }
-            return newInstanceNode;
-        }
-
-        FrameState framestate = GraphUtil.findLastFrameState(addBefore);
-
-        BeginNode trueBegin = graph.add(new BeginNode());
-        BeginNode falseBegin = graph.add(new BeginNode());
-        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-        ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
-
-        // true branch - inline object is already buffered (oop or null) or is null
-
-        EndNode trueEnd = graph.add(new EndNode());
-        trueBegin.setNext(trueEnd);
-
-        // false branch - inline object is not buffered
-
-        EndNode falseEnd = graph.add(new EndNode());
-
-        falseBegin.setNext(newInstanceNode);
-        newInstanceNode.setNext(falseEnd);
-        FixedWithNextNode previous = newInstanceNode;
-        for (WriteNode w : writes) {
-            previous.setNext(w);
-            w.setNext(falseEnd);
-            previous = w;
-        }
-        if (addMembar) {
-            // all fields implicitly final therefore use constructor freeze
-            MembarNode memBar = graph.add(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE, LocationIdentity.init()));
-            previous.setNext(memBar);
-            memBar.setNext(falseEnd);
-        }
-
-        // merge
-        MergeNode merge = graph.add(new MergeNode());
-        merge.setStateAfter(framestate.duplicate());
-
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        merge.setNext(addBefore);
-        ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.object(TypeReference.create(graph.getAssumptions(), type)), merge,
-                        existingOop, newInstanceNode));
-        return phi;
-
-    }
-
-    public static void insertLateInitWrites(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes) {
-        StructuredGraph graph = addBefore.graph();
-        FrameState framestate = GraphUtil.findLastFrameState(addBefore);
-
-        BeginNode trueBegin = graph.add(new BeginNode());
-        BeginNode falseBegin = graph.add(new BeginNode());
-
-        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
-        if (isAlreadyBuffered.isTautology())
-            return;
-        if (isAlreadyBuffered.isContradiction()) {
-            for (WriteNode w : writes) {
-                graph.addBeforeFixed(addBefore, w);
-            }
-            return;
-        }
-        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-        ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
-
-        // true branch - inline object is already buffered (oop or null) or is null
-
-        EndNode trueEnd = graph.add(new EndNode());
-        trueBegin.setNext(trueEnd);
-
-        // false branch - inline object is not buffered
-
-        EndNode falseEnd = graph.add(new EndNode());
-
-        FixedWithNextNode previous = falseBegin;
-        for (WriteNode w : writes) {
-            previous.setNext(w);
-            w.setNext(falseEnd);
-            previous = w;
-        }
-
-        if (falseBegin.next() == null)
-            falseBegin.setNext(falseEnd);
-
-        // merge
-        MergeNode merge = graph.add(new MergeNode());
-        merge.setStateAfter(framestate.duplicate());
-
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        merge.setNext(addBefore);
-    }
-
     /**
      * Needed for replacement with a {@link CommitAllocationNode}
      */
@@ -399,7 +256,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    private boolean scalarize = false;
+    private boolean scalarize = true;
     private boolean insertGuardBeforeVirtualize = false;
 
     @Override
