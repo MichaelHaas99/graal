@@ -441,6 +441,7 @@ import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.spi.CoreProvidersDelegate;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
@@ -1081,7 +1082,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         FrameStateBuilder startFrameStateNonVirtual = null;
         ArrayList<VirtualObjectState> states = null;
-        graph.setScalarizeParameters(getMethod());
         if (graph.hasScalarizedParameters() && !parsingIntrinsic()) {
             // create an InlineTypeNode for each scalarized parameter and set it as local in the
             // framestate
@@ -2089,17 +2089,18 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     private boolean forceInliningEverything;
 
     @Override
-    public Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean inlineEverything) {
+    public Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean inlineEverything, boolean fromMethodHandle) {
         GraalError.guarantee(invokeKind != InvokeKind.Interface, "Interface invoke needs a referencedType");
-        return handleReplacedInvoke(invokeKind, targetMethod, args, inlineEverything, null);
+        return handleReplacedInvoke(invokeKind, targetMethod, args, inlineEverything, null, fromMethodHandle);
     }
 
-    public Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean inlineEverything, ResolvedJavaType referencedType) {
+    public Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean inlineEverything, ResolvedJavaType referencedType,
+                    boolean fromMethodHandle) {
         boolean previous = forceInliningEverything;
         forceInliningEverything = previous || inlineEverything;
         try {
             setBciCanBeDuplicated(true);
-            return appendInvoke(invokeKind, targetMethod, args, referencedType);
+            return appendInvoke(invokeKind, targetMethod, args, referencedType, fromMethodHandle);
         } finally {
             setBciCanBeDuplicated(false);
             forceInliningEverything = previous;
@@ -2114,6 +2115,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     protected Invokable appendInvoke(InvokeKind initialInvokeKind, ResolvedJavaMethod initialTargetMethod, ValueNode[] args, ResolvedJavaType referencedType) {
+        return appendInvoke(initialInvokeKind, initialTargetMethod, args, referencedType, false);
+    }
+
+    protected Invokable appendInvoke(InvokeKind initialInvokeKind, ResolvedJavaMethod initialTargetMethod, ValueNode[] args, ResolvedJavaType referencedType, boolean fromMethodHandle) {
         if (!parsingIntrinsic() && DeoptALot.getValue(options)) {
             append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
             JavaKind resultType = initialTargetMethod.getSignature().getReturnKind();
@@ -2223,7 +2228,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             assert intrinsicContext.allowPartialIntrinsicArgumentMismatch() || checkPartialIntrinsicExit(intrinsicCallSiteParser == null ? null : intrinsicCallSiteParser.currentInvoke.args, args);
             targetMethod = originalMethod;
         }
-        Invoke invoke = createNonInlinedInvoke(edgeAction, invokeBci, args, targetMethod, invokeKind, resultType, returnType, profile);
+        Invoke invoke = createNonInlinedInvoke(edgeAction, invokeBci, args, targetMethod, invokeKind, resultType, returnType, profile, fromMethodHandle);
         graph.notifyInliningDecision(invoke, false, "GraphBuilderPhase", null, null, null, invoke.getTargetMethod(), "bytecode parser did not replace invoke");
         if (partialIntrinsicExit) {
             // This invoke must never be later inlined as an intrinsic so restrict this call site to
@@ -2323,13 +2328,19 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod,
                     InvokeKind invokeKind, JavaKind resultType, JavaType returnType, JavaTypeProfile profile) {
+        return createNonInlinedInvoke(exceptionEdge, invokeBci, invokeArgs, targetMethod, invokeKind, resultType, returnType, profile, false);
+    }
+
+    protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod,
+                    InvokeKind invokeKind, JavaKind resultType, JavaType returnType, JavaTypeProfile profile, boolean fromMethodHandle) {
 
         // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
-        if (targetMethod.hasScalarizedParameters()) {
-            invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod, invokeKind);
+        if (targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
+            invokeArgs = InlineTypeUtil.scalarizeInvokeArgs(this, invokeArgs, targetMethod, invokeKind);
+            // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod, invokeKind);
         }
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, invokeArgs, returnType, profile));
-        Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType);
+        Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType, fromMethodHandle);
 // ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, invoke.asNode(),
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
@@ -2443,6 +2454,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, CallTargetNode callTarget, JavaKind resultType) {
+        return createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType, false);
+    }
+
+    protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, CallTargetNode callTarget, JavaKind resultType, boolean fromMethodHandle) {
         Invoke invoke;
         if (exceptionEdge == ExceptionEdgeAction.OMIT) {
             invoke = append(createInvoke(invokeBci, callTarget, resultType));
@@ -2450,8 +2465,8 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             invoke = append(createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge));
         }
 
-        if (callTarget.targetMethod().hasScalarizedReturn()) {
-            handleScalarizedReturnOnInvoke(invoke, resultType);
+        if (callTarget.targetMethod().hasScalarizedReturn() && !fromMethodHandle) {
+            InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
         } else {
             frameState.pushReturn(resultType, invoke.asNode());
             invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
@@ -3154,7 +3169,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
             if (method.hasScalarizedReturn()) {
-                ReturnScalarizedNode.create(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
+                ReturnScalarizedNode.createAndAppend(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
             } else {
                 append(new ReturnNode(realReturnVal));
             }

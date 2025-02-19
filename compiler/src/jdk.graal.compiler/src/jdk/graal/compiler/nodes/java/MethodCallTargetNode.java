@@ -24,11 +24,6 @@
  */
 package jdk.graal.compiler.nodes.java;
 
-import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
-
-import java.util.ArrayList;
-import java.util.List;
-
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
@@ -41,30 +36,20 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.CallTargetNode;
-import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
-import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.FrameState;
-import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
-import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
-import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
-import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.ValuePhiNode;
-import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.AnchoringNode;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
@@ -72,7 +57,6 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaTypeProfile;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -239,108 +223,13 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
              * e.g. Object.toString with a Long receiver will be converted to Long.toString()
              * therefore we need to scalarize the boxed object
              */
-            checkForNeededArgsScalarization(specialCallTarget, false);
+            // checkForNeededArgsScalarization(specialCallTarget, false);
+            InlineTypeUtil.handleDevirtualizationOnCallTarget(this, this.targetMethod, specialCallTarget, false);
             this.setTargetMethod(specialCallTarget);
             setInvokeKind(InvokeKind.Special);
             return true;
         }
         return false;
-    }
-
-    public void checkForNeededArgsScalarization(ResolvedJavaMethod specialCallTarget, boolean scalarizeIfEqual) {
-        boolean scalarize = this.targetMethod == specialCallTarget && scalarizeIfEqual;
-        int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
-        boolean[] scalarizeParameters = new boolean[parameterLength];
-        int argumentIndex = 0;
-        for (int i = 0; i < parameterLength; i++) {
-            scalarizeParameters[i] = (!targetMethod.isScalarizedParameter(i, true) || scalarize) && specialCallTarget.isScalarizedParameter(i, true);
-        }
-        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
-        for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
-            if (scalarizeParameters[signatureIndex]) {
-                ValueNode[] scalarized = genScalarizationCFG(arguments.get(argumentIndex), specialCallTarget, signatureIndex);
-                scalarizedArgs.addAll(List.of(scalarized));
-                argumentIndex++;
-            } else {
-                if (targetMethod.isScalarizedParameter(signatureIndex, true)) {
-                    int length = targetMethod.getScalarizedParameter(signatureIndex, true).length;
-                    scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
-                    argumentIndex += length;
-                } else {
-                    scalarizedArgs.add(arguments.get(argumentIndex));
-                    argumentIndex++;
-                }
-            }
-
-        }
-        arguments.clear();
-        arguments.addAll(scalarizedArgs);
-    }
-
-    public ValueNode[] genScalarizationCFG(ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
-        StructuredGraph graph = graph();
-        boolean nullFree = targetMethod.isParameterNullFree(signatureIndex, true);
-        ResolvedJavaField[] fields = targetMethod.getScalarizedParameterFields(signatureIndex, true);
-        if (nullFree) {
-            ValueNode[] loads = new ValueNode[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), arg, fields[i]));
-                loads[i] = load;
-                graph().addBeforeFixed(invoke().asFixedNode(), load);
-            }
-            return loads;
-        }
-
-        BeginNode trueBegin = graph.add(new BeginNode());
-        BeginNode falseBegin = graph.add(new BeginNode());
-
-        IfNode ifNode = graph.add(new IfNode(graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(new IsNullNode(arg)))), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-        ((FixedWithNextNode) invoke().asFixedNode().predecessor()).setNext(ifNode);
-
-        // get a valid framestate for the merge node
-        FrameState framestate = GraphUtil.findLastFrameState(ifNode);
-
-        ValueNode[] loads = new ValueNode[fields.length];
-        ValueNode[] consts = new ValueNode[fields.length];
-
-        // true branch - inline object is non-null, load the field values
-
-        ValueNode nonNull = PiNode.create(arg, objectNonNull(), trueBegin);
-        FixedWithNextNode previous = trueBegin;
-        for (int i = 0; i < fields.length; i++) {
-            LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNull, fields[i]));
-            loads[i] = load;
-            previous.setNext(load);
-            previous = load;
-        }
-        EndNode trueEnd = graph.add(new EndNode());
-        previous.setNext(trueEnd);
-
-        // false branch - inline object is null, use default values of fields
-
-        for (int i = 0; i < fields.length; i++) {
-            ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
-            consts[i] = load;
-        }
-        EndNode falseEnd = graph.add(new EndNode());
-        if (falseBegin.next() == null)
-            falseBegin.setNext(falseEnd);
-
-        // merge
-        MergeNode merge = graph.add(new MergeNode());
-        merge.setStateAfter(framestate);
-
-        // produces phi nodes
-        ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
-        phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
-        for (int i = 0; i < fields.length; i++) {
-            phis[i + 1] = graph.addOrUnique(new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
-        }
-
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        merge.setNext(invoke().asFixedNode());
-        return phis;
     }
 
     public static MethodCallTargetNode tryDevirtualizeInterfaceCall(ValueNode receiver, ResolvedJavaMethod targetMethod, JavaTypeProfile profile,
@@ -441,9 +330,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                 }
 
                 // after de-virtualization we maybe need to scalarize the receiver
-                callTargetResult.setTargetMethod(targetMethod);
-                callTargetResult.checkForNeededArgsScalarization(singleImplementorMethod, false);
-                callTargetResult.setTargetMethod(singleImplementorMethod);
+                InlineTypeUtil.handleDevirtualizationOnCallTarget(callTargetResult, targetMethod, singleImplementorMethod, false);
 
                 // Virtual calls can be further de-virtualized.
                 callTargetResult.trySimplifyToSpecial(contextType);
