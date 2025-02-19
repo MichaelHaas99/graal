@@ -49,6 +49,7 @@ import jdk.graal.compiler.phases.common.inlining.walker.CallsiteHolderExplorable
 import jdk.graal.compiler.phases.common.inlining.walker.InliningData;
 import jdk.graal.compiler.phases.graph.FixedNodeRelativeFrequencyCache;
 import jdk.graal.compiler.phases.tiers.HighTierContext;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
@@ -202,7 +203,11 @@ public class InlineableGraph implements Inlineable {
 
         // use the signature of the previous invoke node in case we speculate on receiver types e.g.
         // maybe receiver can be scalarized then
-        newGraph.setScalarizeParameters(invoke.callTarget().targetMethod());
+        if (!(invoke.callTarget() instanceof ResolvedMethodHandleCallTargetNode)) {
+            newGraph.setScalarizeParameters(invoke.callTarget().targetMethod());
+        } else {
+            newGraph.dontScalarizeParameters();
+        }
         try (DebugContext.Scope s = debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();

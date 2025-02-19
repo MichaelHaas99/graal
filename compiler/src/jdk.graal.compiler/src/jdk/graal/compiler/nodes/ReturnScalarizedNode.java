@@ -1,11 +1,9 @@
 package jdk.graal.compiler.nodes;
 
-import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
-
+import java.util.ArrayList;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.ObjectStamp;
-import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
@@ -14,12 +12,11 @@ import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
-import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaKind;
@@ -54,67 +51,17 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         return scalarizedInlineObject.get(index);
     }
 
-    public static ReturnNode create(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
+    public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
-        LogicNode isInit = b.add(new LogicNegationNode(b.add(new IsNullNode(result))));
-        ValuePhiNode[] phis = genCFG(b, result, fields, isInit);
+        LogicNode isNotNull = b.add(new LogicNegationNode(b.add(new IsNullNode(result))));
 
         // PEA will replace oop with tagged hub if it is virtual
-        return b.add(new ReturnScalarizedNode(result, List.of(phis)));
-    }
-
-
-    public static ValuePhiNode[] genCFG(GraphBuilderContext b, ValueNode result, ResolvedJavaField[] fields, LogicNode isInit) {
-        BeginNode trueBegin = b.getGraph().add(new BeginNode());
-        BeginNode falseBegin = b.getGraph().add(new BeginNode());
-
-        IfNode ifNode = b.add(new IfNode(b.add(isInit), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-
-        // get a valid framestate for the merge node
-        FrameState framestate = GraphUtil.findLastFrameState(ifNode);
-
-        ValueNode[] loads = new ValueNode[fields.length];
-        ValueNode[] consts = new ValueNode[fields.length];
-
-        // true branch - inline object is non-null, load the field values
-
-        ValueNode nonNull = PiNode.create(result, objectNonNull(), trueBegin);
-        for (int i = 0; i < fields.length; i++) {
-            LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNull, fields[i]));
-            loads[i] = load;
-            if (trueBegin.next() == null)
-                trueBegin.setNext(load);
-        }
-        EndNode trueEnd = b.add(new EndNode());
-
-        // check maybe needed for empty inline objects?
-        if (trueBegin.next() == null)
-            trueBegin.setNext(trueEnd);
-
-        // false branch - inline object is null, use default values of fields
-
-        for (int i = 0; i < fields.length; i++) {
-            ConstantNode load = b.add(ConstantNode.defaultForKind(fields[i].getJavaKind()));
-            consts[i] = load;
-        }
-        EndNode falseEnd = b.add(new EndNode());
-        if (falseBegin.next() == null)
-            falseBegin.setNext(falseEnd);
-
-        // merge
-        MergeNode merge = b.append(new MergeNode());
-        merge.setStateAfter(framestate.duplicate());
-
-        // produces phi nodes
-        ValuePhiNode[] phis = new ValuePhiNode[fields.length];
-        for (int i = 0; i < fields.length; i++) {
-            phis[i] = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
-        }
-
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        return phis;
+        ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, isNotNull, fields);
+        returnNode.scalarizedInlineObject.clear();
+        returnNode.scalarizedInlineObject.addAll(List.of(phis));
+        return returnNode;
     }
 
     @Override
