@@ -3,6 +3,9 @@ package jdk.graal.compiler.valhalla;
 import jdk.graal.compiler.jtt.JTTTest;
 import jdk.graal.compiler.test.AddExports;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.Arrays;
 import java.util.EnumSet;
 
@@ -598,5 +601,36 @@ public class TestC2CCalls2 extends JTTTest {
         runTest("test10", val1, other, rI, false);
         //getCode(getResolvedJavaMethod("test10"));
 
+    }
+
+    public static void testMethodHandle(MethodHandle incrementAndCheck_mh, MyInterface1 object){
+
+        try {
+//            MethodHandles.Lookup lookup = MethodHandles.lookup();
+//            MethodType mt_1 = MethodType.methodType(MyInterface1.class, OtherVal.class, int.class);
+//            MethodHandle incrementAndCheck_mh_1 = lookup.findVirtual(MyValue1.class, "test1", mt_1);
+//            MyValue1 v = (MyValue1) incrementAndCheck_mh_1.invokeExact(object, new OtherVal(3), 3);
+//            Class<?> clazz = MyValue1.class;
+            Assert.assertEquals(incrementAndCheck_mh.invoke(object, new OtherVal(3), 3), new MyValue1(9));
+
+//            MethodType mt_2 = MethodType.methodType(MyValue2.class);
+//            MethodHandle incrementAndCheck_mh_2 = lookup.findVirtual(clazz, "test1", mt_2);
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Method handle lookup failed");
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void run1() throws NoSuchMethodException, IllegalAccessException, InvalidInstalledCodeException {
+        getCode(getResolvedJavaMethod(MyValue1.class, "test1"), null, true, true, getInitialOptions());
+
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+
+        MethodType mt_1 = MethodType.methodType(MyInterface1.class, OtherVal.class, int.class);
+        MethodHandle incrementAndCheck_mh_1 = lookup.findVirtual(MyValue1.class, "test1", mt_1);
+        getCode(getResolvedJavaMethod("testMethodHandle"), null, true, true, getInitialOptions()).executeVarargs(incrementAndCheck_mh_1, new MyValue1(3));
     }
 }

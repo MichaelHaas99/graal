@@ -1,5 +1,8 @@
 package jdk.graal.compiler.valhalla;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -471,6 +474,15 @@ public class TestLWorldProfiling extends JTTTest {
         return new MyInteger(1);
     }
 
+    public static Integer testInteger(Integer x) {
+        return x-1;
+    }
+
+    @Test
+    public void testIntegerSnippet(){
+        getCode(getResolvedJavaMethod("testInteger"), null, true, true, getInitialOptions());
+    }
+
     public MyInteger reuseOop(){
         return createmyInteger();
     }
@@ -483,6 +495,7 @@ public class TestLWorldProfiling extends JTTTest {
 
     private static final OptionValues WITHOUT_PEA_INLINING = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false, HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false, HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
     private static final OptionValues WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false);
+
 
 
 
