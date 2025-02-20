@@ -430,23 +430,4 @@ public final class GraphEffectList extends EffectList {
             }
         });
     }
-
-    public void applyRunnable(Node node, Runnable action) {
-        add(new Effect("replace first input") {
-            @Override
-            public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                action.run();
-            }
-
-            @Override
-            public boolean isVisible() {
-                return true;
-            }
-
-            @Override
-            void format(StringBuilder str) {
-                format(str, new String[]{"node"}, new Object[]{node});
-            }
-        });
-    }
 }

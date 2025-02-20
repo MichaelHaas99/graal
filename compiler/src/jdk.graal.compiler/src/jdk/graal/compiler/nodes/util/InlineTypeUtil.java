@@ -40,11 +40,11 @@ import jdk.graal.compiler.nodes.memory.WriteNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
-import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.TriState;
 
 public class InlineTypeUtil {
 
@@ -52,13 +52,16 @@ public class InlineTypeUtil {
         handleDevirtualizationOnCallTarget(invoke.callTarget(), invoke.getTargetMethod(), invoke.getTargetMethod(), true);
     }
 
-    private static ValueNode[] boxScalarizedArgsForMethodHandle(Invoke invoke) {
+    public static void boxScalarizedArgs(Invoke invoke) {
+        StructuredGraph graph = invoke.asNode().graph();
         CallTargetNode callTarget = invoke.callTarget();
-        assert callTarget instanceof ResolvedMethodHandleCallTargetNode : "expected resolved method handle call target";
-        ResolvedMethodHandleCallTargetNode methodHandleCallTargetNode = (ResolvedMethodHandleCallTargetNode) callTarget;
-        ResolvedJavaMethod targetMethod = methodHandleCallTargetNode.targetMethod();
+        // assert callTarget instanceof ResolvedMethodHandleCallTargetNode : "expected resolved
+        // method handle call target";
+        // ResolvedMethodHandleCallTargetNode methodHandleCallTargetNode =
+        // (ResolvedMethodHandleCallTargetNode) callTarget;
+        ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
-        List<ValueNode> arguments = methodHandleCallTargetNode.arguments();
+        List<ValueNode> arguments = callTarget.arguments();
         ArrayList<ValueNode> newArguments = new ArrayList<>(parameterLength);
         int currentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {
@@ -72,13 +75,17 @@ public class InlineTypeUtil {
                     inlineTypeNode = InlineTypeNode.createWithoutOop(getParameterType(targetMethod, i, true),
                                     arguments.subList(currentIndex + 1, scalarizedParametersLen).toArray(new ValueNode[parameterLength - 1]), arguments.get(parameterLength));
                 }
+                graph.add(inlineTypeNode);
+                graph.addBeforeFixed(invoke.asFixedNode(), inlineTypeNode);
                 currentIndex += parameterLength;
                 newArguments.add(inlineTypeNode);
             } else {
                 newArguments.add(arguments.get(currentIndex++));
             }
         }
-        return newArguments.toArray(new ValueNode[newArguments.size()]);
+        callTarget.arguments().clear();
+        callTarget.arguments().addAll(newArguments);
+        // return newArguments.toArray(new ValueNode[newArguments.size()]);
     }
 
     private static ResolvedJavaType getParameterType(ResolvedJavaMethod method, int index, boolean indexIncludesReceiverIfExists) {
@@ -423,23 +430,32 @@ public class InlineTypeUtil {
 
     }
 
+    public static TriState isAlreadyBuffered(StructuredGraph graph, ValueNode isNotNull, ValueNode existingOop) {
+        if (createIsAlreadyBufferedCheck(graph, isNotNull, existingOop).isTautology()) {
+            return TriState.TRUE;
+        }
+        return TriState.UNKNOWN;
+    }
+
     public static ValueNode insertLoweredGraph(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
                     ResolvedJavaType type) {
         StructuredGraph graph = addBefore.graph();
+        assert newInstanceNode != null && newInstanceNode.isAlive() : "NewInstanceNode should be alive";
 
         LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
-        if (isAlreadyBuffered.isTautology())
-            return existingOop;
+
+        assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
 
         if (newInstanceNode == null) {
             assert type != null : "type for lowering inline type expected";
             newInstanceNode = graph.add(new NewInstanceNode(type, true));
         }
-        addWrites(graph, writes);
+        // addWrites(graph, writes);
 
         if (isAlreadyBuffered.isContradiction()) {
             graph.addBeforeFixed(addBefore, newInstanceNode);
             for (WriteNode w : writes) {
+                assert w != null && w.isAlive() : "WriteNode should be alive";
                 graph.addBeforeFixed(addBefore, w);
             }
             if (addMembar) {
@@ -470,6 +486,7 @@ public class InlineTypeUtil {
         newInstanceNode.setNext(falseEnd);
         FixedWithNextNode previous = newInstanceNode;
         for (WriteNode w : writes) {
+            assert w != null && w.isAlive() : "WriteNode should be alive";
             previous.setNext(w);
             w.setNext(falseEnd);
             previous = w;
@@ -498,13 +515,15 @@ public class InlineTypeUtil {
         StructuredGraph graph = addBefore.graph();
 
         LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
-        if (isAlreadyBuffered.isTautology())
-            return;
+        assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
+// if (isAlreadyBuffered.isTautology())
+// return;
 
-        addWrites(graph, writes);
+        // addWrites(graph, writes);
 
         if (isAlreadyBuffered.isContradiction()) {
             for (WriteNode w : writes) {
+                assert w != null && w.isAlive() : "WriteNode should be alive";
                 graph.addBeforeFixed(addBefore, w);
             }
             return;
