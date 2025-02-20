@@ -96,6 +96,7 @@ import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.calc.CompareNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
@@ -112,6 +113,7 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.phases.common.inlining.info.InlineInfo;
 import jdk.graal.compiler.phases.common.util.EconomicSetNodeEventListener;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup;
@@ -514,6 +516,14 @@ public class InliningUtil extends ValueMergeUtil {
 
         if (invoke.next() instanceof InlineTypeNode inlineTypeNode && inlineeMethod.hasScalarizedReturn()) {
             inlineTypeNode.removeOnInlining();
+        }
+        if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STOREINLINETYPEFIELDSTOBUF) {
+            foreignCallNode.replaceAtUsages(invoke.asNode());
+            // TODO: is commented code correct?
+            // assert foreignCallNode.next() instanceof MembarNode: "store inline type fields to buf
+            // foreign call should be followed by membar";
+            // foreignCallNode.next().asFixedNode().safeDelete();
+            graph.removeFixed(foreignCallNode);
         }
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph, returnAction, mark);
         GraphUtil.killCFG(invokeNode);
