@@ -256,13 +256,13 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    private boolean scalarize = true;
+    private boolean virtualize = false;
     private boolean insertGuardBeforeVirtualize = false;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
         // TODO: something causes an error
-        if (!scalarize)
+        if (!virtualize)
             return;
         /*
          * Reference objects can escape into their ReferenceQueue at any safepoint, therefore

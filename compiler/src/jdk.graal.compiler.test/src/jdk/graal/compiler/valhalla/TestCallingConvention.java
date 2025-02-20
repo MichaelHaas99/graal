@@ -204,6 +204,16 @@ public class TestCallingConvention extends JTTTest {
         return m;
     }
 
+    public static int demonstratePERead(MyValue m){
+        randomGlobal = m;
+        int i = m.i;
+        return i;
+    }
+
+    public static MyValue demonstrateScalarizedReturn(MyValue m){
+        return m;
+    }
+
     private static final OptionValues DEMO_OPTIONS_WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, GraalOptions.InlineMonomorphicCalls, false, GraalOptions.InlinePolymorphicCalls, false, GraalOptions.InlineMegamorphicCalls, false, GraalOptions.InlineVTableStubs, false, GraalOptions.LimitInlinedInvokes, 0.0,UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
     private static final OptionValues DEMO_OPTIONS_WITH_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, true, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
 
@@ -227,6 +237,12 @@ public class TestCallingConvention extends JTTTest {
     }
 
     @Test
+    public void testPERead() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstratePERead", random());
+    }
+
+    @Test
     public void runDemo3() throws Throwable {
         resetCache();
         runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstratePEA");
@@ -236,6 +252,12 @@ public class TestCallingConvention extends JTTTest {
     public void runDemo4() throws Throwable {
         resetCache();
         runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateFramestate");
+    }
+
+    @Test
+    public void runDemo5() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITH_INLINING,"demonstrateScalarizedReturn", new MyValue());
     }
 
     private static String getCallingConvention(ResolvedJavaMethod method){

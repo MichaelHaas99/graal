@@ -1,7 +1,9 @@
 package jdk.graal.compiler.jtt.bytecode;
 
 import java.lang.reflect.Method;
+import java.util.EnumSet;
 
+import jdk.vm.ci.meta.DeoptimizationReason;
 import org.junit.Test;
 
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -1650,7 +1652,7 @@ public class BC_ifacmpeq4 extends JTTTest {
                 // Null checks
                 // Avoid acmp in the computation of the expected result!
                 test(m.getName(), args[i]);
-                test(WITHOUT_PEA, m.getName(), args[i]);
+                test(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), m.getName(), args[i]);
             } else {
                 // Equality checks
                 for (int j = 0; j < args.length; ++j) {
@@ -1662,7 +1664,7 @@ public class BC_ifacmpeq4 extends JTTTest {
                     }
                     // Avoid acmp in the computation of the expected result!
                     test(m.getName(), args[i], args[j]);
-                    test(WITHOUT_PEA, m.getName(), args[i], args[j]);
+                    test(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), m.getName(), args[i], args[j]);
                 }
             }
         }
@@ -1682,6 +1684,7 @@ public class BC_ifacmpeq4 extends JTTTest {
 
         // Run tests
         for (Method m : getClass().getMethods()) {
+            //if(!m.getName().equals("testEq02_1")) continue;
             if (m.getName().startsWith("test")) {
                 // Do some warmup runs
                 for(int i=0; i<1000;i++){

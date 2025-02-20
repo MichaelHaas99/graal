@@ -2,6 +2,7 @@ package jdk.graal.compiler.valhalla;
 
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 
 import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.core.phases.HighTier;
@@ -23,7 +24,7 @@ import jdk.internal.vm.annotation.NullRestricted;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.internal.value.ValueClass;
 
-@AddExports({"java.base/jdk.internal.vm.annotation","java.base/jdk.internal.value"})
+@AddExports({"java.base/jdk.internal.vm.annotation","java.base/jdk.internal.value","java.base/java.lang.CharacterData"})
 public class TestValueClasses extends JTTTest {
 
     public static final int rI = 20;
@@ -314,6 +315,8 @@ public class TestValueClasses extends JTTTest {
         return vt1 == null;
     }
 
+    private static final MyValueClass1 testValue1 = MyValueClass1.createWithFieldsInline(rI, rL);
+
     /*
     Thread[#14,JVMCI CompilerThread0,9,system]: Compilation of compiler.valhalla.inlinetypes.TestValueClasses.test14(MyValueClass1, MyValueClass1) @ -1 failed:
 java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileData$BranchProbabilityData.getDesignatedSuccessorProbability()" because the return value of "jdk.graal.compiler.nodes.ShortCircuitOrNode.getShortCircuitProbability()" is null
@@ -322,13 +325,14 @@ java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileD
     LogicConstantNode.and(
     no branchprobability given
      */
+
     @Test
     public void run0() throws  Throwable{
         resetCache();
         //MyValue2.createWithFieldsInline
         //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
         InstalledCode c = getCode(getResolvedJavaMethod("test14"), null, true, true, getInitialOptions());
-        //c.executeVarargs(this);
+        c.executeVarargs(this, null, null);
     }
 
     @Test
@@ -336,7 +340,123 @@ java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileD
         resetCache();
         //MyValue2.createWithFieldsInline
         //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
-        InstalledCode c = getCode(getResolvedJavaMethod(org.graalvm.collections.EconomicMapImpl.class, "setRawValue"), null, true, true, getInitialOptions());
+        //InstalledCode c = getCode(getResolvedJavaMethod(org.graalvm.collections.EconomicMapImpl.class, "setRawValue"), null, true, true, getInitialOptions());
         //c.executeVarargs(this);
+    }
+
+    @Test
+    public void run5() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        //InstalledCode c = getCode(getResolvedJavaMethod(org.graalvm.collections.EconomicMapImpl.class, "setValue"), null, true, true, getInitialOptions());
+        //c.executeVarargs(this);
+    }
+
+    @Test
+    public void run6() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod(Class.forName("java.lang.CharacterData"), "of"), null, true, true, getInitialOptions());
+        //c.executeVarargs(this);
+    }
+
+    @Test
+    public void run7() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod(HashMap.class, "putVal"), null, true, true, getInitialOptions());
+        //c.executeVarargs(this);
+    }
+
+    static value class Container {
+        int x = 0;
+        Empty1 empty1;
+        Empty2 empty2 = new Empty2();
+
+        public Container(Empty1 val) {
+            empty1 = val;
+        }
+    }
+
+    static value class Empty2 {
+
+    }
+
+    static value class Empty1 {
+        Empty2 empty2 = new Empty2();
+    }
+
+    @DontInline
+    public static Empty1 test6_helper1(Empty1 vt) {
+        return vt;
+    }
+
+    @DontInline
+    public static Empty2 test6_helper2(Empty2 vt) {
+        return vt;
+    }
+
+    @DontInline
+    public static Container test6_helper3(Container vt) {
+        return vt;
+    }
+
+    public Empty1 test6(Empty1 vt) {
+//        Empty1 empty1 = test6_helper1(vt);
+//        test6_helper2((empty1 != null) ? empty1.empty2 : null);
+//        Container c = test6_helper3(new Container(empty1));
+//        return c.empty1;
+        Container c = new Container(vt);
+        return c.empty1;
+    }
+
+    // causes materialization of nullable scalarized inline object as part of other object
+    public void test6_verifier() {
+        Assert.assertEquals(test6(null), null);
+        //return test6(null) == null;
+    }
+
+    @Test
+    public void run2() throws  Throwable{
+        resetCache();
+        new Container(null);
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("test6_verifier"), null, true, true, getInitialOptions());
+        //c.executeVarargs(this, null);
+    }
+
+    public static Container container;
+
+    public Empty1 testCommitAlloc(){
+        Empty1 empty = new Empty1();
+        container = new Container(empty);
+        return empty;
+    }
+
+    @Test
+    public void run3() throws  Throwable{
+        resetCache();
+        new Empty1();
+        new Empty2();
+        new Container(null);
+        InstalledCode c = getCode(getResolvedJavaMethod("testCommitAlloc"), null, true, true, getInitialOptions());
+    }
+
+    public Empty1 testCommitAlloc2(Empty1 empty){
+        container = new Container(empty);
+        return empty;
+    }
+
+    @Test
+    public void run4() throws  Throwable{
+        resetCache();
+        new Empty1();
+        new Empty2();
+        new Container(null);
+        InstalledCode c = getCode(getResolvedJavaMethod("testCommitAlloc2"), null, true, true, getInitialOptions());
     }
 }
