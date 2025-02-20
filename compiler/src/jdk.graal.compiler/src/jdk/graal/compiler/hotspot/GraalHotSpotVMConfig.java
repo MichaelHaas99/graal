@@ -135,6 +135,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final boolean printInlining = getFlag("PrintInlining", Boolean.class);
     public final boolean inline = getFlag("Inline", Boolean.class);
 
+    public final boolean returnConventionEnabled = access.getFlag("InlineTypeReturnedAsFields", Boolean.class);
+
     // There are 3 available locking modes:
     // LM_MONITOR uses only heavy monitors for locking;
     // LM_LEGACY uses stack-locking, with monitors as 2nd tier;
@@ -607,6 +609,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final long valueObjectHashCodeAddress = getAddress("JVMCIRuntime::value_object_hashCode");
     public final long loadUnknownInlineAddress = getAddress("JVMCIRuntime::load_unknown_inline");
     public final long storeUnknownInlineAddress = getAddress("JVMCIRuntime::store_unknown_inline");
+    public final long storeInlineTypeFieldsToBuf = getAddress("SharedRuntime::store_inline_type_fields_to_buf");
 
     // This flag indicates that support for loom is enabled.
     public final boolean continuationsEnabled = getFieldValue("CompilerToVM::Data::continuations_enabled", Boolean.class, "bool");

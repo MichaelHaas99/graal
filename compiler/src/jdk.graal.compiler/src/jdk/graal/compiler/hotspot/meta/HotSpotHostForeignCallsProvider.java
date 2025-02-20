@@ -91,6 +91,7 @@ import static jdk.graal.compiler.nodes.java.ForeignCallDescriptors.REGISTER_FINA
 import static jdk.graal.compiler.replacements.IdentityHashCodeSnippets.VALUEOBJECTHASHCODE;
 import static jdk.graal.compiler.replacements.InlineTypePlugin.LOADUNKNOWNINLINE;
 import static jdk.graal.compiler.replacements.InlineTypePlugin.STOREUNKNOWNINLINE;
+import static jdk.graal.compiler.replacements.MethodHandlePlugin.STOREINLINETYPEFIELDSTOBUF;
 import static jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates.findMethod;
 import static jdk.graal.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation.POW;
 import static jdk.graal.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
@@ -554,6 +555,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         linkForeignCall(options, providers, VALUEOBJECTHASHCODE, c.valueObjectHashCodeAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, LOADUNKNOWNINLINE, c.loadUnknownInlineAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, STOREUNKNOWNINLINE, c.storeUnknownInlineAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, STOREINLINETYPEFIELDSTOBUF, c.storeInlineTypeFieldsToBuf, PREPEND_THREAD);
         registerForeignCall(NOTIFY, c.notifyAddress, NativeCall);
         registerForeignCall(NOTIFY_ALL, c.notifyAllAddress, NativeCall);
 
