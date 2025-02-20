@@ -187,6 +187,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.meta.TriState;
 
 /**
  * VM-independent lowerings for standard Java nodes. VM-specific methods are abstract and must be
@@ -1030,14 +1031,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
                     if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
                         assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
-                        // InlineTypeNode inlineTypeNode =
-                        // InlineTypeNode.createWithoutValues(virtual.type(),
-                        // reuseAlloc.getOopsOrHubs().get(objIndex),
-                        // reuseAlloc.getIsNotNulls().get(objIndex));
-// graph.add(inlineTypeNode);
-// recursiveInlineTypeLowerings.add(inlineTypeNode);
-// graph.addBeforeFixed(commit, inlineTypeNode);
-// allocations[objIndex] = inlineTypeNode;
+
+                        if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex)) == TriState.TRUE) {
+                            // already buffered (or null) use this instance
+                            allocations[objIndex] = reuseAlloc.getExistingOops().get(objIndex);
+                            continue;
+                        }
+
                         NewInstanceNode newObject = graph.add(new NewInstanceNode(virtual.type(), true));
                         recursiveInlineTypeLowerings.add(newObject);
                         int valuePos = valuePositions[objIndex];
@@ -1047,14 +1047,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             if (value instanceof VirtualObjectNode) {
                                 value = allocations[commit.getVirtualObjects().indexOf(value)];
                             }
-// if (value == null) {
-// omittedValues.set(valuePos);
-// ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
-// inlineTypeNode.setFieldValue(field, ConstantNode.defaultForKind(field.getJavaKind(), graph));
-// } else {
-// ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
-// inlineTypeNode.setFieldValue(field, value);
-// }
+
                             if (value == null) {
                                 omittedValues.set(valuePos);
                             } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
@@ -1080,12 +1073,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                                     WriteNode write = new WriteNode(address, LocationIdentity.init(), arrayImplicitStoreConvert(graph, storageKind, value, commit, virtual, valuePos), barrierType,
                                                     MemoryOrderMode.PLAIN);
                                     // graph.addAfterFixed(newObject, graph.add(write));
-                                    writes.add(write);
+                                    writes.add(graph.add(write));
                                 }
                             }
                             valuePos++;
                         }
-                        allocations[objIndex] = InlineTypeUtil.insertLoweredGraph(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOopsOrHubs().get(objIndex), writes, false, newObject,
+                        allocations[objIndex] = InlineTypeUtil.insertLoweredGraph(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex), writes, false,
+                                        newObject,
                                         virtual.type());
                         continue;
 
@@ -1190,8 +1184,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                                     barrierType = barrierSet.postAllocationInitBarrier(barrierType);
                                     WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, JavaKind.Object, allocValue), barrierType, MemoryOrderMode.PLAIN);
                                     if (newObject instanceof InlineTypeNode inlineTypeNode) {
-                                        lateWrites.computeIfAbsent(inlineTypeNode, k -> new ArrayList<>());
-                                        lateWrites.get(inlineTypeNode).add(write);
+                                        if (InlineTypeUtil.isAlreadyBuffered(graph, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop()) == TriState.TRUE) {
+                                            lateWrites.computeIfAbsent(inlineTypeNode, k -> new ArrayList<>());
+                                            lateWrites.get(inlineTypeNode).add(graph.add(write));
+                                        }
                                     } else {
                                         graph.addBeforeFixed(commit, graph.add(write));
                                     }

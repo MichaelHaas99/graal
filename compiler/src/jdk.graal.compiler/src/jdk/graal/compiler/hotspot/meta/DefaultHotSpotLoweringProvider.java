@@ -236,6 +236,7 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.meta.TriState;
 
 /**
  * HotSpot implementation of {@link LoweringProvider}.
@@ -1240,6 +1241,13 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         StructuredGraph graph = inlineTypeNode.graph();
         if (graph.getGuardsStage() != GraphState.GuardsStage.FIXED_DEOPTS)
             return;
+        if (InlineTypeUtil.isAlreadyBuffered(graph, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop()) == TriState.TRUE) {
+            inlineTypeNode.replaceAtUsages(inlineTypeNode.getExistingOop());
+            graph.removeFixed(inlineTypeNode);
+            return;
+        }
+
+        // need to allocate it or create diamond
         NewInstanceNode newObject = graph.add(new NewInstanceNode(inlineTypeNode.getType(), true));
         List<WriteNode> writes = new ArrayList<>();
         int entryCount = inlineTypeNode.getScalarizedInlineObject().size();
@@ -1260,7 +1268,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, field.getJavaKind(), value), barrierType,
                                 MemoryOrderMode.PLAIN);
                 // graph.addAfterFixed(newObject, graph.add(write));
-                writes.add(write);
+                writes.add(graph.add(write));
             }
         }
 
