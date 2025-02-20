@@ -25,17 +25,25 @@
 package jdk.graal.compiler.replacements;
 
 import static jdk.graal.compiler.core.common.GraalOptions.MaximumRecursiveInlining;
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
+import static jdk.graal.compiler.nodes.memory.MemoryKill.NO_LOCATION;
 
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampPair;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.NodeInputList;
+import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.CallTargetNode;
 import jdk.graal.compiler.nodes.CallTargetNode.InvokeKind;
+import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.Invokable;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.InvokeNode;
+import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
+import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
@@ -91,6 +99,7 @@ public class MethodHandlePlugin implements NodePlugin {
                     b.add(methodHandleNode.asNode());
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
+                    appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
                 }
             } else {
                 ResolvedMethodHandleCallTargetNode callTarget = (ResolvedMethodHandleCallTargetNode) invoke.callTarget();
@@ -129,10 +138,12 @@ public class MethodHandlePlugin implements NodePlugin {
                         // the special ResolvedMethodHandleCallTargetNode.
 
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
+                        appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci());
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
                         assert invoke.isAlive() : "invoke should be alive to scalarize parameters before its position";
                         macroInvokable.addMethodHandleInfo(b.append(callTarget));
+                        appendForeignCall(b, macroInvokable, invokeReturnStamp, newInvokable.bci());
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
                     }
@@ -161,5 +172,39 @@ public class MethodHandlePlugin implements NodePlugin {
             return true;
         }
         return false;
+    }
+
+    public static final HotSpotForeignCallDescriptor STOREINLINETYPEFIELDSTOBUF = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATION,
+                    "storeInlineTypeFieldsToBuf",
+                    Object.class,
+                    long.class /* oop or hub */);
+
+    // see PhaseMacroExpand::expand_mh_intrinsic_return
+    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
+        if (invokeReturnStamp.getTrustedStamp().getStackKind() == JavaKind.Void || !invokeReturnStamp.getTrustedStamp().isObjectStamp() ||
+                        !b.getPlatformConfigurationProvider().requiresRuntimeCallAfterInvoke()) {
+            return;
+        }
+        // TODO: only insert if return convention is enabled
+        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(STOREINLINETYPEFIELDSTOBUF, invokable.asNode());
+        bufferInlineTypeCall.setBci(bci);
+        b.append(bufferInlineTypeCall);
+        // get the framestate of the macro invokable
+        FrameState correctFrameState = invokable.stateAfter().duplicate();
+        b.append(correctFrameState);
+        // replace the top of the stack with the result of the foreign call
+        correctFrameState.replaceFirstInput(invokable.asNode(), bufferInlineTypeCall);
+        bufferInlineTypeCall.setStateAfter(correctFrameState);
+
+        // set the foreign call as the output
+        b.pop(invokeReturnStamp.getTrustedStamp().getStackKind());
+        b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), bufferInlineTypeCall);
+        b.append(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE));
+
+        // deopt not allowed between invoke and foreign call
+        // bufferInlineTypeCall.setInvalidateStateDuring();
+
+        // make the framestate of the invokable invalid, but is not used so not necessary
+        // invokable.stateAfter().invalidateForDeoptimizationReturnConvention();
     }
 }
