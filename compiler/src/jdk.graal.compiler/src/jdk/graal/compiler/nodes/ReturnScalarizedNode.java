@@ -109,6 +109,10 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), isNotNull, existingOop, hub);
                 tool.ensureAdded(returnResultDecider);
                 tool.replaceFirstInput(result, returnResultDecider);
+// ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), returnResultDecider,
+// ConstantNode.forBoolean(true, graph()));
+// tool.addNode(print);
 
                 // The nullable virtual inline object contains correct values for both cases (null
                 // and non-null). Therefore use its values to replace the input list.
@@ -137,6 +141,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
             // replace the object with the hub to avoid materialization
             tool.replaceFirstInput(result, taggedHub);
+
+// ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), taggedHub,
+// ConstantNode.forBoolean(true, graph()));
+// tool.addNode(print);
         }
     }
 
