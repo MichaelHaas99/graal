@@ -24,15 +24,15 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
 
     public static final NodeClass<CommitAllocationOrReuseOopNode> TYPE = NodeClass.create(CommitAllocationOrReuseOopNode.class);
 
-    @OptionalInput NodeInputList<ValueNode> oopsOrHubs = new NodeInputList<>(this);
+    @OptionalInput NodeInputList<ValueNode> existingOops = new NodeInputList<>(this);
     @OptionalInput NodeInputList<ValueNode> isNotNulls = new NodeInputList<>(this);
 
     public CommitAllocationOrReuseOopNode() {
         super(TYPE);
     }
 
-    public List<ValueNode> getOopsOrHubs() {
-        return oopsOrHubs;
+    public List<ValueNode> getExistingOops() {
+        return existingOops;
     }
 
     public List<ValueNode> getIsNotNulls() {
@@ -59,7 +59,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
              * created.
              */
             tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i),
-                            oopsOrHubs.get(i), isNotNulls.get(i));
+                            existingOops.get(i), isNotNulls.get(i));
             pos += entryCount;
         }
         tool.delete();

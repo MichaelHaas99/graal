@@ -271,7 +271,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                         commit.addLocks(monitorIds);
                     }
                     for (ValueNode oopOrHub : oopsOrHubs) {
-                        ((CommitAllocationOrReuseOopNode) commit).getOopsOrHubs().add(oopOrHub != null ? graph.addOrUniqueWithInputs(oopOrHub) : null);
+                        ((CommitAllocationOrReuseOopNode) commit).getExistingOops().add(oopOrHub != null ? graph.addOrUniqueWithInputs(oopOrHub) : null);
                     }
                     for (ValueNode isNotNull : isNotNulls) {
                         ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(isNotNull != null ? graph.addOrUniqueWithInputs(isNotNull) : null);
