@@ -5,8 +5,8 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.la
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperNullFreeShift;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.lockMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markWordLockMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayPattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
@@ -65,7 +65,7 @@ public class IsNullFreeArraySnippets implements Snippets {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        final Word lockBits = mark.and(lockMaskInPlace(INJECTED_VMCONFIG));
+        final Word lockBits = mark.and(Word.unsigned(markWordLockMaskInPlace(INJECTED_VMCONFIG)));
         if (lockBits.equal(WordFactory.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
             return mark.and(WordFactory.unsigned(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG))).equal(WordFactory.unsigned(nullFreeArrayPattern(INJECTED_VMCONFIG)));
         }
