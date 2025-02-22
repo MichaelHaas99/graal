@@ -32,7 +32,6 @@ import static jdk.vm.ci.amd64.AMD64.r10;
 import static jdk.vm.ci.amd64.AMD64.r11;
 import static jdk.vm.ci.amd64.AMD64.r13;
 import static jdk.vm.ci.amd64.AMD64.r14;
-import static jdk.vm.ci.amd64.AMD64.r15;
 import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbp;
 import static jdk.vm.ci.amd64.AMD64.rsp;
@@ -55,6 +54,7 @@ import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
+import jdk.graal.compiler.core.common.memory.BarrierType;
 import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
 import jdk.graal.compiler.core.gen.LIRGenerationProvider;
 import jdk.graal.compiler.debug.Assertions;
@@ -76,7 +76,6 @@ import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMap;
-import jdk.graal.compiler.lir.amd64.AMD64Move;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
 import jdk.graal.compiler.lir.asm.DataBuilder;
@@ -333,7 +332,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0]) && allowStackRepair) {
+            if (crb.compilationResult.getMethods() != null && needStackRepair(crb.compilationResult.getMethods()[0]) && allowStackRepair && crb.compilationResult.getEntryBCI() == -1) {
                 // needs stack repair
 
                 if (frameMap.preserveFramePointer()) {
@@ -622,7 +621,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (!isXMMRegister(toValue)) {
                 Register dst = ValueUtil.isStackSlot(toValue) ? tmp2 : ValueUtil.asRegister(toValue);
                 if (kind == JavaKind.Object) {
-                    loadHeapOop(crb, asm, dst, fromAddress);
+                    loadHeapOop(crb, asm, dst, fromAddress, fields[fields.length - i - 1]);
                 } else {
                     boolean isSigned = kind != JavaKind.Char && kind != JavaKind.Boolean;
                     loadSizedValue(asm, dst, fromAddress, kind.getByteCount(), isSigned);
@@ -676,21 +675,35 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return stackSlot.getRawOffset() + getTarget().wordSize;
     }
 
-    private void loadHeapOop(CompilationResultBuilder crb, AMD64MacroAssembler asm, Register dst, AMD64Address fromAddress) {
-        asm.movptr(dst, fromAddress);
-        if (config.useCompressedOops) {
+    private void loadHeapOop(CompilationResultBuilder crb, AMD64MacroAssembler asm, Register dst, AMD64Address fromAddress, ResolvedJavaField field) {
+        // asm.movptr(dst, fromAddress);
+        AMD64HotSpotMacroAssembler hasm = (AMD64HotSpotMacroAssembler) asm;
+        hasm.loadObject(dst, fromAddress);
+// if (config.useCompressedOops) {
+// AMD64Move.move((AMD64Kind) new
+// AMD64HotSpotLIRKindTool().getNarrowOopKind().getPlatformKind(), crb, asm,
+// dst.asValue(), dst.asValue());
+// new AMD64Move.UncompressPointerOp(dst.asValue(), dst.asValue(),
+// getProviders().getRegisters().getHeapBaseRegister().asValue(),
+// config.getOopEncoding(), false,
+// new AMD64HotSpotLIRKindTool()).emitCode(crb, asm);
             // loaded compressed oop, uncompress it, zero out upper 32 bits
-            asm.movl(dst, dst);
-            AMD64Move.UncompressPointerOp.emitUncompressCode(asm, dst, config.getOopEncoding().getShift(), getProviders().getRegisters().getHeapBaseRegister(), false);
-        }
-        if (config.gc == HotSpotGraalRuntime.HotSpotGC.X) {
-            ForeignCallLinkage xCallTarget = this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.X_FIELD_BARRIER);
-            emitXBarrier(crb, asm, null, dst, config, xCallTarget, fromAddress);
-        } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.Z) {
+
+        // hasm.
+// asm.movl(dst, dst);
+// AMD64Move.UncompressPointerOp.emitUncompressCode(asm, dst,
+// config.getOopEncoding().getShift(),
+// getProviders().getRegisters().getHeapBaseRegister(), false);
+// }
+        if (config.gc == HotSpotGraalRuntime.HotSpotGC.Z) {
             ForeignCallLinkage zCallTarget = this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.Z_LOAD_BARRIER);
             emitZBarrier(crb, asm, dst, zCallTarget, fromAddress, false);
         } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.G1) {
-            emitG1Barrier(crb, asm, dst, fromAddress, false);
+            BarrierType barrierType = this.getProviders().getPlatformConfigurationProvider().getBarrierSet().fieldReadBarrierType(field,
+                            this.getProviders().getMetaAccessExtensionProvider().getStorageKind(field.getType()));
+            if (barrierType == BarrierType.REFERENCE_GET) {
+                emitG1Barrier(crb, asm, dst, fromAddress, false);
+            }
         }
         // TODO: others don't need a read barrier?
         // config.gc == HotSpotGraalRuntime.HotSpotGC.Epsilon || config.useG1GC()
@@ -791,37 +804,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         });
     }
 
-
-    public static void emitXBarrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Label success, Register resultReg, GraalHotSpotVMConfig config, ForeignCallLinkage callTarget,
-                    AMD64Address address) {
-        assert !resultReg.equals(address.getBase()) && !resultReg.equals(address.getIndex()) : Assertions.errorMessage(resultReg, address);
-
-        final Label entryPoint = new Label();
-        final Label continuation = new Label();
-
-        masm.testq(resultReg, new AMD64Address(r15, config.threadAddressBadMaskOffset));
-        if (success != null) {
-            masm.jcc(AMD64Assembler.ConditionFlag.Zero, success);
-            masm.jmp(entryPoint);
-        } else {
-            masm.jcc(AMD64Assembler.ConditionFlag.NotZero, entryPoint);
-        }
-        masm.bind(entryPoint);
-
-        CallingConvention cc = callTarget.getOutgoingCallingConvention();
-        AMD64Address cArg0 = (AMD64Address) crb.asAddress(cc.getArgument(0));
-        AMD64Address cArg1 = (AMD64Address) crb.asAddress(cc.getArgument(1));
-
-        masm.movq(cArg0, resultReg);
-        masm.leaq(resultReg, address);
-        masm.movq(cArg1, resultReg);
-        AMD64Call.directCall(crb, masm, callTarget, null, false, null);
-        masm.movq(resultReg, cArg0);
-
-        // Return to inline code
-        masm.jmp(continuation);
-        masm.bind(continuation);
-    }
 
     public static void emitZBarrier(CompilationResultBuilder crb,
                     AMD64MacroAssembler masm,

@@ -71,8 +71,8 @@ public class DelayedRawComparisonSnippets implements Snippets {
             }
             args.add("x", node.getObject1());
             args.add("y", node.getObject2());
-            args.addConst("offset", node.getLongOffset());
-            args.addConst("locationIdentity", node.getLocationIdentity());
+            args.add("offset", node.getLongOffset());
+            args.add("locationIdentity", node.getLocationIdentity());
             template(tool, node, args).instantiate(tool.getMetaAccess(), node, DEFAULT_REPLACER, args);
         }
 

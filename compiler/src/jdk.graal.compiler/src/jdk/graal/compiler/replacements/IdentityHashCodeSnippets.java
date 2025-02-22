@@ -99,8 +99,8 @@ public abstract class IdentityHashCodeSnippets implements Snippets {
             StructuredGraph graph = node.graph();
             Arguments args = new Arguments(identityHashCodeSnippet, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("thisObj", node.object());
-            args.addConst("canBeInlineType", node.object().stamp(NodeView.DEFAULT).canBeInlineType());
-            args.addConst("isInlineType", node.object().stamp(NodeView.DEFAULT).isInlineType());
+            args.add("canBeInlineType", node.object().stamp(NodeView.DEFAULT).canBeInlineType());
+            args.add("isInlineType", node.object().stamp(NodeView.DEFAULT).isInlineType());
             SnippetTemplate template = template(tool, node, args);
             template.instantiate(tool.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }

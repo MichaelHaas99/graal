@@ -107,7 +107,6 @@ import jdk.graal.compiler.nodes.extended.ClassIsArrayNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.extended.JavaReadNode;
 import jdk.graal.compiler.nodes.extended.JavaWriteNode;
@@ -1028,7 +1027,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         computeAllocationEmissionOrder(commit, emissionOrder);
 
         List<AbstractNewObjectNode> recursiveLowerings = new ArrayList<>();
-        //List<InlineTypeNode> recursiveInlineTypeLowerings = new ArrayList<>();
         List<AbstractNewObjectNode> recursiveInlineTypeLowerings = new ArrayList<>();
         ValueNode[] allocations = new ValueNode[virtualObjects.size()];
         BitSet omittedValues = new BitSet();
@@ -1080,7 +1078,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                                 if (address != null) {
                                     WriteNode write = new WriteNode(address, LocationIdentity.init(), arrayImplicitStoreConvert(graph, storageKind, value, commit, virtual, valuePos), barrierType,
                                             MemoryOrderMode.PLAIN);
-                                    // graph.addAfterFixed(newObject, graph.add(write));
                                     writes.add(graph.add(write));
                                 }
                             }
@@ -1177,10 +1174,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return new NewArrayNode(virtual.componentType(), length, true);
     }
 
+
     @SuppressWarnings("try")
     public void writeOmittedValues(CommitAllocationNode commit, StructuredGraph graph, ValueNode[] allocations, BitSet omittedValues) {
 
-        HashMap<InlineTypeNode, List<WriteNode>> lazyWrites = new HashMap<>();
+        HashMap<ValueNode, InlineTypeUtil.InlineTypeInfo> lateWrites = new HashMap<>();
         int valuePos = 0;
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
             VirtualObjectNode virtual = commit.getVirtualObjects().get(objIndex);
@@ -1189,14 +1187,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 ValueNode newObject = allocations[objIndex];
                 for (int i = 0; i < entryCount; i++, valuePos++) {
                     if (!omittedValues.get(valuePos)) {
-                        continue;
-                    }
-                    if (newObject instanceof InlineTypeNode inlineTypeNode) {
-                        assert virtual instanceof VirtualArrayNode : Assertions.errorMessageContext("virtual", virtual);
-                        VirtualInstanceNode virtualInstance = (VirtualInstanceNode) virtual;
-                        ResolvedJavaField field = virtualInstance.field(i);
-                        inlineTypeNode.setFieldValue(field, value);
-                        valuePos++;
                         continue;
                     }
                     ValueNode value = commit.getValues().get(valuePos);
@@ -1221,21 +1211,30 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                         }
                         if (address != null) {
                             barrierType = barrierSet.postAllocationInitBarrier(barrierType);
-                            WriteNode write = graph.add(
-                                            new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, JavaKind.Object, allocValue), barrierType, MemoryOrderMode.PLAIN));
-                            if (newObject instanceof InlineTypeNode inlineTypeNode) {
-                                lazyWrites.computeIfAbsent(inlineTypeNode, k -> new ArrayList<>());
-                                lazyWrites.get(inlineTypeNode).add(graph.add(write));
+                            WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, JavaKind.Object, allocValue), barrierType, MemoryOrderMode.PLAIN);
+                            if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
+                                assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
+
+                                if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex)) != TriState.TRUE) {
+                                    // only do write if not already buffered (or null), use this
+                                    // instance
+                                    final int currentObjIndex = objIndex;
+                                    lateWrites.computeIfAbsent(newObject,
+                                                    k -> new InlineTypeUtil.InlineTypeInfo(reuseAlloc.getIsNotNulls().get(currentObjIndex), reuseAlloc.getExistingOops().get(currentObjIndex)));
+                                    InlineTypeUtil.InlineTypeInfo info = lateWrites.get(newObject);
+                                    info.getWrites().add(graph.add(write));
+                                }
                             } else {
                                 graph.addBeforeFixed(commit, graph.add(write));
                             }
+
                         }
                     }
                 }
             }
         }
-        for (InlineTypeNode inlineTypeNode : lazyWrites.keySet()) {
-            InlineTypeUtil.insertLateInitWrites(commit, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop(), lazyWrites.get(inlineTypeNode));
+        for (ValueNode inlineType : lateWrites.keySet()) {
+            InlineTypeUtil.insertLateInitWrites(commit, lateWrites.get(inlineType).getIsNotNull(), lateWrites.get(inlineType).getExistingOop(), lateWrites.get(inlineType).getWrites());
         }
     }
 
@@ -1267,7 +1266,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     if (value instanceof VirtualObjectNode) {
                         if (!complete[commit.getVirtualObjects().indexOf(value)]) {
                             allValuesAvailable = false;
-                            valuePos = valuePosBefore + entryCount;
+                            // valuePos = valuePosBefore + entryCount;
                             break;
                         }
                     }

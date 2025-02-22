@@ -141,8 +141,8 @@ public class ObjectEqualsSnippets implements Snippets {
                 args.add("y", y);
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
-                args.addConst("trace", isTracingEnabledForMethod(node.graph()));
-                args.addConst("inlineComparison", inlineComparison);
+                args.add("trace", isTracingEnabledForMethod(node.graph()));
+                args.add("inlineComparison", inlineComparison);
                 args.addVarargs("offsets", long.class, StampFactory.forKind(JavaKind.Long), offsets);
                 args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                 args.addVarargs("identities", LocationIdentity.class, StampFactory.forKind(JavaKind.Object), identities);
@@ -156,10 +156,10 @@ public class ObjectEqualsSnippets implements Snippets {
                     boolean yInlineType = rightEntry.inlineType();
                     // HotSpotResolvedObjectType test = leftEntry.getValidType();
                     // HotSpotResolvedObjectType test2 = rightEntry.getValidType();
-                    args.addConst("xAlwaysNull", xAlwaysNull);
-                    args.addConst("xInlineType", xInlineType);
-                    args.addConst("yAlwaysNull", yAlwaysNull);
-                    args.addConst("yInlineType", yInlineType);
+                    args.add("xAlwaysNull", xAlwaysNull);
+                    args.add("xInlineType", xInlineType);
+                    args.add("yAlwaysNull", yAlwaysNull);
+                    args.add("yInlineType", yInlineType);
                 }
 
                 return args;

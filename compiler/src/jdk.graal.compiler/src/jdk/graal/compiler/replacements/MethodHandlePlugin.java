@@ -208,7 +208,7 @@ public class MethodHandlePlugin implements NodePlugin {
         // set the foreign call as the output
         b.pop(invokeReturnStamp.getTrustedStamp().getStackKind());
         b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), bufferInlineTypeCall);
-        b.append(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE));
+        b.append(MembarNode.forInitialization());
 
         // deopt not allowed between invoke and foreign call
         // bufferInlineTypeCall.setInvalidateStateDuring();

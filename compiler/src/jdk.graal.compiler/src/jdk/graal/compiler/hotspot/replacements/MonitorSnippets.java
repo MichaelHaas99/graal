@@ -50,7 +50,6 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OB
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJECT_MONITOR_SUCC_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.diagnoseSyncOnValueBasedClasses;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.heldMonitorCountOffset;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypeMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.isCAssertEnabled;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.javaThreadLockStackEndOffset;
@@ -95,12 +94,12 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probabilit
 import static jdk.graal.compiler.nodes.extended.MembarNode.memoryBarrier;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static jdk.graal.compiler.replacements.nodes.CStringConstant.cstring;
-import static jdk.vm.ci.meta.DeoptimizationAction.None;
-import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
-import static org.graalvm.word.LocationIdentity.any;
 import static jdk.graal.compiler.word.Word.nullPointer;
 import static jdk.graal.compiler.word.Word.unsigned;
 import static jdk.graal.compiler.word.Word.zero;
+import static jdk.vm.ci.meta.DeoptimizationAction.None;
+import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.List;
 import java.util.Objects;
@@ -904,8 +903,8 @@ public class MonitorSnippets implements Snippets {
             Arguments args = new Arguments(monitorenter, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("object", monitorenterNode.object());
             args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
-            args.addConst("canBeInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).canBeInlineType());
-            args.addConst("isInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).isInlineType());
+            args.add("canBeInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).canBeInlineType());
+            args.add("isInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).isInlineType());
             args.add("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
             args.add("threadRegister", registers.getThreadRegister());
             args.add("stackPointerRegister", registers.getStackPointerRegister());
