@@ -5,8 +5,6 @@ import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.graalvm.word.LocationIdentity;
-
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.GraalError;
@@ -452,19 +450,19 @@ public class InlineTypeUtil {
         }
         // addWrites(graph, writes);
 
-        if (isAlreadyBuffered.isContradiction()) {
-            graph.addBeforeFixed(addBefore, newInstanceNode);
-            for (WriteNode w : writes) {
-                assert w != null && w.isAlive() : "WriteNode should be alive";
-                graph.addBeforeFixed(addBefore, w);
-            }
-            if (addMembar) {
-                // all fields implicitly final therefore use constructor freeze
-                MembarNode memBar = graph.add(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE, LocationIdentity.init()));
-                graph.addBeforeFixed(addBefore, memBar);
-            }
-            return newInstanceNode;
-        }
+ if (isAlreadyBuffered.isContradiction()) {
+     graph.addBeforeFixed(addBefore, newInstanceNode);
+     for (WriteNode w : writes) {
+         assert w != null && w.isAlive() : "WriteNode should be alive";
+         graph.addBeforeFixed(addBefore, w);
+     }
+     if (addMembar) {
+         // all fields implicitly final therefore use constructor freeze
+         MembarNode memBar = graph.add(MembarNode.forInitialization());
+         graph.addBeforeFixed(addBefore, memBar);
+     }
+     return newInstanceNode;
+ }
 
         FrameState framestate = GraphUtil.findLastFrameState(addBefore);
 
@@ -493,7 +491,7 @@ public class InlineTypeUtil {
         }
         if (addMembar) {
             // all fields implicitly final therefore use constructor freeze
-            MembarNode memBar = graph.add(new MembarNode(MembarNode.FenceKind.CONSTRUCTOR_FREEZE, LocationIdentity.init()));
+            MembarNode memBar = graph.add(MembarNode.forInitialization());
             previous.setNext(memBar);
             memBar.setNext(falseEnd);
         }
@@ -569,6 +567,29 @@ public class InlineTypeUtil {
         for (WriteNode w : writes) {
             if (!w.isAlive())
                 graph.add(w);
+        }
+    }
+
+    public static class InlineTypeInfo {
+        public InlineTypeInfo(ValueNode isNotNull, ValueNode existingOop) {
+            this.isNotNull = isNotNull;
+            this.existingOop = existingOop;
+        }
+
+        private ValueNode isNotNull;
+        private ValueNode existingOop;
+        private List<WriteNode> writes = new ArrayList<>();
+
+        public ValueNode getIsNotNull() {
+            return isNotNull;
+        }
+
+        public ValueNode getExistingOop() {
+            return existingOop;
+        }
+
+        public List<WriteNode> getWrites() {
+            return writes;
         }
     }
 }

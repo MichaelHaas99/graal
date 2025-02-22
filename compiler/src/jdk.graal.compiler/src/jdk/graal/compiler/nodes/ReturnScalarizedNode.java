@@ -82,7 +82,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
     }
 
-    private boolean virtualize = false;
+    private boolean virtualize = true;
 
     @Override
     public void virtualize(VirtualizerTool tool) {

@@ -270,6 +270,7 @@ suite = {
           "jdk.internal.misc",
           "jdk.internal.util",
           "jdk.internal.vm.annotation",
+            "jdk.internal.value",
         ],
         "java.instrument" : [
           "sun.instrument",

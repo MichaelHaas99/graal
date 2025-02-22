@@ -253,7 +253,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int klassProtoTypeHeaderOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord");
     public final int klassKind = getFieldOffset("Klass::_kind", Integer.class, "Klass::KlassKind const");
     public final int klassFlatArrayKlassKind = getConstant("Klass::FlatArrayKlassKind", Integer.class);
-    public final long flatArrayPattern = getConstant("markWord::flat_array_pattern", Long.class);
+    public final long flatArrayPattern = getConstant("markWord::null_free_flat_array_pattern", Long.class);
     public final long flatArrayMaskInPlace = getConstant("markWord::flat_array_mask_in_place", Long.class);
     public final long nullFreeArrayPattern = getConstant("markWord::null_free_array_pattern", Long.class);
     public final long nullFreeArrayMaskInPlace = getConstant("markWord::null_free_array_mask_in_place", Long.class);
@@ -423,11 +423,6 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     public final int contEntryOffset = getFieldOffset("JavaThread::_cont_entry", Integer.class, "ContinuationEntry*", -1, JDK >= 24);
     public final int pinCountOffset = getFieldOffset("ContinuationEntry::_pin_count", Integer.class, "uint32_t", -1, JDK >= 24);
-
-    /**
-     * Identity hash code value when uninitialized.
-     */
-    public final int uninitializedIdentityHashCodeValue = getConstant("markWord::no_hash", Integer.class);
 
     public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
                     Integer.class, "address");

@@ -256,7 +256,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    private boolean virtualize = false;
+    private boolean virtualize = true;
     private boolean insertGuardBeforeVirtualize = false;
 
     @Override
