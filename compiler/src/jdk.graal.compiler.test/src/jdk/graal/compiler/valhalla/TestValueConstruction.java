@@ -99,4 +99,22 @@ public class TestValueConstruction extends JTTTest {
         InstalledCode c = getCode(getResolvedJavaMethod("test12"), null, true, true, getInitialOptions());
     }
 
+    static interface TestInterface1{
+        void testMethod();
+    }
+    static value class MyClass implements TestInterface1{
+        @Override
+        public void testMethod() {}
+    }
+
+    static void testNullReceiver(TestInterface1 object){
+        object.testMethod();
+    }
+
+    @Test
+    public void run5() throws  Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod("testNullReceiver"), null, true, true, getInitialOptions());
+    }
+
 }

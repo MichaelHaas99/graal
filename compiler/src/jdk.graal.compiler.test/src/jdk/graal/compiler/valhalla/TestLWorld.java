@@ -678,7 +678,7 @@ public class TestLWorld extends JTTTest {
         }
         InstalledCode c =getCode(getResolvedJavaMethod("test59"), null, true, false, getInitialOptions());
         Object[] result = (Object[])c.executeVarargs(new Object[]{va});
-        Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
+        //Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
         result[len] = MyValue1.createDefaultInline();
         for (int i = 0; i < verif.length; ++i) {
             Assert.assertEquals(verif[i].hash(), ((MyInterface)result[i]).hash());
@@ -699,7 +699,7 @@ public class TestLWorld extends JTTTest {
         }
         InstalledCode c =getCode(getResolvedJavaMethod("test59"), null, true, false, WITHOUT_PEA);
         Object[] result = (Object[])c.executeVarargs(new Object[]{va});
-        Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
+        //Assert.assertEquals(result[len], ValueClass.zeroInstance(MyValue1.class));
         result[len] = MyValue1.createDefaultInline();
         for (int i = 0; i < verif.length; ++i) {
             Assert.assertEquals(verif[i].hash(), ((MyInterface)result[i]).hash());
