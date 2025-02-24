@@ -191,7 +191,7 @@ public class MethodHandlePlugin implements NodePlugin {
     // see PhaseMacroExpand::expand_mh_intrinsic_return
     private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
         if (invokeReturnStamp.getTrustedStamp().getStackKind() == JavaKind.Void || !invokeReturnStamp.getTrustedStamp().isObjectStamp() ||
-                        !b.getPlatformConfigurationProvider().requiresRuntimeCallAfterInvoke()) {
+                        !b.getValhallaOptionsProvider().returnCallingConventionEnabled()) {
             return;
         }
         // TODO: only insert if return convention is enabled

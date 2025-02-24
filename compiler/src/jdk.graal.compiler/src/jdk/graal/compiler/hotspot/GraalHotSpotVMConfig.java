@@ -136,6 +136,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final boolean inline = getFlag("Inline", Boolean.class);
 
     public final boolean returnConventionEnabled = access.getFlag("InlineTypeReturnedAsFields", Boolean.class);
+    public final boolean useArrayFlattening = access.getFlag("UseArrayFlattening", Boolean.class);
+    public final boolean useFieldFlattening = access.getFlag("UseFieldFlattening", Boolean.class);
 
     // There are 3 available locking modes:
     // LM_MONITOR uses only heavy monitors for locking;

@@ -45,6 +45,7 @@ import jdk.graal.compiler.hotspot.meta.HotSpotRegistersProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotSnippetReflectionProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotStampProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotSuitesProvider;
+import jdk.graal.compiler.hotspot.meta.HotspotValhallaOptionsProvider;
 import jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode;
 import jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil;
 import jdk.graal.compiler.hotspot.word.HotSpotWordTypes;
@@ -99,6 +100,10 @@ public abstract class HotSpotBackendFactory implements ArchitectureSpecific {
 
     protected HotSpotPlatformConfigurationProvider createConfigInfoProvider(GraalHotSpotVMConfig config, BarrierSet barrierSet) {
         return new HotSpotPlatformConfigurationProvider(config, barrierSet);
+    }
+
+    protected HotspotValhallaOptionsProvider createValhallaOptionsProvider(GraalHotSpotVMConfig config) {
+        return new HotspotValhallaOptionsProvider(config);
     }
 
     protected HotSpotMetaAccessExtensionProvider createMetaAccessExtensionProvider(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
@@ -167,6 +172,12 @@ public abstract class HotSpotBackendFactory implements ArchitectureSpecific {
             try (InitTimer rt = timer("create platform configuration provider")) {
                 platformConfigurationProvider = createConfigInfoProvider(config, barrierSet);
             }
+
+            HotspotValhallaOptionsProvider valhallaOptionsProvider;
+            try (InitTimer rt = timer("create valhalla options provider")) {
+                valhallaOptionsProvider = createValhallaOptionsProvider(config);
+            }
+
             HotSpotMetaAccessExtensionProvider metaAccessExtensionProvider;
             try (InitTimer rt = timer("create MetaAccessExtensionProvider")) {
                 metaAccessExtensionProvider = createMetaAccessExtensionProvider(metaAccess, constantReflection);
@@ -197,7 +208,8 @@ public abstract class HotSpotBackendFactory implements ArchitectureSpecific {
                 identityHashCodeProvider = createIdentityHashCodeProvider();
             }
             providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, null, registers,
-                            snippetReflection, wordTypes, stampProvider, platformConfigurationProvider, metaAccessExtensionProvider, loopsDataProvider, config, identityHashCodeProvider);
+                            snippetReflection, wordTypes, stampProvider, platformConfigurationProvider, metaAccessExtensionProvider, loopsDataProvider, config, identityHashCodeProvider,
+                            valhallaOptionsProvider);
 
             try (InitTimer rt = timer("create Replacements provider")) {
                 replacements = createReplacements(target, providers, bytecodeProvider);
