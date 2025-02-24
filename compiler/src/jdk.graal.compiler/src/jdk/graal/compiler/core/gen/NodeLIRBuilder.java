@@ -723,6 +723,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         // TODO: actually wrong to say the scalarized return values are temps
         emitInvoke(callTarget, parameters, callState, result, results);
 
+        // assign the read multi value nodes a result see
+        // CallDynamicJavaDirectNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra_)
+
         if (isNotNull != null) {
             // produce code for the isNotNull information
 

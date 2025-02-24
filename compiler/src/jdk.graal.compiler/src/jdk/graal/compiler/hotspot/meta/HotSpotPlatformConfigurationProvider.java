@@ -36,13 +36,11 @@ public class HotSpotPlatformConfigurationProvider implements PlatformConfigurati
 
     private final boolean useLightweightLocking;
 
-    private final boolean needRuntimeCallAfterInvoke;
 
     public HotSpotPlatformConfigurationProvider(GraalHotSpotVMConfig config, BarrierSet barrierSet) {
         this.barrierSet = barrierSet;
         this.canVirtualizeLargeByteArrayAccess = config.deoptimizationSupportLargeAccessByteArrayVirtualization;
         this.useLightweightLocking = HotSpotReplacementsUtil.useLightweightLocking(config);
-        this.needRuntimeCallAfterInvoke = config.returnConventionEnabled;
     }
 
     @Override
@@ -70,8 +68,4 @@ public class HotSpotPlatformConfigurationProvider implements PlatformConfigurati
         return barrierSet;
     }
 
-    @Override
-    public boolean requiresRuntimeCallAfterInvoke() {
-        return needRuntimeCallAfterInvoke;
-    }
 }

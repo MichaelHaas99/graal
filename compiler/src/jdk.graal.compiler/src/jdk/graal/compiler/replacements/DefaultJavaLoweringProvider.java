@@ -1083,7 +1083,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             }
                             valuePos++;
                         }
-                        allocations[objIndex] = InlineTypeUtil.insertLoweredGraph(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex), writes, false,
+                        allocations[objIndex] = InlineTypeUtil.createAllocationDiamond(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex), writes, false,
                                         newObject,
                                         virtual.type());
                         continue;
@@ -1266,7 +1266,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     if (value instanceof VirtualObjectNode) {
                         if (!complete[commit.getVirtualObjects().indexOf(value)]) {
                             allValuesAvailable = false;
-                            // valuePos = valuePosBefore + entryCount;
+                            valuePos = valuePosBefore + entryCount;
                             break;
                         }
                     }

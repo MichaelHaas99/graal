@@ -83,11 +83,4 @@ public interface PlatformConfigurationProvider {
         return true;
     }
 
-    /**
-     * Returns whether a runtime call is required after an invoke to a method handle due to a
-     * possible scalarized inline type return.
-     */
-    default boolean requiresRuntimeCallAfterInvoke() {
-        return false;
-    }
 }

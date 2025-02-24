@@ -68,6 +68,9 @@ public class InlineTypePlugin implements NodePlugin {
             if (!field.isNullFreeInlineType()) {
                 // field is flat and nullable
 
+                // TODO: functionality not correctly implemented yet, wait until it's fully
+                // implemented in the VM
+
                 BeginNode trueBegin = b.getGraph().add(new BeginNode());
                 BeginNode falseBegin = b.getGraph().add(new BeginNode());
 
@@ -78,7 +81,7 @@ public class InlineTypePlugin implements NodePlugin {
                 trueBegin.setNext(trueEnd);
 
                 // false branch - flat field is non-null
-                InlineTypeNode instance = genGetFlatField(b, object, field);
+                InlineTypeNode instance = genLoadFlatField(b, object, field);
                 EndNode falseEnd = b.add(new EndNode());
                 falseBegin.setNext(instance);
 
@@ -100,7 +103,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // field is flat and null-restricted
-                b.push(JavaKind.Object, genGetFlatField(b, object, field));
+                b.push(JavaKind.Object, genLoadFlatField(b, object, field));
             }
             return true;
 
@@ -110,9 +113,8 @@ public class InlineTypePlugin implements NodePlugin {
             // for null free inline type fields it is the responsibility of the reader to return the
             // default instance if the field is null
             object = genNullCheck(b, object);
-            HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
             LoadFieldNode fieldValue = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
-            genGetNullFreeInlineTypeField(b, fieldValue, field);
+            genHandleNullFreeInlineTypeField(b, fieldValue, field);
             return true;
 
         }
@@ -122,15 +124,25 @@ public class InlineTypePlugin implements NodePlugin {
     @Override
     public boolean handleLoadStaticField(GraphBuilderContext b, ResolvedJavaField field) {
         if (field.isNullFreeInlineType() && !field.isInitialized()) {
-            // field is a static null-free inline type, do a null check
+            // field is a static null-free inline type and not already initialized, do a null-check
+            // at runtime
             LoadFieldNode fieldValue = b.add(LoadFieldNode.create(b.getAssumptions(), null, field));
-            genGetNullFreeInlineTypeField(b, fieldValue, field);
+            genHandleNullFreeInlineTypeField(b, fieldValue, field);
             return true;
         }
         return false;
     }
 
-    private InlineTypeNode genGetFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
+    /**
+     * Responsible for loading the inline object stored in a flat representation as a field in
+     * another object.
+     * 
+     * @param b the context
+     * @param object the receiver object for the field access
+     * @param field the accessed field
+     * @return an {@link InlineTypeNode} representing the loaded flat field
+     */
+    private InlineTypeNode genLoadFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
 
         // make a null check for all load operations
         object = genNullCheck(b, object);
@@ -153,10 +165,19 @@ public class InlineTypePlugin implements NodePlugin {
             loads[i] = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setOuterDeclaringClass(fieldType)));
         }
 
+        // create InlineTypeNode
         return b.append(InlineTypeNode.createNullFreeWithoutOop(fieldType, loads));
     }
 
-    private void genGetNullFreeInlineTypeField(GraphBuilderContext b, ValueNode fieldValue, ResolvedJavaField field) {
+    /**
+     * Responsible checking an already loaded value from a null-restricted field at runtime. If the
+     * value is null, it has to be replaced by the default instance.
+     *
+     * @param b the context
+     * @param fieldValue the alreeady loaded field value
+     * @param field the accessed field
+     */
+    private void genHandleNullFreeInlineTypeField(GraphBuilderContext b, ValueNode fieldValue, ResolvedJavaField field) {
         HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
         BeginNode trueBegin = b.getGraph().add(new BeginNode());
         BeginNode falseBegin = b.getGraph().add(new BeginNode());
@@ -209,7 +230,7 @@ public class InlineTypePlugin implements NodePlugin {
                 storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
                                 b.maskSubWordValue(ConstantNode.forConstant(JavaConstant.INT_1, b.getMetaAccess(), b.getGraph()), field.getNullMarkerField().getJavaKind())));
                 falseBegin.setNext(storeField);
-                genPutFlatField(b, object, field, value);
+                genStoreFlatField(b, object, field, value);
                 EndNode falseEnd = b.add(new EndNode());
 
                 // merge
@@ -219,14 +240,24 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // field is null restricted
-                genPutFlatField(b, object, field, value);
+                genStoreFlatField(b, object, field, value);
             }
             return true;
         }
         return false;
     }
 
-    private void genPutFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
+    /**
+     * Responsible for storing the {@code value} in a flat representation into a flat field of
+     * another {@code object}. It therefore loads each field value of the object and stores it at a
+     * specific offset into the object.
+     *
+     * @param b the context
+     * @param object the receiver object for the field access
+     * @param field the accessed field
+     * @param value the value to be stored into the field
+     */
+    private void genStoreFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
 
         // make a null check for all load operations
         object = genNullCheck(b, object);
@@ -268,6 +299,10 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
+    /**
+     * 
+     * @deprecated
+     */
     private void genFieldNullCheck(GraphBuilderContext b, ValueNode fieldValue, BeginNode trueBegin, BeginNode falseBegin) {
         LogicNode condition = b.add(IsNullNode.create(fieldValue));
         b.add(condition);
@@ -277,9 +312,10 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
-        if (!elementKind.isObject())
+        if (!elementKind.isObject() || !b.getValhallaOptionsProvider().useArrayFlattening())
             return false;
 
+        // TODO: return immeidately if flat arrays are disabled
         boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
         boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
@@ -295,7 +331,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
                 b.push(elementKind,
-                                genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType, shift, null));
+                                genLoadFlatFieldFromArray(b, array, index, boundsCheck, resolvedType, shift, null));
                 return true;
             }
 
@@ -313,7 +349,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // produce code that loads the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
 
-                instanceFlatArray = genArrayLoadFlatField(b, array, index, boundsCheck, resolvedType,
+                instanceFlatArray = genLoadFlatFieldFromArray(b, array, index, boundsCheck, resolvedType,
                                 shift, trueBegin);
                 resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
                 if (hasNoNext(trueBegin)) {
@@ -355,7 +391,13 @@ public class InlineTypePlugin implements NodePlugin {
         return false;
     }
 
-    private FixedWithNextNode genArrayLoadFlatField(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift,
+    /**
+     * Similar to {@link #genLoadFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField)}, but
+     * loads the flat field from a flat array.
+     * 
+     * @return
+     */
+    private FixedWithNextNode genLoadFlatFieldFromArray(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift,
                     BeginNode begin) {
         HotSpotResolvedObjectType componentType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
 
@@ -396,9 +438,8 @@ public class InlineTypePlugin implements NodePlugin {
 
     @Override
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
-        if (!elementKind.isObject())
+        if (!elementKind.isObject() || !b.getValhallaOptionsProvider().useArrayFlattening())
             return false;
-
         boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
         boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
 
@@ -418,7 +459,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // we store the value in a flat array we need to do a null check before loading the
                 // fields
                 ValueNode nullCheckedValue = genNullCheck(b, value);
-                genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
+                genStoreFlatFieldToArray(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 nullCheckedValue, shift);
                 return true;
             }
@@ -444,7 +485,7 @@ public class InlineTypePlugin implements NodePlugin {
 
                 // produce code that stores the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
-                ValueNode firstFixedNode = genArrayStoreFlatField(b, array, index, boundsCheck, storeCheck, resolvedType,
+                ValueNode firstFixedNode = genStoreFlatFieldToArray(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 nullCheckedValue, shift);
                 trueEnd = b.add(new EndNode());
                 if (hasNoNext(trueBegin)) {
@@ -477,7 +518,13 @@ public class InlineTypePlugin implements NodePlugin {
         return false;
     }
 
-    private ValueNode genArrayStoreFlatField(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
+    /**
+     *
+     * similar to
+     * {@link #genStoreFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField, ValueNode)}, but
+     * stores the object as an element into a flat array.
+     */
+    private ValueNode genStoreFlatFieldToArray(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
                     ValueNode value, int shift) {
         HotSpotResolvedObjectType elementType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
         ResolvedJavaField[] innerFields = elementType.getInstanceFields(true);

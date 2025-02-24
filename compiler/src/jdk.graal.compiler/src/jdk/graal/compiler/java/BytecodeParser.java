@@ -2335,15 +2335,30 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     InvokeKind invokeKind, JavaKind resultType, JavaType returnType, JavaTypeProfile profile, boolean fromMethodHandle) {
 
         // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
-        if (targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
-            invokeArgs = InlineTypeUtil.scalarizeInvokeArgs(this, invokeArgs, targetMethod, invokeKind);
-            // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod, invokeKind);
+// if (targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
+// invokeArgs = InlineTypeUtil.scalarizeInvokeArgs(this, invokeArgs, targetMethod, invokeKind);
+// // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod, invokeKind);
+// }
+// emit null checks for null free parameters before the scalarization
+        int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
+        for (int i = 0; i < parameterLength; i++) {
+            if (targetMethod.isParameterNullFree(i, true)) {
+                invokeArgs[i] = nullCheckedValue(invokeArgs[i]);
+            }
         }
+// if (invokeKind.hasReceiver() && invokeArgs[0].stamp(NodeView.DEFAULT).canBeInlineType()) {
+// // emit a null check in case we scalarize the receiver later during devirtualization
+// invokeArgs[0] = nullCheckedValue(invokeArgs[0]);
+// }
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, invokeArgs, returnType, profile));
         Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType, fromMethodHandle);
 // ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, invoke.asNode(),
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
+
+        if (targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
+            InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
+        }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);

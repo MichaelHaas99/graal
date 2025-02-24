@@ -129,7 +129,6 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GetObjectAddressNode;
 import jdk.graal.compiler.nodes.GraphState;
-import jdk.graal.compiler.nodes.GraphState.GuardsStage;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
@@ -1310,7 +1309,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             }
         }
 
-        ValueNode replacement = InlineTypeUtil.insertLoweredGraph(inlineTypeNode, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop(), writes, true, newObject, inlineTypeNode.getType());
+        ValueNode replacement = InlineTypeUtil.createAllocationDiamond(inlineTypeNode, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop(), writes, true, newObject,
+                        inlineTypeNode.getType());
         FixedValueAnchorNode anchor = graph.add(new FixedValueAnchorNode(replacement));
         graph.addBeforeFixed(inlineTypeNode, anchor);
         inlineTypeNode.replaceAtUsages(anchor);
