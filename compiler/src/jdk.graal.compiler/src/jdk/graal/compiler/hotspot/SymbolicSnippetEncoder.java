@@ -42,7 +42,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 
-import jdk.graal.compiler.serviceprovider.GraalServices;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.MapCursor;
@@ -111,6 +110,7 @@ import jdk.graal.compiler.replacements.SnippetCounter;
 import jdk.graal.compiler.replacements.SnippetIntegerHistogram;
 import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.classfile.ClassfileBytecode;
+import jdk.graal.compiler.serviceprovider.GraalServices;
 import jdk.graal.compiler.util.ObjectCopier;
 import jdk.graal.compiler.word.WordTypes;
 import jdk.vm.ci.code.Architecture;
@@ -369,7 +369,7 @@ public class SymbolicSnippetEncoder {
                         originalProvider.getConstantFieldProvider(), originalProvider.getForeignCalls(), originalProvider.getLowerer(), null, originalProvider.getSuites(),
                         originalProvider.getRegisters(), originalProvider.getSnippetReflection(), originalProvider.getWordTypes(), originalProvider.getStampProvider(),
                         originalProvider.getPlatformConfigurationProvider(), originalProvider.getMetaAccessExtensionProvider(), originalProvider.getLoopsDataProvider(), originalProvider.getConfig(),
-                        originalProvider.getIdentityHashCodeProvider());
+                        originalProvider.getIdentityHashCodeProvider(), originalProvider.getValhallaOptionsProvider());
         HotSpotSnippetReplacementsImpl filteringReplacements = new HotSpotSnippetReplacementsImpl(newProviders,
                         originalProvider.getReplacements().getDefaultReplacementBytecodeProvider(), originalProvider.getCodeCache().getTarget());
         filteringReplacements.setGraphBuilderPlugins(originalProvider.getReplacements().getGraphBuilderPlugins());

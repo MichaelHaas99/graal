@@ -35,6 +35,7 @@ import jdk.graal.compiler.nodes.spi.LoweringProvider;
 import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.Replacements;
 import jdk.graal.compiler.nodes.spi.StampProvider;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.word.WordTypes;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -59,11 +60,12 @@ public class Providers implements CoreProviders {
     protected final SnippetReflectionProvider snippetReflection;
     protected final WordTypes wordTypes;
     protected final IdentityHashCodeProvider identityHashCodeProvider;
+    protected final ValhallaOptionsProvider valhallaOptionsProvider;
 
     public Providers(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
                     ForeignCallsProvider foreignCalls, LoweringProvider lowerer, Replacements replacements, StampProvider stampProvider, PlatformConfigurationProvider platformConfigurationProvider,
                     MetaAccessExtensionProvider metaAccessExtensionProvider, SnippetReflectionProvider snippetReflection, WordTypes wordTypes, LoopsDataProvider loopsDataProvider,
-                    IdentityHashCodeProvider identityHashCodeProvider) {
+                    IdentityHashCodeProvider identityHashCodeProvider, ValhallaOptionsProvider valhallaOptionsProvider) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
         this.constantFieldProvider = constantFieldProvider;
@@ -78,12 +80,13 @@ public class Providers implements CoreProviders {
         this.snippetReflection = snippetReflection;
         this.wordTypes = wordTypes;
         this.identityHashCodeProvider = identityHashCodeProvider;
+        this.valhallaOptionsProvider = valhallaOptionsProvider;
     }
 
     public Providers(Providers copyFrom) {
         this(copyFrom.getMetaAccess(), copyFrom.getCodeCache(), copyFrom.getConstantReflection(), copyFrom.getConstantFieldProvider(), copyFrom.getForeignCalls(), copyFrom.getLowerer(),
                         copyFrom.getReplacements(), copyFrom.getStampProvider(), copyFrom.getPlatformConfigurationProvider(), copyFrom.getMetaAccessExtensionProvider(),
-                        copyFrom.getSnippetReflection(), copyFrom.getWordTypes(), copyFrom.getLoopsDataProvider(), copyFrom.getIdentityHashCodeProvider());
+                        copyFrom.getSnippetReflection(), copyFrom.getWordTypes(), copyFrom.getLoopsDataProvider(), copyFrom.getIdentityHashCodeProvider(), copyFrom.getValhallaOptionsProvider());
     }
 
     @Override
@@ -156,27 +159,32 @@ public class Providers implements CoreProviders {
         return wordTypes;
     }
 
+    @Override
+    public ValhallaOptionsProvider getValhallaOptionsProvider() {
+        return valhallaOptionsProvider;
+    }
+
     public Providers copyWith(ConstantReflectionProvider substitution) {
         assert this.getClass() == Providers.class : "must override";
         return new Providers(metaAccess, codeCache, substitution, constantFieldProvider, foreignCalls, lowerer, replacements, stampProvider, platformConfigurationProvider, metaAccessExtensionProvider,
-                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider);
+                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider, valhallaOptionsProvider);
     }
 
     public Providers copyWith(ConstantFieldProvider substitution) {
         assert this.getClass() == Providers.class : "must override";
         return new Providers(metaAccess, codeCache, constantReflection, substitution, foreignCalls, lowerer, replacements, stampProvider, platformConfigurationProvider, metaAccessExtensionProvider,
-                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider);
+                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider, valhallaOptionsProvider);
     }
 
     public Providers copyWith(Replacements substitution) {
         assert this.getClass() == Providers.class : "must override in " + getClass();
         return new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, substitution, stampProvider, platformConfigurationProvider,
-                        metaAccessExtensionProvider, snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider);
+                        metaAccessExtensionProvider, snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider, valhallaOptionsProvider);
     }
 
     public Providers copyWith(MetaAccessExtensionProvider substitution) {
         assert this.getClass() == Providers.class : getClass() + " must override";
         return new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, stampProvider, platformConfigurationProvider, substitution,
-                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider);
+                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider, valhallaOptionsProvider);
     }
 }
