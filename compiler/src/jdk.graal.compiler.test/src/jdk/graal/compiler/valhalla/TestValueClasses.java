@@ -370,6 +370,9 @@ java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileD
         InstalledCode c = getCode(getResolvedJavaMethod(HashMap.class, "putVal"), null, true, true, getInitialOptions());
         //c.executeVarargs(this);
     }
+    //jdk.internal.math.DoubleToDecimal::toDecimal
+
+
 
     static value class Container {
         int x = 0;

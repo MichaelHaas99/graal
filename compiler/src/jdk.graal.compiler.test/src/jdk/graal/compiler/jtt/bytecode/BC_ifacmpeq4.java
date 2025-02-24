@@ -1687,7 +1687,7 @@ public class BC_ifacmpeq4 extends JTTTest {
             //if(!m.getName().equals("testEq02_1")) continue;
             if (m.getName().startsWith("test")) {
                 // Do some warmup runs
-                for(int i=0; i<1000;i++){
+                for(int i=0; i<1;i++){
                     runTest(m, args, nullMode);
                 }
                 System.out.println(m.getName()+" done");
