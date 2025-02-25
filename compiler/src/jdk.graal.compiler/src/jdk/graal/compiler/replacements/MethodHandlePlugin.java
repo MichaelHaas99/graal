@@ -108,7 +108,7 @@ public class MethodHandlePlugin implements NodePlugin {
                     b.add(methodHandleNode.asNode());
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
-                    appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
+                    appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci(), null);
                 }
             } else {
                 ResolvedMethodHandleCallTargetNode callTarget = (ResolvedMethodHandleCallTargetNode) invoke.callTarget();
@@ -136,6 +136,7 @@ public class MethodHandlePlugin implements NodePlugin {
                     return false;
                 }
 
+
                 // also make sure that inline objects are not scalarized on the new call target
                 Invokable newInvokable = b.handleReplacedInvoke(invoke.getInvokeKind(),
                                 targetMethod, argumentsList.toArray(new ValueNode[argumentsList.size()]),
@@ -147,12 +148,12 @@ public class MethodHandlePlugin implements NodePlugin {
                         // the special ResolvedMethodHandleCallTargetNode.
 
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
-                        appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci());
+                        appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci(), callTarget);
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
                         assert invoke.isAlive() : "invoke should be alive to scalarize parameters before its position";
                         macroInvokable.addMethodHandleInfo(b.append(callTarget));
-                        appendForeignCall(b, macroInvokable, invokeReturnStamp, newInvokable.bci());
+                        appendForeignCall(b, macroInvokable, invokeReturnStamp, newInvokable.bci(), callTarget);
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
                     }
@@ -189,7 +190,10 @@ public class MethodHandlePlugin implements NodePlugin {
                     long.class /* oop or hub */);
 
     // see PhaseMacroExpand::expand_mh_intrinsic_return
-    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
+    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci, ResolvedMethodHandleCallTargetNode callTarget) {
+        // in case we have a resolved target method
+        if (callTarget != null && !callTarget.targetMethod().hasScalarizedReturn())
+            return;
         if (invokeReturnStamp.getTrustedStamp().getStackKind() == JavaKind.Void || !invokeReturnStamp.getTrustedStamp().isObjectStamp() ||
                         !b.getValhallaOptionsProvider().returnCallingConventionEnabled()) {
             return;
