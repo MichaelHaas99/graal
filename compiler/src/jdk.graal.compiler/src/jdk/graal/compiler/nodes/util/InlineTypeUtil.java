@@ -44,6 +44,7 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -666,5 +667,9 @@ public class InlineTypeUtil {
         public void generate(NodeLIRBuilderTool generator) {
 
         }
+    }
+
+    public static boolean needsSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return StampTool.canBeInlineType(x.stamp(NodeView.DEFAULT), valhallaOptionsProvider) && StampTool.canBeInlineType(y.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
     }
 }
