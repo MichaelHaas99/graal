@@ -50,6 +50,7 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -68,10 +69,14 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     public static final NodeClass<ObjectEqualsNode> TYPE = NodeClass.create(ObjectEqualsNode.class);
     private static final ObjectEqualsOp OP = new ObjectEqualsOp();
 
-    private final boolean substituabilityCheck;
+    private boolean substituabilityCheck;
 
     public boolean substituabilityCheck() {
         return substituabilityCheck;
+    }
+
+    public void setSubstitutabilityCheck(boolean substituabilityCheck) {
+        this.substituabilityCheck = substituabilityCheck;
     }
 
     private ACmpDataAccessor profile;
@@ -87,7 +92,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     public ObjectEqualsNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
         assert x.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp && y.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp : Assertions.errorMessageContext("x", x, "y", y);
-        substituabilityCheck = x.stamp(NodeView.DEFAULT).canBeInlineType() && y.stamp(NodeView.DEFAULT).canBeInlineType();
+        substituabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, null);
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {
@@ -115,12 +120,12 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
 
         ValueNode updatedX = null;
-        if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !xAnchorNode.stamp(NodeView.DEFAULT).canBeInlineType()) {
+        if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !StampTool.canBeInlineType(xAnchorNode.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
             updatedX = xAnchorNode.object();
         }
 
         ValueNode updatedY = null;
-        if (forY instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode && !yAnchorNode.stamp(NodeView.DEFAULT).canBeInlineType()) {
+        if (forY instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode && !StampTool.canBeInlineType(yAnchorNode.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
             updatedY = yAnchorNode.object();
         }
 
