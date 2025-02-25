@@ -135,6 +135,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final boolean printInlining = getFlag("PrintInlining", Boolean.class);
     public final boolean inline = getFlag("Inline", Boolean.class);
 
+    public final boolean valhallaEnabled = access.getFlag("EnableValhalla", Boolean.class);
     public final boolean returnConventionEnabled = access.getFlag("InlineTypeReturnedAsFields", Boolean.class);
     public final boolean useArrayFlattening = access.getFlag("UseArrayFlattening", Boolean.class);
     public final boolean useFieldFlattening = access.getFlag("UseFieldFlattening", Boolean.class);
