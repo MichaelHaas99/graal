@@ -162,7 +162,8 @@ public class InlineTypePlugin implements NodePlugin {
             int off = innerField.getOffset() - fieldType.firstFieldOffset();
 
             // holder has no header so remove the header offset
-            loads[i] = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setOuterDeclaringClass(fieldType)));
+            loads[i] = b.add(
+                            LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
 
         // create InlineTypeNode
@@ -283,7 +284,7 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder has no header so remove the header offset
-            writeOperations.add(new StoreFlatFieldNode.StoreFieldWrapper(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass(fieldType)));
+            writeOperations.add(new StoreFlatFieldNode.StoreFieldWrapper(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);
