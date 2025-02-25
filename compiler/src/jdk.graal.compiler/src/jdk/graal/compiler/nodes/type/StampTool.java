@@ -34,7 +34,7 @@ import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
-
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -272,6 +272,41 @@ public class StampTool {
     public static boolean isAlwaysArray(Stamp stamp) {
         if (stamp instanceof AbstractObjectStamp) {
             return ((AbstractObjectStamp) stamp).isAlwaysArray();
+        }
+        return false;
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values can be inline types
+     *
+     * @param stamp the stamp to check
+     * @param valhallaOptionsProvider options specific for the valhalla
+     * @return true if this stamp represents a legal object stamp whose values can be an inline type
+     */
+    public static boolean canBeInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+            return false;
+        if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
+            return abstractObjectStamp.canBeInlineType();
+        }
+        return false;
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values are known to be inline types
+     *
+     * @param stamp the stamp to check
+     * @param valhallaOptionsProvider options specific for the valhalla
+     * @return true if this stamp represents a legal object stamp whose values are known to be
+     *         inline types
+     */
+    public static boolean isInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+            return false;
+        if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
+            return abstractObjectStamp.isInlineType();
         }
         return false;
     }
