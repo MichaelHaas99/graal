@@ -5,19 +5,26 @@ import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 
 public class HotspotValhallaOptionsProvider implements ValhallaOptionsProvider {
 
-    private final boolean useArrayFlatteing;
+    private final boolean valhallaEnabled;
+    private final boolean useArrayFlattening;
     private final boolean useFieldFlattening;
     private final boolean returnConventionEnabled;
 
     public HotspotValhallaOptionsProvider(GraalHotSpotVMConfig config) {
-        useArrayFlatteing = config.useArrayFlattening;
+        valhallaEnabled = config.valhallaEnabled;
+        useArrayFlattening = config.useArrayFlattening;
         useFieldFlattening = config.useFieldFlattening;
         returnConventionEnabled = config.returnConventionEnabled;
     }
 
     @Override
+    public boolean valhallaEnabled() {
+        return valhallaEnabled;
+    }
+
+    @Override
     public boolean useArrayFlattening() {
-        return useArrayFlatteing;
+        return useArrayFlattening;
     }
 
     @Override
