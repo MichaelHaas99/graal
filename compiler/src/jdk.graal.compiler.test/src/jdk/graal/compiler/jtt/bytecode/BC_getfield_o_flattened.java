@@ -28,6 +28,8 @@ import java.util.EnumSet;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.valhalla.TestValueClasses;
+import jdk.vm.ci.code.InstalledCode;
 import org.junit.Test;
 
 import jdk.graal.compiler.jtt.JTTTest;
@@ -121,4 +123,15 @@ public class BC_getfield_o_flattened extends JTTTest {
         runTest(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), "test", MyValue1.createDefaultInline());
     }
 
+    static final MyValue1 staticMyValue1 = MyValue1.createDefaultInline();
+
+    public static MyValue2 testConstantFolding(){
+        return staticMyValue1.v1;
+    }
+
+    @Test
+    public void run8() throws  Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod("testConstantFolding"), null, true, true, getInitialOptions());
+    }
 }
