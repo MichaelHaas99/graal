@@ -36,7 +36,6 @@ import jdk.graal.compiler.nodes.spi.LoweringProvider;
 import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.Replacements;
 import jdk.graal.compiler.nodes.spi.StampProvider;
-import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.phases.tiers.SuitesProvider;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
@@ -52,6 +51,7 @@ public class HotSpotProviders extends Providers {
     private SuitesProvider suites;
     private final HotSpotRegistersProvider registers;
     private final GraalHotSpotVMConfig config;
+    private final HotspotValhallaOptionsProvider valhallaOptionsProvider;
 
     public HotSpotProviders(MetaAccessProvider metaAccess,
                     HotSpotCodeCacheProvider codeCache,
@@ -69,12 +69,13 @@ public class HotSpotProviders extends Providers {
                     MetaAccessExtensionProvider metaAccessExtensionProvider,
                     LoopsDataProvider loopsDataProvider,
                     GraalHotSpotVMConfig config,
-                    IdentityHashCodeProvider identityHashCodeProvider, ValhallaOptionsProvider valhallaOptionsProvider) {
+                    IdentityHashCodeProvider identityHashCodeProvider, HotspotValhallaOptionsProvider valhallaOptionsProvider) {
         super(metaAccess, codeCache, constantReflection, constantField, foreignCalls, lowerer, replacements, stampProvider, platformConfigurationProvider, metaAccessExtensionProvider,
-                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider, valhallaOptionsProvider);
+                        snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider);
         this.suites = suites;
         this.registers = registers;
         this.config = config;
+        this.valhallaOptionsProvider = valhallaOptionsProvider;
     }
 
     @Override
@@ -106,7 +107,7 @@ public class HotSpotProviders extends Providers {
 
     @Override
     public HotspotValhallaOptionsProvider getValhallaOptionsProvider() {
-        return (HotspotValhallaOptionsProvider) super.getValhallaOptionsProvider();
+        return valhallaOptionsProvider;
     }
 
     public GraalHotSpotVMConfig getConfig() {
