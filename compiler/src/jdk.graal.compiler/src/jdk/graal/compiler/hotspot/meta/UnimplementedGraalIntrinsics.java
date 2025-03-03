@@ -104,8 +104,17 @@ public final class UnimplementedGraalIntrinsics {
 
         if (jdk >= 24) {
             add(toBeInvestigated, // @formatter:off
-                        "jdk/internal/vm/vector/VectorSupport.selectFromOp(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$VectorMask;Ljdk/internal/vm/vector/VectorSupport$VectorSelectFromOp;)Ljdk/internal/vm/vector/VectorSupport$Vector;",
+                    // TODO: implement unsafe accesses
+                    "jdk/internal/misc/Unsafe.finishPrivateBuffer(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "jdk/internal/misc/Unsafe.getValue(Ljava/lang/Object;JLjava/lang/Class;)Ljava/lang/Object;",
+                    "jdk/internal/misc/Unsafe.isFlatArray(Ljava/lang/Class;)Z",
+                    "jdk/internal/misc/Unsafe.makePrivateBuffer(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "jdk/internal/misc/Unsafe.putValue(Ljava/lang/Object;JLjava/lang/Class;Ljava/lang/Object;)V",
+                    "jdk/internal/value/ValueClass.newNullRestrictedArray(Ljava/lang/Class;I)[Ljava/lang/Object;",
+
+                    "jdk/internal/vm/vector/VectorSupport.selectFromOp(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$VectorMask;Ljdk/internal/vm/vector/VectorSupport$VectorSelectFromOp;)Ljdk/internal/vm/vector/VectorSupport$Vector;",
                         "jdk/internal/vm/vector/VectorSupport.selectFromTwoVectorOp(Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$SelectFromTwoVector;)Ljdk/internal/vm/vector/VectorSupport$Vector;"
+
                         // @formatter:on
             );
         }
