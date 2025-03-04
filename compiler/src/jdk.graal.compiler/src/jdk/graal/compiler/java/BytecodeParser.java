@@ -397,6 +397,7 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.HasIdentityNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
@@ -1855,6 +1856,17 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         return emitIncompatibleClassChangeCheck(receiver, referencedType);
     }
 
+    protected ValueNode maybeEmitExplicitIdentityCheck(ValueNode object) {
+        if (!StampTool.canBeInlineType(object.stamp(NodeView.DEFAULT), getValhallaOptionsProvider()) || !needsExplicitIdentityCheckException(object)) {
+            return object;
+        }
+        ValueNode hasIdentity = append(new HasIdentityNode(object));
+        LogicNode condition = genUnique(new IntegerEqualsNode(hasIdentity, ConstantNode.forInt(1, graph)));
+        AbstractBeginNode passingSuccessor = emitBytecodeExceptionCheck(condition, true, BytecodeExceptionKind.IDENTITY);
+        // TODO: save identity information in stamp
+        return genUnique(PiNode.create(object, StampFactory.object(), passingSuccessor));
+    }
+
     @Override
     public AbstractBeginNode emitBytecodeExceptionCheck(LogicNode condition, boolean passingOnTrue, BytecodeExceptionKind exceptionKind, ValueNode... arguments) {
         AbstractBeginNode result = GraphBuilderContext.super.emitBytecodeExceptionCheck(condition, passingOnTrue, exceptionKind, arguments);
@@ -3252,6 +3264,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     protected void genMonitorEnter(ValueNode x, int bci) {
         MonitorIdNode monitorId = graph.add(new MonitorIdNode(frameState.lockDepth(true), bci()));
         ValueNode object = maybeEmitExplicitNullCheck(x);
+        if (getValhallaOptionsProvider().valhallaEnabled() && InlineTypeUtil.isIdentityExceptionClassAvailable()) {
+            object = maybeEmitExplicitIdentityCheck(object);
+        }
         MonitorEnterNode monitorEnter = append(createMonitorEnterNode(object, monitorId));
         frameState.pushLock(object, monitorId);
         monitorEnter.setStateAfter(createFrameState(bci, monitorEnter));
@@ -5572,6 +5587,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
          * change check, i.e., the Java HotSpot VM never has profiling information.
          */
         return false;
+    }
+
+    protected boolean needsExplicitIdentityCheckException(ValueNode object) {
+        return needsExplicitException();
     }
 
     @Override

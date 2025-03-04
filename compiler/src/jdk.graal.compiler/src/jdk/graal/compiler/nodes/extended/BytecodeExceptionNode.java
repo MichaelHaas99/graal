@@ -29,6 +29,8 @@ import static jdk.graal.compiler.nodeinfo.InputType.Value;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -45,8 +47,7 @@ import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
-import org.graalvm.word.LocationIdentity;
-
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -156,7 +157,10 @@ public final class BytecodeExceptionNode extends AbstractMemoryCheckpoint implem
          * indicating the presence of unstructured locking which is not supported. No additional
          * arguments are allowed.
          */
-        UNSTRUCTURED_LOCKING(0, IllegalMonitorStateException.class, "Unstructured locking encountered. Native Image enforces structured locking (JVMS 2.11.10)");
+        UNSTRUCTURED_LOCKING(0, IllegalMonitorStateException.class, "Unstructured locking encountered. Native Image enforces structured locking (JVMS 2.11.10)"),
+
+        // TODO: simplify to IdentityException.class at some point
+        IDENTITY(0, InlineTypeUtil.getIdentityExceptionClass());
 
         final int numArguments;
         final Class<? extends Throwable> exceptionClass;
