@@ -88,6 +88,7 @@ import jdk.graal.compiler.hotspot.replacements.DelayedRawComparisonSnippets;
 import jdk.graal.compiler.hotspot.replacements.DigestBaseSnippets;
 import jdk.graal.compiler.hotspot.replacements.FastNotifyNode;
 import jdk.graal.compiler.hotspot.replacements.FlatArrayComponentSizeSnippets;
+import jdk.graal.compiler.hotspot.replacements.HasIdentitySnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotAllocationSnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotHashCodeSnippets;
@@ -167,6 +168,7 @@ import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.HasIdentityNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
@@ -300,6 +302,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected IsNullFreeArraySnippets.Templates isNullFreeArraySnippets;
     protected FlatArrayComponentSizeSnippets.Templates flatArrayComponentSizeSnippets;
     protected DelayedRawComparisonSnippets.Templates delayedRawcomparisonSnippets;
+    protected HasIdentitySnippets.Templates hasIdentitySnippets;
     protected ReturnResultDeciderSnippets.Templates returnResultDeciderSnippets;
     protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
     protected HotSpotG1WriteBarrierSnippets.Templates g1WriteBarrierSnippets;
@@ -359,6 +362,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         flatArrayComponentSizeSnippets = new FlatArrayComponentSizeSnippets.Templates(options, providers);
         delayedRawcomparisonSnippets = new DelayedRawComparisonSnippets.Templates(options, providers);
         returnResultDeciderSnippets = new ReturnResultDeciderSnippets.Templates(options, providers);
+        hasIdentitySnippets = new HasIdentitySnippets.Templates(options, providers);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, runtime, providers, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, runtime, providers);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, providers);
@@ -648,6 +652,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerDelayRawComparison((DelayedRawComparisonNode) n, tool, graph);
         } else if (n instanceof ReturnResultDeciderNode) {
             lowerReturnResultDecider((ReturnResultDeciderNode) n, tool);
+        } else if (n instanceof HasIdentityNode) {
+            lowerHasIdentity((HasIdentityNode) n, tool);
         } else {
             return false;
         }
@@ -863,6 +869,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
     protected void lowerReturnResultDecider(ReturnResultDeciderNode node, LoweringTool tool) {
         returnResultDeciderSnippets.lower(node, tool);
+    }
+
+    protected void lowerHasIdentity(HasIdentityNode node, LoweringTool tool) {
+        hasIdentitySnippets.lower(node, tool);
     }
 
     private void lowerKlassLayoutHelperNode(KlassLayoutHelperNode n, LoweringTool tool) {
@@ -1115,6 +1125,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             cachedExceptions.put(BytecodeExceptionKind.DIVISION_BY_ZERO, clearStackTrace(new ArithmeticException()));
             cachedExceptions.put(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY,
                             clearStackTrace(new IllegalArgumentException(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY.getExceptionMessage())));
+            // TODO: simplify to new IdentityException() at some point
+            cachedExceptions.put(BytecodeExceptionKind.IDENTITY, clearStackTrace(InlineTypeUtil.createIdentityExceptionInstance()));
         }
 
         private static RuntimeException clearStackTrace(RuntimeException ex) {
@@ -1138,6 +1150,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             runtimeCalls.put(BytecodeExceptionKind.LONG_EXACT_OVERFLOW, new ForeignCallSignature("createLongExactOverflowException", ArithmeticException.class));
             runtimeCalls.put(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY,
                             new ForeignCallSignature("createIllegalArgumentExceptionArgumentIsNotAnArray", IllegalArgumentException.class));
+            // TODO: simplify to IdentityException.class at some point
+            runtimeCalls.put(BytecodeExceptionKind.IDENTITY, new ForeignCallSignature("createIdentityException", InlineTypeUtil.getIdentityExceptionClass()));
         }
     }
 

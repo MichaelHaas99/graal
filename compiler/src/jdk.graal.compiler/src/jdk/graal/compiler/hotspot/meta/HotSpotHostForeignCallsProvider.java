@@ -124,6 +124,7 @@ import jdk.graal.compiler.hotspot.stubs.ClassCastExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.CreateExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.DivisionByZeroExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.ExceptionHandlerStub;
+import jdk.graal.compiler.hotspot.stubs.IdentityExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.IllegalArgumentExceptionArgumentIsNotAnArrayStub;
 import jdk.graal.compiler.hotspot.stubs.IntegerExactOverflowExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.IntrinsicStubsGen;
@@ -145,9 +146,9 @@ import jdk.graal.compiler.replacements.arraycopy.ArrayCopyForeignCalls;
 import jdk.graal.compiler.replacements.nodes.AESNode;
 import jdk.graal.compiler.replacements.nodes.ArrayCompareToForeignCalls;
 import jdk.graal.compiler.replacements.nodes.ArrayCopyWithConversionsForeignCalls;
-import jdk.graal.compiler.replacements.nodes.ArrayFillNode;
 import jdk.graal.compiler.replacements.nodes.ArrayEqualsForeignCalls;
 import jdk.graal.compiler.replacements.nodes.ArrayEqualsWithMaskForeignCalls;
+import jdk.graal.compiler.replacements.nodes.ArrayFillNode;
 import jdk.graal.compiler.replacements.nodes.ArrayIndexOfForeignCalls;
 import jdk.graal.compiler.replacements.nodes.ArrayRegionCompareToForeignCalls;
 import jdk.graal.compiler.replacements.nodes.BigIntegerMulAddNode;
@@ -543,6 +544,8 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         link(new IllegalArgumentExceptionArgumentIsNotAnArrayStub(options, providers,
                         registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY),
                                         SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
+        link(new IdentityExceptionStub(options, providers,
+                        registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.IDENTITY), SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
 
         link(new LookUpSecondarySupersTableStub(options, providers,
                         registerStubCall(LOOKUP_SECONDARY_SUPERS_TABLE_SLOW_PATH, DESTROYS_ALL_CALLER_SAVE_REGISTERS)));

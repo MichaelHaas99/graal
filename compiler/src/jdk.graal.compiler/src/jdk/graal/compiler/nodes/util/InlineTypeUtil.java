@@ -57,6 +57,37 @@ import jdk.vm.ci.meta.TriState;
 
 public class InlineTypeUtil {
 
+    static Class<? extends Throwable> identityExceptionClass;
+
+    private static boolean identityExceptionClassAvailable;
+
+    static {
+        try {
+            identityExceptionClass = (Class<? extends Throwable>) Class.forName("java.lang.IdentityException");
+            identityExceptionClassAvailable = true;
+        } catch (Exception e) {
+            // just assert the null pointer exception class as dummy which shouldn't be used
+            identityExceptionClass = NullPointerException.class;
+            identityExceptionClassAvailable = false;
+        }
+    }
+
+    public static boolean isIdentityExceptionClassAvailable() {
+        return identityExceptionClassAvailable;
+    }
+
+    public static Class<? extends Throwable> getIdentityExceptionClass() {
+        return identityExceptionClass;
+    }
+
+    public static RuntimeException createIdentityExceptionInstance() {
+        try {
+            return (RuntimeException) identityExceptionClass.getDeclaredConstructor().newInstance();
+        } catch (Exception e) {
+            throw new GraalError(e);
+        }
+    }
+
     public static void scalarizeInvokeArgs(Invoke invoke) {
         handleDevirtualizationOnCallTarget(invoke.callTarget(), invoke.getTargetMethod(), invoke.getTargetMethod(), true);
     }
