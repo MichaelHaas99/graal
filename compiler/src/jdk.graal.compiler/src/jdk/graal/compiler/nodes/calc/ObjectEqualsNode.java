@@ -75,10 +75,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         return substituabilityCheck;
     }
 
-    public void setSubstitutabilityCheck(boolean substituabilityCheck) {
-        this.substituabilityCheck = substituabilityCheck;
-    }
-
     private ACmpDataAccessor profile;
 
     public ACmpDataAccessor getProfile() {
@@ -198,7 +194,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                 // virtual is non-null they can never be the same objects
                 return LogicConstantNode.contradiction(graph);
             } else {
-                // virtual is nullable, only equal if virtual is also null;
+                assert !virtual.hasIdentity() : "only inline objects can be virtual and nullable, they have no identity";
+                // virtual is nullable, only equal if virtual is also null
                 LogicNode result = new IntegerEqualsNode(tool.getIsNotNull(virtual), ConstantNode.forInt(0));
                 tool.addNode(result);
                 return result;
