@@ -28,6 +28,7 @@ import jdk.graal.compiler.api.replacements.SnippetReflectionProvider;
 import jdk.graal.compiler.core.common.spi.ConstantFieldProvider;
 import jdk.graal.compiler.core.common.spi.ForeignCallsProvider;
 import jdk.graal.compiler.core.common.spi.MetaAccessExtensionProvider;
+import jdk.graal.compiler.hotspot.meta.HotspotValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.IdentityHashCodeProvider;
 import jdk.graal.compiler.nodes.spi.LoopsDataProvider;
@@ -160,8 +161,8 @@ public class Providers implements CoreProviders {
 
     @Override
     public ValhallaOptionsProvider getValhallaOptionsProvider() {
-        // to avoid problems with other providers using the Providers constructor
-        throw new UnsupportedOperationException("valhalla options provider not implemented yet");
+        // to avoid problems with other providers being a subclass of Providers constructor
+        return new HotspotValhallaOptionsProvider();
     }
 
     public Providers copyWith(ConstantReflectionProvider substitution) {
