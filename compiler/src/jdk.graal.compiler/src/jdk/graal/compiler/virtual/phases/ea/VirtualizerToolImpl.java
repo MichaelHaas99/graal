@@ -381,7 +381,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     public VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from) {
         if (StampTool.isPointerNonNull(from))
             return from;
-        VirtualInstanceNode virtualObject = new VirtualInstanceNode(from.type(), from.type().isIdentity());
+        VirtualInstanceNode virtualObject = new VirtualInstanceNode(from.type(), from.hasIdentity());
         effects.addFloatingNode(virtualObject, "newVirtualObject");
         int id = virtualObject.getObjectId();
         if (id == -1) {
