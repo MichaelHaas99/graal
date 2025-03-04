@@ -17,6 +17,13 @@ public class HotspotValhallaOptionsProvider implements ValhallaOptionsProvider {
         returnConventionEnabled = config.returnConventionEnabled;
     }
 
+    public HotspotValhallaOptionsProvider() {
+        valhallaEnabled = false;
+        useArrayFlattening = false;
+        useFieldFlattening = false;
+        returnConventionEnabled = false;
+    }
+
     @Override
     public boolean valhallaEnabled() {
         return valhallaEnabled;
