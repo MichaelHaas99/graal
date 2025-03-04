@@ -27,6 +27,7 @@ package jdk.graal.compiler.virtual.phases.ea;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.DebugCloseable;
@@ -229,12 +230,12 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 }
                 if (!objects.isEmpty()) {
                     CommitAllocationNode commit;
-                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && oopsOrHubs.isEmpty() ||
-                                    fixed.predecessor() instanceof CommitAllocationOrReuseOopNode && !oopsOrHubs.isEmpty()) {
+                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && oopsOrHubs.stream().allMatch(Objects::isNull) && isNotNulls.stream().allMatch(Objects::isNull) ||
+                                    fixed.predecessor() instanceof CommitAllocationOrReuseOopNode) {
                         commit = (CommitAllocationNode) fixed.predecessor();
                     } else {
                         try (DebugCloseable context = graph.withNodeSourcePosition(NodeSourcePosition.placeholder(graph.method()))) {
-                            if (oopsOrHubs.isEmpty()) {
+                            if (oopsOrHubs.stream().allMatch(Objects::isNull) && isNotNulls.stream().allMatch(Objects::isNull)) {
                                 commit = graph.add(new CommitAllocationNode());
                             } else {
                                 commit = graph.add(new CommitAllocationOrReuseOopNode());
@@ -270,12 +271,15 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     for (List<MonitorIdNode> monitorIds : locks) {
                         commit.addLocks(monitorIds);
                     }
-                    for (ValueNode oopOrHub : oopsOrHubs) {
-                        ((CommitAllocationOrReuseOopNode) commit).getExistingOops().add(oopOrHub != null ? graph.addOrUniqueWithInputs(oopOrHub) : null);
+                    if (commit instanceof CommitAllocationOrReuseOopNode) {
+                        for (ValueNode oopOrHub : oopsOrHubs) {
+                            ((CommitAllocationOrReuseOopNode) commit).getExistingOops().add(oopOrHub != null ? graph.addOrUniqueWithInputs(oopOrHub) : null);
+                        }
+                        for (ValueNode isNotNull : isNotNulls) {
+                            ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(isNotNull != null ? graph.addOrUniqueWithInputs(isNotNull) : null);
+                        }
                     }
-                    for (ValueNode isNotNull : isNotNulls) {
-                        ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(isNotNull != null ? graph.addOrUniqueWithInputs(isNotNull) : null);
-                    }
+
                     commit.getEnsureVirtual().addAll(ensureVirtual);
 
                     assert commit.usages().filter(AllocatedObjectNode.class).count() == commit.getUsageCount() : Assertions.errorMessage(commit, commit.usages(), commit.getUsageCount());
