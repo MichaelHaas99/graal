@@ -13,6 +13,7 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 
 @NodeInfo()
@@ -66,7 +67,7 @@ public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode i
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         }
-        if (!stamp(NodeView.DEFAULT).canBeInlineType()) {
+        if (!StampTool.canBeInlineType(stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
             return object;
         }
         return this;
