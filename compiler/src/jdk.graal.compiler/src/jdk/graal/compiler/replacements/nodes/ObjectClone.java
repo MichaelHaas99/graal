@@ -116,7 +116,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                 return;
             }
             if (!type.isArray()) {
-                VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, type.isIdentity());
+                VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, type.isIdentity() || !type.isIdentity() && !tool.getValhallaOptionsProvider().valhallaEnabled());
                 ResolvedJavaField[] fields = newVirtual.getFields();
 
                 ValueNode[] state = new ValueNode[fields.length];
