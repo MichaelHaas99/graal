@@ -97,7 +97,7 @@ import static jdk.graal.compiler.replacements.nodes.CStringConstant.cstring;
 import static jdk.graal.compiler.word.Word.nullPointer;
 import static jdk.graal.compiler.word.Word.unsigned;
 import static jdk.graal.compiler.word.Word.zero;
-import static jdk.vm.ci.meta.DeoptimizationAction.None;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 import static org.graalvm.word.LocationIdentity.any;
 
@@ -247,7 +247,7 @@ public class MonitorSnippets implements Snippets {
         if (canBeInlineType) {
             // check mark word for inline type
             if (isInlineType || mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
-                DeoptimizeNode.deopt(None, RuntimeConstraint);
+                DeoptimizeNode.deopt(InvalidateReprofile, RuntimeConstraint);
             }
         }
 
@@ -903,8 +903,8 @@ public class MonitorSnippets implements Snippets {
             Arguments args = new Arguments(monitorenter, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("object", monitorenterNode.object());
             args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
-            args.add("canBeInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).canBeInlineType());
-            args.add("isInlineType", monitorenterNode.object().stamp(NodeView.DEFAULT).isInlineType());
+            args.add("canBeInlineType", StampTool.canBeInlineType(monitorenterNode.object().stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider()));
+            args.add("isInlineType", StampTool.isInlineType(monitorenterNode.object().stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider()));
             args.add("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
             args.add("threadRegister", registers.getThreadRegister());
             args.add("stackPointerRegister", registers.getStackPointerRegister());
