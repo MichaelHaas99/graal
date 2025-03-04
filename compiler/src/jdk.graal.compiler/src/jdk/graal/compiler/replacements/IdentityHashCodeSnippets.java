@@ -44,6 +44,7 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates;
@@ -99,8 +100,8 @@ public abstract class IdentityHashCodeSnippets implements Snippets {
             StructuredGraph graph = node.graph();
             Arguments args = new Arguments(identityHashCodeSnippet, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("thisObj", node.object());
-            args.add("canBeInlineType", node.object().stamp(NodeView.DEFAULT).canBeInlineType());
-            args.add("isInlineType", node.object().stamp(NodeView.DEFAULT).isInlineType());
+            args.add("canBeInlineType", StampTool.canBeInlineType(node.object().stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider()));
+            args.add("isInlineType", StampTool.isInlineType(node.object().stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider()));
             SnippetTemplate template = template(tool, node, args);
             template.instantiate(tool.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }

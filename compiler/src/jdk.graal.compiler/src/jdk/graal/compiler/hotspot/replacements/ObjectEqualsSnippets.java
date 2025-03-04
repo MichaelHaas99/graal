@@ -39,6 +39,7 @@ import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.InstanceOfSnippetsTemplates;
@@ -48,9 +49,7 @@ import jdk.graal.compiler.replacements.nodes.ExplodeLoopNode;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.hotspot.SingleTypeEntry;
-import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -99,10 +98,10 @@ public class ObjectEqualsSnippets implements Snippets {
                 long[] offsets = new long[0];
                 JavaKind[] kinds = new JavaKind[0];
                 LocationIdentity[] identities = new LocationIdentity[0];
-                if (x.stamp(NodeView.DEFAULT).isInlineType()) {
+                if (StampTool.isInlineType(x.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) x.stamp(NodeView.DEFAULT);
                     type = stamp.type();
-                } else if (y.stamp(NodeView.DEFAULT).isInlineType()) {
+                } else if (StampTool.isInlineType(y.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) y.stamp(NodeView.DEFAULT);
                     type = stamp.type();
                 } else {
@@ -166,14 +165,6 @@ public class ObjectEqualsSnippets implements Snippets {
             } else {
                 throw GraalError.shouldNotReachHere(node + " " + replacer); // ExcludeFromJacocoGeneratedReport
             }
-        }
-
-        private static boolean noInlineType(JavaType type) {
-            return !StampFactory.forDeclaredType(new Assumptions(), type, false).getTrustedStamp().canBeInlineType();
-        }
-
-        private static boolean canBeInlineType(JavaType type) {
-            return !noInlineType(type);
         }
 
         private static boolean isTracingEnabledForMethod(StructuredGraph graph) {
