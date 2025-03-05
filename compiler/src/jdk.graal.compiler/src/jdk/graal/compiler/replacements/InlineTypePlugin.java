@@ -316,9 +316,8 @@ public class InlineTypePlugin implements NodePlugin {
         if (!elementKind.isObject() || !b.getValhallaOptionsProvider().useArrayFlattening())
             return false;
 
-        // TODO: return immeidately if flat arrays are disabled
-        boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
-        boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
+        boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
+        boolean canBeInlineTypeArray = StampTool.canBeInlineTypeArray(array, b.getValhallaOptionsProvider());
 
         if (canBeInlineTypeArray) {
             // array can consist of inline objects

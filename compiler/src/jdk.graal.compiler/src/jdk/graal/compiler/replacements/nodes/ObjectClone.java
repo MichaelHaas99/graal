@@ -39,6 +39,7 @@ import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.spi.ArrayLengthProvider;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
@@ -133,8 +134,9 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                  * virtualization of the cloned array. TODO make PEA also support null-restricted
                  * and flat arrays.
                  */
-                if (getObject().stamp(NodeView.DEFAULT).canBeInlineTypeArray())
+                if (StampTool.canBeInlineTypeArray(getObject(), tool.getValhallaOptionsProvider())) {
                     return;
+                }
                 ValueNode length = findLength(FindLengthMode.SEARCH_ONLY, tool.getConstantReflection());
                 if (length == null) {
                     return;

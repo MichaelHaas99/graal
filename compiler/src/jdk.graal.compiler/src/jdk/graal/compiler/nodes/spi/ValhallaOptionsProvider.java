@@ -14,6 +14,11 @@ public interface ValhallaOptionsProvider {
         return false;
     }
 
+    /**
+     * Automatically disabled if EnableValhalla is disabled see.
+     * {@code //Disable calling convention optimizations if inline types are not supported.} in
+     * arguments.cpp
+     */
     default boolean returnCallingConventionEnabled() {
         return false;
     }

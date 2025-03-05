@@ -30,7 +30,6 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_P
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static jdk.graal.compiler.nodes.extended.IsFlatArrayNode.isFlatArray;
-import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
 
 import java.util.EnumMap;
 import java.util.function.Supplier;
@@ -686,7 +685,7 @@ public abstract class ArrayCopySnippets implements Snippets {
                     snippetInfo = arraycopyExactStubCallSnippet;
                     arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
                 } else if (srcComponentType == null && destComponentType == null ||
-                                arraycopy.canBeInlineTypeCopy()) {
+                                arraycopy.canBeInlineTypeArrayCopy(tool.getValhallaOptionsProvider())) {
                     // we don't know anything about the types - use the generic copying
                     snippetInfo = delayedGenericArraycopySnippet;
                     // no need for additional type check to avoid duplicated work

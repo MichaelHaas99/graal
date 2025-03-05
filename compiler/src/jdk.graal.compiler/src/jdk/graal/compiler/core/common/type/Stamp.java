@@ -146,7 +146,8 @@ public abstract class Stamp implements SpeculationContextObject {
     }
 
     /**
-     * Tests whether this stamp can represent an inline type
+     * Tests whether this stamp can represent an inline type. Similar to
+     * {@code TypeOopPtr::can_be_inline_type}.
      */
     public boolean canBeInlineType() {
         return false;
@@ -160,7 +161,8 @@ public abstract class Stamp implements SpeculationContextObject {
     }
 
     /**
-     * Tests whether this stamp can represent an inline type array
+     * Tests whether this stamp can represent an inline type array, Similar to
+     * {@code TypeOopPtr::can_be_inline_array}.
      */
     public boolean canBeInlineTypeArray() {
         return false;
