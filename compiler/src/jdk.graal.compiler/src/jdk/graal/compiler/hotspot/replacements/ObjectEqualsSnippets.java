@@ -99,10 +99,10 @@ public class ObjectEqualsSnippets implements Snippets {
                 long[] offsets = new long[0];
                 JavaKind[] kinds = new JavaKind[0];
                 LocationIdentity[] identities = new LocationIdentity[0];
-                if (StampTool.isInlineType(x.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+                if (StampTool.isInlineType(x, tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) x.stamp(NodeView.DEFAULT);
                     type = stamp.type();
-                } else if (StampTool.isInlineType(y.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+                } else if (StampTool.isInlineType(y, tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) y.stamp(NodeView.DEFAULT);
                     type = stamp.type();
                 } else {

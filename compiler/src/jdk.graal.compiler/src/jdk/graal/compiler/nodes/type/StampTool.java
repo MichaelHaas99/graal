@@ -276,6 +276,10 @@ public class StampTool {
         return false;
     }
 
+    public static boolean canBeInlineType(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return canBeInlineType(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
+    }
+
     /**
      * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
      * stamp whose values can be inline types
@@ -291,6 +295,10 @@ public class StampTool {
             return abstractObjectStamp.canBeInlineType();
         }
         return false;
+    }
+
+    public static boolean isInlineType(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return isInlineType(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
     }
 
     /**
