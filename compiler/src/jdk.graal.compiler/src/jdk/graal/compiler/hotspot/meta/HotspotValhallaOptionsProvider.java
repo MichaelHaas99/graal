@@ -31,12 +31,12 @@ public class HotspotValhallaOptionsProvider implements ValhallaOptionsProvider {
 
     @Override
     public boolean useArrayFlattening() {
-        return useArrayFlattening;
+        return valhallaEnabled && useArrayFlattening;
     }
 
     @Override
     public boolean useFieldFlattening() {
-        return useFieldFlattening;
+        return valhallaEnabled && useFieldFlattening;
     }
 
     @Override

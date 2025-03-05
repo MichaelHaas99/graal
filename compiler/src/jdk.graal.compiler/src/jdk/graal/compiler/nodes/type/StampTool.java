@@ -311,4 +311,48 @@ public class StampTool {
         return false;
     }
 
+    public static boolean canBeInlineTypeArray(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return canBeInlineTypeArray(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values can be arrays with an inline type as component type.
+     *
+     * @param stamp the stamp to check
+     * @param valhallaOptionsProvider options specific for the valhalla
+     * @return true if this stamp represents a legal object stamp whose values can be arrays with an
+     *         inline type as component type.
+     */
+    public static boolean canBeInlineTypeArray(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+            return false;
+        if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
+            return abstractObjectStamp.canBeInlineTypeArray();
+        }
+        return false;
+    }
+
+    public static boolean isInlineTypeArray(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return isInlineTypeArray(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values are known to be arrays with an inline type as component type.
+     *
+     * @param stamp the stamp to check
+     * @param valhallaOptionsProvider options specific for the valhalla
+     * @return true if this stamp represents a legal object stamp whose values are known to be
+     *         arrays with an inline type as component type.
+     */
+    public static boolean isInlineTypeArray(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+            return false;
+        if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
+            return abstractObjectStamp.isInlineTypeArray();
+        }
+        return false;
+    }
+
 }

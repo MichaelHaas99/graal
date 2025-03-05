@@ -103,8 +103,11 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             return false;
 
         if (!isAlwaysArray()) {
-            if (type() == null && !exactType)
+            if (type() == null && exactType) {
+                // Object is the base class of all arrays
                 return true;
+            }
+            // can't be an array
             return false;
         }
 
@@ -113,9 +116,10 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
         ResolvedJavaType componentType = type().getComponentType();
 
-        // multidimensional array is no inline type array as well as array of primitives
+        // multidimensional array and array of primitives can't be inline type arrays
         if (componentType.isArray() || componentType.isPrimitive())
             return false;
+
         if (!isExactType()) {
             // merge which resulted in object class as superclass for array elements
             if (componentType.isJavaLangObject())
@@ -130,7 +134,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         if (type() == null || type().getComponentType() == null)
             return false;
         ResolvedJavaType componentType = type().getComponentType();
-        return isAlwaysArray() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
+        return isAlwaysArray() && nonNull() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
     }
 
     @Override
