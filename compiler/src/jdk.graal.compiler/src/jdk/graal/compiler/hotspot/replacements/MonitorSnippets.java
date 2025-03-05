@@ -903,8 +903,8 @@ public class MonitorSnippets implements Snippets {
             Arguments args = new Arguments(monitorenter, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("object", monitorenterNode.object());
             args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
-            args.add("canBeInlineType", StampTool.canBeInlineType(monitorenterNode.object().stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider()));
-            args.add("isInlineType", StampTool.isInlineType(monitorenterNode.object().stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider()));
+            args.add("canBeInlineType", StampTool.canBeInlineType(monitorenterNode.object(), tool.getValhallaOptionsProvider()));
+            args.add("isInlineType", StampTool.isInlineType(monitorenterNode.object(), tool.getValhallaOptionsProvider()));
             args.add("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
             args.add("threadRegister", registers.getThreadRegister());
             args.add("stackPointerRegister", registers.getStackPointerRegister());

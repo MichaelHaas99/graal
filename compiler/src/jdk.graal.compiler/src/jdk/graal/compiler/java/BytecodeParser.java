@@ -1857,7 +1857,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     protected ValueNode maybeEmitExplicitIdentityCheck(ValueNode object) {
-        if (!StampTool.canBeInlineType(object.stamp(NodeView.DEFAULT), getValhallaOptionsProvider()) || !needsExplicitIdentityCheckException(object)) {
+        if (!StampTool.canBeInlineType(object, getValhallaOptionsProvider()) || !needsExplicitIdentityCheckException(object)) {
             return object;
         }
         ValueNode hasIdentity = append(new HasIdentityNode(object));

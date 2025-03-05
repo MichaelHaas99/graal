@@ -67,7 +67,7 @@ public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode i
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         }
-        if (!StampTool.canBeInlineType(stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+        if (!StampTool.canBeInlineType(this, tool.getValhallaOptionsProvider())) {
             return object;
         }
         return this;

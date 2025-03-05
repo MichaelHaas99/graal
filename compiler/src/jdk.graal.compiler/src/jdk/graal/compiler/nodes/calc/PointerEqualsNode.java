@@ -134,7 +134,7 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
             if (condition != CanonicalCondition.EQ) {
                 return false;
             }
-            if (StampTool.canBeInlineType(originalX.stamp(NodeView.DEFAULT), valhallaOptionsProvider) && StampTool.canBeInlineType(originalY.stamp(NodeView.DEFAULT), valhallaOptionsProvider)) {
+            if (StampTool.canBeInlineType(originalX, valhallaOptionsProvider) && StampTool.canBeInlineType(originalY.stamp(NodeView.DEFAULT), valhallaOptionsProvider)) {
                 return false;
             }
             ValueNode forX = GraphUtil.unproxify(originalX);

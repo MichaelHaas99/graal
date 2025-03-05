@@ -123,12 +123,12 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
 
         ValueNode updatedX = null;
-        if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !StampTool.canBeInlineType(xAnchorNode.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+        if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !StampTool.canBeInlineType(xAnchorNode, tool.getValhallaOptionsProvider())) {
             updatedX = xAnchorNode.object();
         }
 
         ValueNode updatedY = null;
-        if (forY instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode && !StampTool.canBeInlineType(yAnchorNode.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+        if (forY instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode && !StampTool.canBeInlineType(yAnchorNode, tool.getValhallaOptionsProvider())) {
             updatedY = yAnchorNode.object();
         }
 

@@ -701,6 +701,6 @@ public class InlineTypeUtil {
     }
 
     public static boolean needsSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
-        return StampTool.canBeInlineType(x.stamp(NodeView.DEFAULT), valhallaOptionsProvider) && StampTool.canBeInlineType(y.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
+        return StampTool.canBeInlineType(x, valhallaOptionsProvider) && StampTool.canBeInlineType(y, valhallaOptionsProvider);
     }
 }
