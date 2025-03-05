@@ -47,6 +47,7 @@ import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
@@ -69,10 +70,14 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     public static final NodeClass<ObjectEqualsNode> TYPE = NodeClass.create(ObjectEqualsNode.class);
     private static final ObjectEqualsOp OP = new ObjectEqualsOp();
 
-    private boolean substituabilityCheck;
+    private boolean substitutabilityCheck;
 
-    public boolean substituabilityCheck() {
-        return substituabilityCheck;
+    public boolean substitutabilityCheck() {
+        return substitutabilityCheck;
+    }
+
+    public void reEvaluateSubstituabilityCheck(ValhallaOptionsProvider valhallaOptionsProvider) {
+        substitutabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, valhallaOptionsProvider);
     }
 
     private ACmpDataAccessor profile;
@@ -88,7 +93,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     public ObjectEqualsNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
         assert x.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp && y.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp : Assertions.errorMessageContext("x", x, "y", y);
-        substituabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, null);
+        substitutabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, null);
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {
@@ -114,6 +119,8 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        // set the substitutability check to false in case valhalla is disabled
+        reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
 
         ValueNode updatedX = null;
         if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !StampTool.canBeInlineType(xAnchorNode.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
@@ -126,14 +133,22 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
 
         if (updatedX != null || updatedY != null) {
-            return create(tool.getConstantReflection(), tool.getMetaAccess(),
+            LogicNode replacement = create(tool.getConstantReflection(), tool.getMetaAccess(),
                             tool.getOptions(), updatedX == null ? forX : updatedX, updatedY == null ? forY : updatedY, NodeView.DEFAULT);
+            if (replacement instanceof ObjectEqualsNode objectEqualsNode) {
+                objectEqualsNode.reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+            }
+            return replacement;
         }
 
         NodeView view = NodeView.from(tool);
 
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, forX, forY, view);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, forX, forY, view,
+                        tool.getValhallaOptionsProvider());
         if (value != null) {
+            if (value instanceof ObjectEqualsNode objectEqualsNode) {
+                objectEqualsNode.reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+            }
             return value;
         }
         return this;
@@ -400,20 +415,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             return;
 
         }
-
-// ValueNode xAlias = tool.getAlias(x);
-// ValueNode yAlias = tool.getAlias(y);
-// if (xAlias instanceof VirtualObjectNode xNode && yAlias instanceof VirtualObjectNode yNode) {
-// if (tool.getIsNotNull(xNode) != null && tool.getIsNotNull(yNode) != null) {
-// node = LogicNode.andWithoutGraphAdd((LogicNode) node, new
-// IntegerEqualsNode(tool.getIsNotNull(xNode), tool.getIsNotNull(yNode)),
-// ProfileData.BranchProbabilityData.unknown());
-// } else if (tool.getIsNotNull(xNode) == null && tool.getIsNotNull(yNode) == null) {
-// // nothing to do
-// } else {
-// return;
-// }
-// }
 
         tool.ensureAdded(node);
         tool.replaceWithValue(node);
