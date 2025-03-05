@@ -23,4 +23,8 @@ public interface ValhallaOptionsProvider {
         return false;
     }
 
+    default boolean useACmpProfile() {
+        return false;
+    }
+
 }

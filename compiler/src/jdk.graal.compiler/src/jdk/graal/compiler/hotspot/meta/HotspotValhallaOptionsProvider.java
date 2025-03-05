@@ -9,12 +9,14 @@ public class HotspotValhallaOptionsProvider implements ValhallaOptionsProvider {
     private final boolean useArrayFlattening;
     private final boolean useFieldFlattening;
     private final boolean returnConventionEnabled;
+    private final boolean useACmpProfile;
 
     public HotspotValhallaOptionsProvider(GraalHotSpotVMConfig config) {
         valhallaEnabled = config.valhallaEnabled;
         useArrayFlattening = config.useArrayFlattening;
         useFieldFlattening = config.useFieldFlattening;
         returnConventionEnabled = config.returnConventionEnabled;
+        useACmpProfile = config.useACmpProfile;
     }
 
     public HotspotValhallaOptionsProvider() {
@@ -22,6 +24,7 @@ public class HotspotValhallaOptionsProvider implements ValhallaOptionsProvider {
         useArrayFlattening = false;
         useFieldFlattening = false;
         returnConventionEnabled = false;
+        useACmpProfile = false;
     }
 
     @Override
@@ -42,5 +45,10 @@ public class HotspotValhallaOptionsProvider implements ValhallaOptionsProvider {
     @Override
     public boolean returnCallingConventionEnabled() {
         return returnConventionEnabled;
+    }
+
+    @Override
+    public boolean useACmpProfile() {
+        return useACmpProfile;
     }
 }

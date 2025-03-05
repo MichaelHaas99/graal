@@ -5086,7 +5086,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     private ACmpDataAccessor getProfileForObjectEquals() {
-        if (parsingIntrinsic() || profilingInfo == null ||
+        if (!getValhallaOptionsProvider().useACmpProfile() || parsingIntrinsic() || profilingInfo == null ||
                         !optimisticOpts.useTypeCheckHints(getOptions())) {
             return null;
         }
