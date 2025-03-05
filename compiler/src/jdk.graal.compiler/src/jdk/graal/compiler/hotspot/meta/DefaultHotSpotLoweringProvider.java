@@ -555,7 +555,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 monitorSnippets.lower((MonitorExitNode) n, registers, tool);
             }
         } else if (n instanceof ObjectEqualsNode objectEqualsNode) {
-            if (objectEqualsNode.substituabilityCheck() && graph.getGuardsStage().areDeoptsFixed()) {
+            if (objectEqualsNode.substitutabilityCheck() && graph.getGuardsStage().areDeoptsFixed()) {
                 objectEqualsSnippets.lower(objectEqualsNode, tool);
             }
         } else if (n instanceof ArrayCopyNode) {

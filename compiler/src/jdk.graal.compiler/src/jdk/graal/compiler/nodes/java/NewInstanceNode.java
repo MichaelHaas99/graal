@@ -81,10 +81,9 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
          */
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(instanceClass) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(instanceClass)) {
-            // disabling Valhalla has no impact on the identity flag in the class file, therefore
-            // do an extra check
+
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(),
-                            instanceClass.isIdentity() || !instanceClass.isIdentity() && !tool.getValhallaOptionsProvider().valhallaEnabled());
+                            instanceClass.isIdentity());
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {

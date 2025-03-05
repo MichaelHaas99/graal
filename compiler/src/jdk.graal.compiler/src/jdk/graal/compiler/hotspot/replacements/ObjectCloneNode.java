@@ -159,7 +159,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
                     // the new instance.
                     CommitAllocationNode commit = newGraph.add(new CommitAllocationNode());
                     newGraph.addAfterFixed(newGraph.start(), commit);
-                    VirtualObjectNode virtualObj = newGraph.add(new VirtualInstanceNode(type, type.isIdentity() || !type.isIdentity() && !tool.getValhallaOptionsProvider().valhallaEnabled()));
+                    VirtualObjectNode virtualObj = newGraph.add(new VirtualInstanceNode(type, type.isIdentity()));
                     virtualObj.setObjectId(0);
 
                     AllocatedObjectNode newObj = newGraph.addWithoutUnique(new AllocatedObjectNode(virtualObj));
