@@ -5090,15 +5090,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                         !optimisticOpts.useTypeCheckHints(getOptions())) {
             return null;
         }
-        ACmpDataAccessor accessor = profilingInfo.getACmpData(bci());
-        if (accessor == null)
-            return null;
-        // TODO: better heuristic
-        if (profilingInfo.getDeoptimizationCount(NullCheckException) > 0)
-            accessor.setDeoptNullCheck();
-        if (profilingInfo.getDeoptimizationCount(ClassCastException) > 0)
-            accessor.setDeoptClassCheck();
-        return accessor;
+        return profilingInfo.getACmpData(bci());
     }
 
     private void genCheckCast(int cpi) {
