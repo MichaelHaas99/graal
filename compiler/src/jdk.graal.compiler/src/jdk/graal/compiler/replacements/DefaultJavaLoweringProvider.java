@@ -1523,7 +1523,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     protected void genNullFreeArrayCheck(StoreIndexedNode n, ValueNode array, LoweringTool tool) {
-        if (!StampTool.isPointerNonNull(n.value()) && n.elementKind().isObject()) {
+        if (!StampTool.isPointerNonNull(n.value()) && StampTool.canBeInlineTypeArray(array, tool.getValhallaOptionsProvider())) {
             StructuredGraph graph = n.graph();
 
             LogicNode storeIsNull = graph.addOrUnique(IsNullNode.create(n.value()));
