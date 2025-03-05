@@ -10,7 +10,8 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.lo
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.OptimizedTypeCheckViolated;
+import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
+import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 
 import org.graalvm.word.LocationIdentity;
 
@@ -219,14 +220,14 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xAlwaysNull) {
             if (xPointer.isNull())
                 return falseValue;
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
         if (yAlwaysNull) {
             if (yPointer.isNull())
                 return falseValue;
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
@@ -261,7 +262,7 @@ public class ObjectEqualsSnippets implements Snippets {
             if (xMark.and(inlineTypePattern(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
                 return falseValue;
             }
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             return falseValue;
         }
 
@@ -274,7 +275,7 @@ public class ObjectEqualsSnippets implements Snippets {
             if (yMark.and(inlineTypePattern(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
                 return falseValue;
             }
-            DeoptimizeNode.deopt(InvalidateReprofile, OptimizedTypeCheckViolated);
+            DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             return falseValue;
         }
 
