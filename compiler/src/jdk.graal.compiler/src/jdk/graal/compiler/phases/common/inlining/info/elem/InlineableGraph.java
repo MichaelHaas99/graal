@@ -84,7 +84,6 @@ public class InlineableGraph implements Inlineable {
             original = (StructuredGraph) original.copy(invoke.asNode().getDebug());
         }
         this.graph = original;
-        // TODO: check if this statement causes further problems
         specializeGraphToArguments(invoke, context, canonicalizer);
     }
 
@@ -201,12 +200,15 @@ public class InlineableGraph implements Inlineable {
         StructuredGraph newGraph = new StructuredGraph.Builder(caller.getOptions(), debug, caller.allowAssumptions()).method(method).trackNodeSourcePosition(trackNodeSourcePosition).profileProvider(
                         caller.getProfileProvider()).speculationLog(caller.getSpeculationLog()).build();
 
-        // use the signature of the previous invoke node in case we speculate on receiver types e.g.
-        // maybe receiver can be scalarized then
-        if (!(invoke.callTarget() instanceof ResolvedMethodHandleCallTargetNode)) {
-            newGraph.setScalarizeParameters(invoke.callTarget().targetMethod());
-        } else {
+        if (invoke.callTarget() instanceof ResolvedMethodHandleCallTargetNode) {
+            // parameters of method handles are expected to be non-scalarized. The JVM will jump to
+            // the correct method entry point, which is responsible for scalarization, in case the
+            // handle does not get inlined.
             newGraph.dontScalarizeParameters();
+        } else {
+            // use the signature of the previous invoke node in case we speculate on receiver types
+            // e.g. maybe the receiver is expected to be scalarized on the inlinee method
+            newGraph.setScalarizeParameters(invoke.callTarget().targetMethod());
         }
         try (DebugContext.Scope s = debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {

@@ -172,6 +172,6 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
             }
         }
 
-        gen.emitScalarizedInvokeAndMoves(this, oopOrHub, projs.toArray(new ReadMultiValueNode[projs.size()]), isNotNull, types);
+        gen.emitInvokeWithScalarizedReturn(this, oopOrHub, projs.toArray(new ReadMultiValueNode[projs.size()]), isNotNull, types);
     }
 }

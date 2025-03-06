@@ -65,7 +65,7 @@ public interface NodeLIRBuilderTool extends NodeValueMap {
 
     void emitInvoke(Invoke i);
 
-    default void emitScalarizedInvokeAndMoves(Invoke i, ReadMultiValueNode oopOrHub, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
+    default void emitInvokeWithScalarizedReturn(Invoke i, ReadMultiValueNode existingOop, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
         throw new UnsupportedOperationException();
     }
 

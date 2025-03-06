@@ -161,7 +161,7 @@ public class Providers implements CoreProviders {
 
     @Override
     public ValhallaOptionsProvider getValhallaOptionsProvider() {
-        // to avoid problems with other providers being a subclass of Providers constructor
+        // to avoid problems with other providers being a subclass using the Providers constructor
         return new HotspotValhallaOptionsProvider();
     }
 
