@@ -285,7 +285,7 @@ public final class LIR extends LIRGenerator.VariableProvider implements EventCou
      * instructions.
      */
     // approximated by executing example program with MyValue3 which uses all return registers
-    public static final int MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END = 16;
+    public static final int MAX_EXCEPTION_EDGE_OP_DISTANCE_FROM_END = 20;
 
     public static boolean verifyBlock(LIR lir, BasicBlock<?> block) {
         ArrayList<LIRInstruction> ops = lir.getLIRforBlock(block);
