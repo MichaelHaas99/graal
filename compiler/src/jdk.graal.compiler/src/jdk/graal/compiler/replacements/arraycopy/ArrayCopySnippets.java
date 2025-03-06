@@ -230,6 +230,8 @@ public abstract class ArrayCopySnippets implements Snippets {
         boolean oneArrayIsFlat = isFlatArray(src) || isFlatArray(dest);
 
         if (oneArrayIsFlat) {
+            // e.g. copy values from flat array to object array, need to buffer the elements from
+            // src array first
             System.arraycopy(src, srcPos, dest, destPos, length);
             return;
         }

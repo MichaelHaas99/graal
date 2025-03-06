@@ -55,8 +55,8 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
     }
 
     /**
-     * TODO: Due to the cycle InvokeNode -> Framestate -> ProjNode -> InvokeNode, ProjNodes can be
-     * scheduled before the InvokeNode.
+     * Due to the cycle InvokeNode -> Framestate -> ReadMultiValueNode -> InvokeNode, ProjNodes can
+     * be scheduled before the InvokeNode.
      */
     @Override
     public void generate(NodeLIRBuilderTool generator) {

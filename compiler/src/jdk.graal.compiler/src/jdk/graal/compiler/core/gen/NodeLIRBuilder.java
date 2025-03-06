@@ -671,41 +671,12 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         }
     }
 
-    public void emitInvoke(Invoke x, Value[] temps) {
-        LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
-        FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
-        CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),
-                        callTarget.signature(), gen);
-        frameMapBuilder.callsMethod(invokeCc);
-
-        Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());
-
-        LabelRef exceptionEdge = null;
-        if (x instanceof InvokeWithExceptionNode) {
-            exceptionEdge = getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge());
-            exceptionEdge.getTargetBlock().setIndirectBranchTarget();
-        }
-        LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
-
-        Value result = invokeCc.getReturn();
-        // TODO: actually wrong to say the scalarized return values are temps
-        emitInvoke(callTarget, parameters, callState, result, temps);
-
-        if (isLegal(result)) {
-            setResult(x.asNode(), gen.emitMove(result));
-        }
-
-        if (x instanceof InvokeWithExceptionNode) {
-            gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
-        }
-    }
-
     @Override
-    public void emitScalarizedInvokeAndMoves(Invoke x, ReadMultiValueNode oopOrHub, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
+    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode existingOop, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
-        // FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
+
         CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),
                         callTarget.signature(), gen);
         frameMapBuilder.callsMethod(invokeCc);
@@ -729,8 +700,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         if (isNotNull != null) {
             // produce code for the isNotNull information
 
-            // get oopOrHub value
-            Value value = result;
+            // get oopOrHub value which is located in the return register
+            Value oopOrHub = result;
 
             ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
                             JavaConstant.forInt(1));
@@ -739,31 +710,31 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             LIRKind kind = (LIRKind) result.getValueKind();
             Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
 
-            Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), value, nullValue, Condition.EQ, false, intZero, intOne);
+            Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), oopOrHub, nullValue, Condition.EQ, false, intZero, intOne);
             setResult(isNotNull, isNotNullVariable);
         }
 
-        if (isLegal(result)) {
-            // if the klass pointer is returned we need to zero out the register
+        assert isLegal(result) : "expected a legal Value for isNotNull";
+        // if the klass pointer is returned we need to zero out the return register
+        // e.g. see if (return_value_is_used()) { in ad_x86.cpp
 
-            // see if (return_value_is_used()) { in ad_x86.cpp
+        ValueKind<?> kind = result.getValueKind();
+        Variable scratch = gen.emitMove(result);
+        Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
+        ConstantValue intOne = new ConstantValue(kind,
+                        JavaConstant.forLong(1));
 
-            ValueKind<?> kind = result.getValueKind();
-            Variable scratch = gen.emitMove(result);
-            Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
-            ConstantValue intOne = new ConstantValue(kind,
-                            JavaConstant.forLong(1));
-            // rax = klassPointer? null : rax
-            Variable existingOop = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
-            setResult(x.asNode(), existingOop);
-        }
-        if (oopOrHub != null) {
-            assert isLegal(results[oopOrHub.getIndex()]);
-            setResult(oopOrHub, operand(x.asNode()));
+        // returnRegister = (returnRegister contains klassPointer)? null : returnRegister
+        Variable temp = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
+        setResult(x.asNode(), temp);
+
+        if (existingOop != null) {
+            assert isLegal(results[existingOop.getIndex()]) : "expected legal Value for oop";
+            setResult(existingOop, operand(x.asNode()));
         }
 
         for (int i = 0; i < scalarizedInlineObject.length; i++) {
-            assert isLegal(results[scalarizedInlineObject[i].getIndex()]) : "expected legal register for scalarized inline type";
+            assert isLegal(results[scalarizedInlineObject[i].getIndex()]) : "expected legal Value for scalarized inline type";
             setResult(scalarizedInlineObject[i], gen.emitMove(results[scalarizedInlineObject[i].getIndex()]));
         }
 

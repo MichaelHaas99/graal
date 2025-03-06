@@ -351,7 +351,6 @@ import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.PluginReplacementNode;
 import jdk.graal.compiler.nodes.PluginReplacementWithExceptionNode;
-import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.ProfileData.BranchProbabilityData;
 import jdk.graal.compiler.nodes.ProfileData.ProfileSource;
 import jdk.graal.compiler.nodes.ProfileData.SwitchProbabilityData;
@@ -398,7 +397,6 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeException
 import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.HasIdentityNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -443,8 +441,6 @@ import jdk.graal.compiler.nodes.spi.CoreProvidersDelegate;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
@@ -2346,22 +2342,14 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod,
                     InvokeKind invokeKind, JavaKind resultType, JavaType returnType, JavaTypeProfile profile, boolean fromMethodHandle) {
 
-        // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod);
-// if (targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
-// invokeArgs = InlineTypeUtil.scalarizeInvokeArgs(this, invokeArgs, targetMethod, invokeKind);
-// // invokeArgs = scalarizedInvokeArgs(invokeArgs, targetMethod, invokeKind);
-// }
-// emit null checks for null free parameters before the scalarization
+// emit null checks for non-null parameters before the scalarization
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
         for (int i = 0; i < parameterLength; i++) {
             if (targetMethod.isParameterNullFree(i, true)) {
                 invokeArgs[i] = nullCheckedValue(invokeArgs[i]);
             }
         }
-// if (invokeKind.hasReceiver() && invokeArgs[0].stamp(NodeView.DEFAULT).canBeInlineType()) {
-// // emit a null check in case we scalarize the receiver later during devirtualization
-// invokeArgs[0] = nullCheckedValue(invokeArgs[0]);
-// }
+
         MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, targetMethod, invokeArgs, returnType, profile));
         Invoke invoke = createNonInlinedInvoke(exceptionEdge, invokeBci, callTarget, resultType, fromMethodHandle);
 // ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, invoke.asNode(),
@@ -2377,107 +2365,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
 
         return invoke;
-    }
-
-    private ValueNode[] scalarizedInvokeArgs(ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod, InvokeKind invokeKind) {
-        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(invokeArgs.length);
-        int signatureIndex = 0;
-        if (targetMethod.hasReceiver()) {
-            if (targetMethod.hasScalarizedReceiver()) {
-                assert invokeKind == InvokeKind.Special : "Invoke kind should be special if we know that we can scalarize the receiver";
-                ValueNode nonNullReceiver = nullCheckedValue(invokeArgs[0]);
-// ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, nonNullReceiver,
-// ConstantNode.forBoolean(false,
-// graph), ConstantNode.forBoolean(true, graph)));
-                ValueNode[] scalarized = genScalarizationCFG(this, nonNullReceiver, targetMethod, signatureIndex);
-                scalarizedArgs.addAll(List.of(scalarized));
-            } else {
-                scalarizedArgs.add(invokeArgs[0]);
-            }
-            signatureIndex++;
-        }
-        for (; signatureIndex < invokeArgs.length; signatureIndex++) {
-            if (targetMethod.isScalarizedParameter(signatureIndex, true)) {
-                ValueNode[] scalarized = genScalarizationCFG(this, invokeArgs[signatureIndex], targetMethod, signatureIndex);
-                scalarizedArgs.addAll(List.of(scalarized));
-            } else {
-                scalarizedArgs.add(invokeArgs[signatureIndex]);
-            }
-
-        }
-        return scalarizedArgs.toArray(new ValueNode[scalarizedArgs.size()]);
-    }
-
-    public ValueNode[] genScalarizationCFG(GraphBuilderContext b, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
-        boolean nullFree = targetMethod.isParameterNullFree(signatureIndex, true);
-        // TODO: nicer interface
-/*
- * ResolvedJavaField[] fields = (targetMethod.hasReceiver() && signatureIndex == 0) ?
- * targetMethod.getDeclaringClass().getInstanceFields(true) :
- * targetMethod.getSignature().getParameterType(signatureIndex,
- * targetMethod.getDeclaringClass()).resolve(targetMethod.getDeclaringClass()).getInstanceFields(
- * true);
- */
-        ResolvedJavaField[] fields = targetMethod.getScalarizedParameterFields(signatureIndex, true);
-        if (nullFree) {
-            ValueNode[] loads = new ValueNode[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), arg, fields[i]));
-                loads[i] = load;
-            }
-            return loads;
-        }
-
-        BeginNode trueBegin = b.getGraph().add(new BeginNode());
-        BeginNode falseBegin = b.getGraph().add(new BeginNode());
-
-        IfNode ifNode = b.add(new IfNode(b.add(LogicNegationNode.create(b.add(new IsNullNode(arg)))), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-
-        // get a valid framestate for the merge node
-        FrameState framestate = GraphUtil.findLastFrameState(ifNode);
-
-        ValueNode[] loads = new ValueNode[fields.length];
-        ValueNode[] consts = new ValueNode[fields.length];
-
-        // true branch - inline object is non-null, load the field values
-
-        ValueNode nonNull = PiNode.create(arg, objectNonNull(), trueBegin);
-        for (int i = 0; i < fields.length; i++) {
-            LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNull, fields[i]));
-            loads[i] = load;
-            if (trueBegin.next() == null)
-                trueBegin.setNext(load);
-        }
-        EndNode trueEnd = b.add(new EndNode());
-
-        // check maybe needed for empty inline objects?
-        if (trueBegin.next() == null)
-            trueBegin.setNext(trueEnd);
-
-        // false branch - inline object is null, use default values of fields
-
-        for (int i = 0; i < fields.length; i++) {
-            ConstantNode load = b.add(ConstantNode.defaultForKind(fields[i].getJavaKind()));
-            consts[i] = load;
-        }
-        EndNode falseEnd = b.add(new EndNode());
-        if (falseBegin.next() == null)
-            falseBegin.setNext(falseEnd);
-
-        // merge
-        MergeNode merge = b.append(new MergeNode());
-        merge.setStateAfter(framestate);
-
-        // produces phi nodes
-        ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
-        phis[0] = b.add(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
-        for (int i = 0; i < fields.length; i++) {
-            phis[i + 1] = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
-        }
-
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        return phis;
     }
 
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, CallTargetNode callTarget, JavaKind resultType) {
@@ -2502,30 +2389,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         return invoke;
     }
 
-    public void handleScalarizedReturnOnInvoke(Invoke invoke, JavaKind resultType) {
-        InlineTypeNode result = InlineTypeNode.createFromInvoke(this, invoke);
-
-        // create virtual object representing nullable scalarized inline object in framestate
-        VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
-        virtual.setObjectId(0);
-        append(virtual);
-
-        ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineObject().size()];
-
-        for (int i = 0; i < newEntries.length; i++) {
-            ValueNode entry = result.getScalarizedInlineObject().get(i);
-            newEntries[i] = entry;
-        }
-
-        // create framestate for invoke with virtual object
-        push(resultType, virtual);
-        setStateAfter(invoke);
-        invoke.stateAfter().addVirtualObjectMapping(append(new VirtualObjectState(virtual, newEntries, result.getIsNotNull())));
-        pop(resultType);
-
-        // push the InlineTypeNode as result
-        push(resultType, result);
-    }
 
     /**
      * Describes what should be done with the exception edge of an invocation. The edge can be
@@ -4427,8 +4290,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         switch (cond) {
             case EQ:
                 if (a.getStackKind() == JavaKind.Object) {
-                    a = append(new FixedInlineTypeEqualityAnchorNode(a));
-                    b = append(new FixedInlineTypeEqualityAnchorNode(b));
+                    if (getValhallaOptionsProvider().valhallaEnabled()) {
+                        a = append(new FixedInlineTypeEqualityAnchorNode(a));
+                        b = append(new FixedInlineTypeEqualityAnchorNode(b));
+                    }
 
                     LogicNode node = genObjectEquals(a, b);
                     if (node instanceof ObjectEqualsNode) {

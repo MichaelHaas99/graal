@@ -55,6 +55,9 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.TriState;
 
+/**
+ * Contains utility functions often needed in conjunction with inline types.
+ */
 public class InlineTypeUtil {
 
     static Class<? extends Throwable> identityExceptionClass;
@@ -66,7 +69,7 @@ public class InlineTypeUtil {
             identityExceptionClass = (Class<? extends Throwable>) Class.forName("java.lang.IdentityException");
             identityExceptionClassAvailable = true;
         } catch (Exception e) {
-            // just assert the null pointer exception class as dummy which shouldn't be used
+            // just use the null pointer exception class as dummy which shouldn't be used
             identityExceptionClass = NullPointerException.class;
             identityExceptionClassAvailable = false;
         }
@@ -148,7 +151,7 @@ public class InlineTypeUtil {
      * @param callTargetNode the call target of whose receiver was devirtualized
      * @param oldMethod the old method before devirtualization
      * @param newMethod the method after devirtiualization
-     * @param nothingScalarizedYet determines if no arguments of the old method was scalarized yet
+     * @param nothingScalarizedYet determines if no arguments of the old method were scalarized yet
      */
     public static void handleDevirtualizationOnCallTarget(CallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
         int parameterLength = oldMethod.getSignature().getParameterCount(!oldMethod.isStatic());

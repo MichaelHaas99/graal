@@ -12,11 +12,11 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
- * The {@link jdk.graal.compiler.nodes.ReturnScalarizedNode} selects, based on its inputs, the node
- * that will be returned by the {@link jdk.graal.compiler.nodes.ReturnScalarizedNode}. If
- * {@link #isNotNull} indicates that the result is null, a null pointer will be returned. In case
- * the result is non-null the node either returns the tagged hub created from {@link #hub} or the
- * {@link #existingOop} if it does not represent a null pointer.
+ * The {@code ReturnResultDeciderNode} selects, based on its inputs, the node that will be returned
+ * by the {@link jdk.graal.compiler.nodes.ReturnScalarizedNode}. If {@link #isNotNull} indicates
+ * that the result is null, a null pointer will be returned. In case the result is non-null the node
+ * either returns the tagged hub created from {@link #hub} or the {@link #existingOop} if it does
+ * not represent a null pointer.
  * 
  */
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)

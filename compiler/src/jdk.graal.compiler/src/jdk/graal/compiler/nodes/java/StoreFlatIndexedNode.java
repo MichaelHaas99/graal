@@ -59,14 +59,14 @@ import jdk.vm.ci.meta.JavaKind;
 @NodeInfo(nameTemplate = "StoreFlatIndexedNode", cycles = CYCLES_8, size = SIZE_8)
 public final class StoreFlatIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, SingleMemoryKill {
 
-    public static class StoreIndexedWrapper {
+    public static class StoreIndexedInfo {
 
         private final int index;
         private final JavaKind elementKind;
         private final int additionalOffset;
         private final int shift;
 
-        public StoreIndexedWrapper(int index, JavaKind elementKind, int additionalOffset, int shift) {
+        public StoreIndexedInfo(int index, JavaKind elementKind, int additionalOffset, int shift) {
             this.index = index;
             this.elementKind = elementKind;
             this.additionalOffset = additionalOffset;
@@ -80,10 +80,10 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    private final List<StoreIndexedWrapper> wrappers = new ArrayList<>();
+    private final List<StoreIndexedInfo> storeIndexedInfos = new ArrayList<>();
 
     public List<StoreIndexedNode> getWriteOperations() {
-        return wrappers.stream().map(w -> {
+        return storeIndexedInfos.stream().map(w -> {
             StoreIndexedNode node = new StoreIndexedNode(array, index, getBoundsCheck(), getStoreCheck(), w.elementKind, values.get(w.index));
             node.setAdditionalOffset(w.additionalOffset);
             node.setShift(w.shift);
@@ -126,10 +126,10 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
     }
 
     public StoreFlatIndexedNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind,
-                    List<StoreFlatIndexedNode.StoreIndexedWrapper> writeOperations) {
+                    List<StoreIndexedInfo> writeOperations) {
         super(TYPE, StampFactory.forVoid(), array, index, boundsCheck, elementKind);
         this.storeCheck = storeCheck;
-        this.wrappers.addAll(writeOperations);
+        this.storeIndexedInfos.addAll(writeOperations);
     }
 
     public LocationIdentity getKilledLocation() {

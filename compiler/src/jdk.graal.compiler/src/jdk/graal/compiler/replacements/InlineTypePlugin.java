@@ -69,7 +69,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // field is flat and nullable
 
                 // TODO: functionality not correctly implemented yet, wait until it's fully
-                // implemented in the VM
+                // implemented in the JVM
 
                 BeginNode trueBegin = b.getGraph().add(new BeginNode());
                 BeginNode falseBegin = b.getGraph().add(new BeginNode());
@@ -134,7 +134,7 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     /**
-     * Responsible for loading the inline object stored in a flat representation as a field in
+     * Responsible for loading the inline object stored in a flat representation as a field value in
      * another object.
      * 
      * @param b the context
@@ -171,11 +171,11 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     /**
-     * Responsible checking an already loaded value from a null-restricted field at runtime. If the
-     * value is null, it has to be replaced by the default instance.
+     * Responsible for checking an already loaded value from a null-restricted field at runtime. If
+     * the value is null, it has to be replaced by the default instance.
      *
      * @param b the context
-     * @param fieldValue the alreeady loaded field value
+     * @param fieldValue the already loaded field value
      * @param field the accessed field
      */
     private void genHandleNullFreeInlineTypeField(GraphBuilderContext b, ValueNode fieldValue, ResolvedJavaField field) {
@@ -185,7 +185,7 @@ public class InlineTypePlugin implements NodePlugin {
 
         genFieldNullCheck(b, fieldValue, trueBegin, falseBegin);
 
-        // true branch - field is null use default instance
+        // true branch - field is null use the default instance
         EndNode trueEnd = b.add(new EndNode());
         ConstantNode defaultValue = b.add(ConstantNode.forConstant(fieldType.getDefaultInlineTypeInstance(), b.getMetaAccess(), b.getGraph()));
         trueBegin.setNext(trueEnd);
@@ -222,14 +222,14 @@ public class InlineTypePlugin implements NodePlugin {
 
                 // true branch - flat field is null
                 StoreFieldNode storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
-                                b.maskSubWordValue(ConstantNode.forConstant(JavaConstant.INT_0, b.getMetaAccess(), b.getGraph()), field.getNullMarkerField().getJavaKind())));
+                                b.maskSubWordValue(ConstantNode.forInt(0, b.getGraph()), field.getNullMarkerField().getJavaKind())));
                 trueBegin.setNext(storeField);
                 EndNode trueEnd = b.add(new EndNode());
 
                 // false branch - flat field is non-null
                 b.add(falseBegin);
                 storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
-                                b.maskSubWordValue(ConstantNode.forConstant(JavaConstant.INT_1, b.getMetaAccess(), b.getGraph()), field.getNullMarkerField().getJavaKind())));
+                                b.maskSubWordValue(ConstantNode.forInt(1, b.getGraph()), field.getNullMarkerField().getJavaKind())));
                 falseBegin.setNext(storeField);
                 genStoreFlatField(b, object, field, value);
                 EndNode falseEnd = b.add(new EndNode());
@@ -249,9 +249,9 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     /**
-     * Responsible for storing the {@code value} in a flat representation into a flat field of
-     * another {@code object}. It therefore loads each field value of the object and stores it at a
-     * specific offset into the object.
+     * Responsible for storing the {@code value} in a flat representation as a field value of
+     * another {@code object}. It therefore loads each field value and stores it at a specific
+     * offset into the {@code object}.
      *
      * @param b the context
      * @param object the receiver object for the field access
@@ -270,7 +270,7 @@ public class InlineTypePlugin implements NodePlugin {
         ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
 
         List<ValueNode> readOperations = new ArrayList<>();
-        List<StoreFlatFieldNode.StoreFieldWrapper> writeOperations = new ArrayList<>();
+        List<StoreFlatFieldNode.StoreFieldInfo> writeOperations = new ArrayList<>();
 
         for (int i = 0; i < innerFields.length; i++) {
             ResolvedJavaField innerField = innerFields[i];
@@ -284,15 +284,19 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder has no header so remove the header offset
-            writeOperations.add(new StoreFlatFieldNode.StoreFieldWrapper(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
+            writeOperations.add(new StoreFlatFieldNode.StoreFieldInfo(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);
     }
 
+    /**
+     *
+     * @deprecated
+     */
     private void genFlatFieldNullCheck(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, BeginNode trueBegin, BeginNode falseBegin) {
         LoadFieldNode y = b.add(LoadFieldNode.create(b.getAssumptions(), object, field.getNullMarkerField()));
-        ConstantNode x = ConstantNode.forConstant(JavaConstant.INT_0, b.getMetaAccess(), b.getGraph());
+        ConstantNode x = ConstantNode.forInt(0, b.getGraph());
 
         LogicNode condition = IntegerEqualsNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, x, y, NodeView.DEFAULT);
         b.add(condition);
@@ -300,10 +304,7 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-    /**
-     * 
-     * @deprecated
-     */
+
     private void genFieldNullCheck(GraphBuilderContext b, ValueNode fieldValue, BeginNode trueBegin, BeginNode falseBegin) {
         LogicNode condition = b.add(IsNullNode.create(fieldValue));
         b.add(condition);
@@ -375,9 +376,6 @@ public class InlineTypePlugin implements NodePlugin {
                 falseBegin.setNext(falseEnd);
             }
 
-            // Stamp stamp = resolvedType.getComponentType() == null ? StampFactory.object() :
-            // StampFactory.forDeclaredType(b.getAssumptions(), resolvedType.getComponentType(),
-            // false).getTrustedStamp();
             ValuePhiNode phiNode = b.add(new ValuePhiNode(resultStamp, null,
                             instanceFlatArray, instanceNonFlatArray));
             b.push(elementKind, phiNode);
@@ -394,8 +392,6 @@ public class InlineTypePlugin implements NodePlugin {
     /**
      * Similar to {@link #genLoadFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField)}, but
      * loads the flat field from a flat array.
-     * 
-     * @return
      */
     private FixedWithNextNode genLoadFlatFieldFromArray(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift,
                     BeginNode begin) {
@@ -418,8 +414,7 @@ public class InlineTypePlugin implements NodePlugin {
             } else {
                 load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(innerField.getJavaKind()), array, index, boundsCheck, innerField.getJavaKind());
             }
-            // LoadIndexedNode load = new LoadIndexedNode(b.getAssumptions(), array, index,
-            // boundsCheck, innerField.getJavaKind());
+
             // holder has no header so remove the header offset
             load.setAdditionalOffset(off);
             load.setShift(shift);
@@ -440,8 +435,8 @@ public class InlineTypePlugin implements NodePlugin {
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
         if (!elementKind.isObject() || !b.getValhallaOptionsProvider().useArrayFlattening())
             return false;
-        boolean isInlineTypeArray = array.stamp(NodeView.DEFAULT).isInlineTypeArray();
-        boolean canBeInlineTypeArray = array.stamp(NodeView.DEFAULT).canBeInlineTypeArray();
+        boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
+        boolean canBeInlineTypeArray = StampTool.canBeInlineTypeArray(array, b.getValhallaOptionsProvider());
 
         if (canBeInlineTypeArray) {
             // array can consist of inline objects
@@ -466,7 +461,6 @@ public class InlineTypePlugin implements NodePlugin {
 
             // runtime check necessary
 
-            // BeginNode trueBegin = b.getGraph().add(new BeginNode());
             BeginNode trueBegin = null;
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
             IfNode ifNode = genFlatArrayCheck(b, array, trueBegin, falseBegin);
@@ -520,7 +514,7 @@ public class InlineTypePlugin implements NodePlugin {
 
     /**
      *
-     * similar to
+     * Similar to
      * {@link #genStoreFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField, ValueNode)}, but
      * stores the object as an element into a flat array.
      */
@@ -530,7 +524,7 @@ public class InlineTypePlugin implements NodePlugin {
         ResolvedJavaField[] innerFields = elementType.getInstanceFields(true);
 
         List<ValueNode> readOperations = new ArrayList<>();
-        List<StoreFlatIndexedNode.StoreIndexedWrapper> writeOperations = new ArrayList<>();
+        List<StoreFlatIndexedNode.StoreIndexedInfo> writeOperations = new ArrayList<>();
 
         // empty inline type will have no fields
         ValueNode returnValue = null;
@@ -549,11 +543,10 @@ public class InlineTypePlugin implements NodePlugin {
                 returnValue = load;
 
             // new holder has a header
-            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedWrapper(i, innerField.getJavaKind(), off, shift));
+            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(i, innerField.getJavaKind(), off, shift));
 
         }
 
-        // create wrapper for the store operations
         StoreFlatIndexedNode storeFlatIndexedNode = b.add(new StoreFlatIndexedNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations));
         storeFlatIndexedNode.addValues(readOperations);
 
@@ -562,7 +555,7 @@ public class InlineTypePlugin implements NodePlugin {
 
     private IfNode genFlatArrayCheck(GraphBuilderContext b, ValueNode array, BeginNode trueBegin, BeginNode falseBegin) {
         IsFlatArrayNode isFlatArrayNode = b.add(new IsFlatArrayNode(array));
-        LogicNode condition = b.add(new IntegerEqualsNode(isFlatArrayNode, ConstantNode.forConstant(JavaConstant.INT_1, b.getMetaAccess(), b.getGraph())));
+        LogicNode condition = b.add(new IntegerEqualsNode(isFlatArrayNode, ConstantNode.forInt(1, b.getGraph())));
 
         // TODO: insert profiling data
         return b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));

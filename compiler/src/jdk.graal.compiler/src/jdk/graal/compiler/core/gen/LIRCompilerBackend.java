@@ -223,6 +223,12 @@ public class LIRCompilerBackend {
 
             FrameMap frameMap = lirGenRes.getFrameMap();
             CompilationResultBuilder crb = lirBackend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory, entryPointDecorator);
+
+            /**
+             * {@code rootMethod} needed in
+             * {@link jdk.graal.compiler.hotspot.amd64.AMD64HotSpotBackend.HotSpotFrameContext#leave(CompilationResultBuilder)}
+             * during code emission. Therefore set it before code is emitted.
+             */
             if (rootMethod != null) {
                 compilationResult.setMethods(rootMethod, inlinedMethods);
                 compilationResult.setBytecodeSize(bytecodeSize);

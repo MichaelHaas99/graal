@@ -64,20 +64,20 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    private final List<StoreFieldWrapper> wrappers = new ArrayList<>();
+    private final List<StoreFieldInfo> storeFieldInfos = new ArrayList<>();
 
-    public static class StoreFieldWrapper {
+    public static class StoreFieldInfo {
         private final int index;
         private final ResolvedJavaField field;
 
-        public StoreFieldWrapper(int index, ResolvedJavaField field) {
+        public StoreFieldInfo(int index, ResolvedJavaField field) {
             this.index = index;
             this.field = field;
         }
     }
 
     public List<StoreFieldNode> getWriteOperations() {
-        return wrappers.stream().map(w -> {
+        return storeFieldInfos.stream().map(w -> {
             StoreFieldNode node = new StoreFieldNode(object, w.field, values.get(w.index));
             return node;
         }).toList();
@@ -108,9 +108,9 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
         return true;
     }
 
-    public StoreFlatFieldNode(ValueNode object, ResolvedJavaField field, List<StoreFieldWrapper> writeOperations) {
+    public StoreFlatFieldNode(ValueNode object, ResolvedJavaField field, List<StoreFieldInfo> writeOperations) {
         this(object, field, MemoryOrderMode.getMemoryOrder(field));
-        wrappers.addAll(writeOperations);
+        storeFieldInfos.addAll(writeOperations);
     }
 
     public StoreFlatFieldNode(ValueNode object, ResolvedJavaField field, MemoryOrderMode memoryOrder) {
@@ -126,9 +126,9 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode) {
-            for (int i = 0; i < wrappers.size(); i++) {
+            for (int i = 0; i < storeFieldInfos.size(); i++) {
                 VirtualInstanceNode virtual = (VirtualInstanceNode) alias;
-                int fieldIndex = virtual.fieldIndex(wrappers.get(i).field);
+                int fieldIndex = virtual.fieldIndex(storeFieldInfos.get(i).field);
                 if (fieldIndex != -1) {
                     tool.setVirtualEntry(virtual, fieldIndex, values.get(i));
                 } else {
