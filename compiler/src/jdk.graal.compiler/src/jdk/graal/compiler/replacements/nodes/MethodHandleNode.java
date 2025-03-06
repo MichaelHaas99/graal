@@ -50,13 +50,16 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -168,6 +171,17 @@ public final class MethodHandleNode extends MacroNode implements Simplifiable {
             replaceAtUsages(invoke);
             GraphUtil.removeFixedWithUnusedInputs(this);
             graph().addBeforeFixed(currentNext, invoke);
+
+            if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STOREINLINETYPEFIELDSTOBUF &&
+                            !invoke.getTargetMethod().hasScalarizedReturn()) {
+                // remove method handle expansion if resolved target method indicates no scalarized
+                // return
+                foreignCallNode.replaceAtUsages(invoke.asNode());
+                assert foreignCallNode.next() instanceof MembarNode : "store inline type fields to buf foreign call should be followed by membar";
+                MembarNode membar = (MembarNode) foreignCallNode.next();
+                graph().removeFixed(membar);
+                graph().removeFixed(foreignCallNode);
+            }
         }
     }
 
