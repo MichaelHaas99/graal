@@ -282,7 +282,7 @@ public class StampTool {
 
     /**
      * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
-     * stamp whose values can be inline types
+     * stamp whose values can be inline types. Similar to {@code TypeOopPtr::can_be_inline_type}.
      *
      * @param stamp the stamp to check
      * @param valhallaOptionsProvider options specific for the valhalla
@@ -325,7 +325,8 @@ public class StampTool {
 
     /**
      * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
-     * stamp whose values can be arrays with an inline type as component type.
+     * stamp whose values can be arrays with an inline type as component type. Similar to
+     * {@code TypeOopPtr::can_be_inline_array}.
      *
      * @param stamp the stamp to check
      * @param valhallaOptionsProvider options specific for the valhalla

@@ -205,11 +205,11 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         List<AllocatedObjectNode> objects = new ArrayList<>(2);
         List<ValueNode> values = new ArrayList<>(8);
         List<List<MonitorIdNode>> locks = new ArrayList<>();
-        List<ValueNode> oopsOrHubs = new ArrayList<>(8);
+        List<ValueNode> existingOops = new ArrayList<>(8);
         List<ValueNode> isNotNulls = new ArrayList<>(8);
         List<ValueNode> otherAllocations = new ArrayList<>(2);
         List<Boolean> ensureVirtual = new ArrayList<>(2);
-        materializeWithCommit(fixed, virtual, objects, locks, values, oopsOrHubs, isNotNulls, ensureVirtual, otherAllocations, materializeEffects);
+        materializeWithCommit(fixed, virtual, objects, locks, values, existingOops, isNotNulls, ensureVirtual, otherAllocations, materializeEffects);
         /*
          * because all currently virtualized allocations will be materialized in 1 commit alloc node
          * with barriers, we ignore other allocations as we only process new instance and commit
@@ -230,12 +230,12 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 }
                 if (!objects.isEmpty()) {
                     CommitAllocationNode commit;
-                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && oopsOrHubs.stream().allMatch(Objects::isNull) && isNotNulls.stream().allMatch(Objects::isNull) ||
+                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && existingOops.stream().allMatch(Objects::isNull) && isNotNulls.stream().allMatch(Objects::isNull) ||
                                     fixed.predecessor() instanceof CommitAllocationOrReuseOopNode) {
                         commit = (CommitAllocationNode) fixed.predecessor();
                     } else {
                         try (DebugCloseable context = graph.withNodeSourcePosition(NodeSourcePosition.placeholder(graph.method()))) {
-                            if (oopsOrHubs.stream().allMatch(Objects::isNull) && isNotNulls.stream().allMatch(Objects::isNull)) {
+                            if (existingOops.stream().allMatch(Objects::isNull) && isNotNulls.stream().allMatch(Objects::isNull)) {
                                 commit = graph.add(new CommitAllocationNode());
                             } else {
                                 commit = graph.add(new CommitAllocationOrReuseOopNode());
@@ -272,8 +272,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                         commit.addLocks(monitorIds);
                     }
                     if (commit instanceof CommitAllocationOrReuseOopNode) {
-                        for (ValueNode oopOrHub : oopsOrHubs) {
-                            ((CommitAllocationOrReuseOopNode) commit).getExistingOops().add(oopOrHub != null ? graph.addOrUniqueWithInputs(oopOrHub) : null);
+                        for (ValueNode existingOop : existingOops) {
+                            ((CommitAllocationOrReuseOopNode) commit).getExistingOops().add(existingOop != null ? graph.addOrUniqueWithInputs(existingOop) : null);
                         }
                         for (ValueNode isNotNull : isNotNulls) {
                             ((CommitAllocationOrReuseOopNode) commit).getIsNotNulls().add(isNotNull != null ? graph.addOrUniqueWithInputs(isNotNull) : null);
