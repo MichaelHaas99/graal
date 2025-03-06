@@ -41,10 +41,8 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
 
     @Override
     public boolean verifyNode() {
-        // assertTrue(virtualObjects.size() == oopsOrHubs.size(), "values size doesn't match
-        // oopsOrHubs size");
-        // assertTrue(virtualObjects.size() == isNotNulls.size(), "values size doesn't match
-        // isNotNulls size");
+        assertTrue(virtualObjects.size() == existingOops.size(), "values size doesn't match existingOops size");
+        assertTrue(virtualObjects.size() == isNotNulls.size(), "values size doesn't match isNotNulls size");
         return super.verifyNode();
     }
 
