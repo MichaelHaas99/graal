@@ -146,36 +146,6 @@ public abstract class Stamp implements SpeculationContextObject {
     }
 
     /**
-     * Tests whether this stamp can represent an inline type. Similar to
-     * {@code TypeOopPtr::can_be_inline_type}.
-     */
-    public boolean canBeInlineType() {
-        return false;
-    }
-
-    /**
-     * Tests whether this stamp is known to be an inline type
-     */
-    public boolean isInlineType() {
-        return false;
-    }
-
-    /**
-     * Tests whether this stamp can represent an inline type array, Similar to
-     * {@code TypeOopPtr::can_be_inline_array}.
-     */
-    public boolean canBeInlineTypeArray() {
-        return false;
-    }
-
-    /**
-     * Tests whether this stamp is known to be an inline type array
-     */
-    public boolean isInlineTypeArray() {
-        return false;
-    }
-
-    /**
      * Tests whether this stamp represents an integer value.
      */
     public boolean isIntegerStamp() {

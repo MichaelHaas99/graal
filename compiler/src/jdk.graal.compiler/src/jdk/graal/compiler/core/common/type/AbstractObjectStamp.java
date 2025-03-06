@@ -77,7 +77,6 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         return copyWith(type, exactType, newNonNull, newAlwaysNull, alwaysArray);
     }
 
-    @Override
     public boolean canBeInlineType() {
         // empty type or array or null can't be inline types
         if (isEmpty() || isAlwaysArray() || alwaysNull())
@@ -91,12 +90,10 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         return !type().isIdentity();
     }
 
-    @Override
     public boolean isInlineType() {
         return nonNull() && isExactType() && !type().isIdentity();
     }
 
-    @Override
     public boolean canBeInlineTypeArray() {
         // empty type, null, no array can't be inline type arrays
         if (isEmpty() || alwaysNull())
@@ -129,7 +126,6 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         return !componentType.isIdentity();
     }
 
-    @Override
     public boolean isInlineTypeArray() {
         if (type() == null || type().getComponentType() == null)
             return false;
