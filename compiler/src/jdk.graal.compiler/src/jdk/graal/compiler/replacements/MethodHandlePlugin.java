@@ -108,7 +108,9 @@ public class MethodHandlePlugin implements NodePlugin {
                     b.add(methodHandleNode.asNode());
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
-                    appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci(), null);
+                    if (b.getValhallaOptionsProvider().returnCallingConventionEnabled() && invokeReturnStamp.getTrustedStamp().isObjectStamp()) {
+                        appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
+                    }
                 }
             } else {
                 ResolvedMethodHandleCallTargetNode callTarget = (ResolvedMethodHandleCallTargetNode) invoke.callTarget();
@@ -148,12 +150,15 @@ public class MethodHandlePlugin implements NodePlugin {
                         // the special ResolvedMethodHandleCallTargetNode.
 
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
-                        appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci(), callTarget);
+                        if (callTarget.targetMethod().hasScalarizedReturn()) {
+                            appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci());
+                        }
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
-                        assert invoke.isAlive() : "invoke should be alive to scalarize parameters before its position";
                         macroInvokable.addMethodHandleInfo(b.append(callTarget));
-                        appendForeignCall(b, macroInvokable, invokeReturnStamp, newInvokable.bci(), callTarget);
+                        if (callTarget.targetMethod().hasScalarizedReturn()) {
+                            appendForeignCall(b, macroInvokable, invokeReturnStamp, invoke.bci());
+                        }
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
                     }
@@ -190,34 +195,26 @@ public class MethodHandlePlugin implements NodePlugin {
                     long.class /* oop or hub */);
 
     // see PhaseMacroExpand::expand_mh_intrinsic_return
-    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci, ResolvedMethodHandleCallTargetNode callTarget) {
-        // in case we have a resolved target method
-        if (callTarget != null && !callTarget.targetMethod().hasScalarizedReturn())
-            return;
-        if (invokeReturnStamp.getTrustedStamp().getStackKind() == JavaKind.Void || !invokeReturnStamp.getTrustedStamp().isObjectStamp() ||
-                        !b.getValhallaOptionsProvider().returnCallingConventionEnabled()) {
-            return;
-        }
-        // TODO: only insert if return convention is enabled
+    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
+
         ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(STOREINLINETYPEFIELDSTOBUF, invokable.asNode());
         bufferInlineTypeCall.setBci(bci);
         b.append(bufferInlineTypeCall);
+
         // get the framestate of the macro invokable
         FrameState correctFrameState = invokable.stateAfter().duplicate();
         b.append(correctFrameState);
+
         // replace the top of the stack with the result of the foreign call
         correctFrameState.replaceFirstInput(invokable.asNode(), bufferInlineTypeCall);
         bufferInlineTypeCall.setStateAfter(correctFrameState);
 
-        // set the foreign call as the output
+        // set the foreign call as result
         b.pop(invokeReturnStamp.getTrustedStamp().getStackKind());
         b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), bufferInlineTypeCall);
+
+        // add a membar for newly created inline objects
         b.append(MembarNode.forInitialization());
 
-        // deopt not allowed between invoke and foreign call
-        // bufferInlineTypeCall.setInvalidateStateDuring();
-
-        // make the framestate of the invokable invalid, but is not used so not necessary
-        // invokable.stateAfter().invalidateForDeoptimizationReturnConvention();
     }
 }
