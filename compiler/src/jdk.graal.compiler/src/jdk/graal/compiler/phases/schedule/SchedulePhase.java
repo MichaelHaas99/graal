@@ -93,6 +93,7 @@ import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.MultiMemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.ValueProxy;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
@@ -403,8 +404,15 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
                             latestBlock.getBeginNode(), currentUsage);
         }
 
+        /**
+         * An {@link InvokeWithExceptionNode} represents the end of a block, therefore technically
+         * nothing can be scheduled after it in the same block. But in case it has a scalarized
+         * return value, multiple {@link ReadMultiValueNode} will be attached to it. Their results
+         * will be generated during {@link InvokeWithExceptionNode#generate(NodeLIRBuilderTool)}.The
+         * scheduler can therefore make an exception for this case. A valid graph has this cycle:
+         * InvokeWithExceptionNode -> Framestate -> ReadMultiValueNode -> InvokeWithExceptionNode.
+         */
         private static boolean checkInvokeWithExceptionScalarizedReturn(Node currentNode, HIRBlock earliestBlock, HIRBlock latestBlock, Node currentUsage) {
-            // TODO: exit condition if graph is broken
             if (!((currentNode instanceof ReadMultiValueNode && (currentUsage == null || currentUsage instanceof VirtualObjectState)) ||
                             (currentNode instanceof VirtualObjectState && (currentUsage == null || currentUsage instanceof FrameState))))
                 return false;
@@ -414,6 +422,8 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
             }
 
             boolean cycleDetected = false;
+            InvokeWithExceptionNode seenInvokeWithException = null;
+            FrameState seenFrameState = null;
             NodeFlood flood = currentNode.graph().createNodeFlood();
             flood.add(currentNode);
             for (Node n : flood) {
@@ -435,24 +445,39 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
                         return false;
                     }
 
-                    // in case we started from a ProjNode, we should be able to detect the cycle now
+                    // in case we started from a ReadMultiValueNode, we should be able to detect the
+                    // cycle now
                     cycleDetected |= virtualObjectState.values().stream().anyMatch(flood::isMarked);
                     flood.addAll(virtualObjectState.values());
                     cycleDetected |= flood.isMarked(virtualObjectState.getIsNotNull());
                     flood.add(virtualObjectState.getIsNotNull());
 
                 } else if (n instanceof InvokeWithExceptionNode invokeWithExceptionNode) {
+                    if (seenInvokeWithException == null) {
+                        seenInvokeWithException = invokeWithExceptionNode;
+                    } else if (seenInvokeWithException != invokeWithExceptionNode) {
+                        // graph is broken
+                        return false;
+                    }
+
                     if (invokeWithExceptionNode.stateAfter() == null) {
                         return false;
                     }
                     flood.add(invokeWithExceptionNode.stateAfter());
                 } else if (n instanceof FrameState frameState) {
+                    if (seenFrameState == null) {
+                        seenFrameState = frameState;
+                    } else if (seenFrameState != frameState) {
+                        // graph is broken
+                        return false;
+                    }
 
                     if (frameState.stackSize() < 1) {
                         return false;
                     }
 
-                    // get the top of the stack which should be a virtual object
+                    // get the top of the stack which should be a virtual object we should be able
+                    // to detect the cycle now
                     int topOfStack;
                     int stackSize = frameState.stackSize();
                     if (frameState.stackAt(frameState.stackSize() - 1) == null) {
@@ -470,6 +495,7 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
                     List<EscapeObjectState> virtualObjectMappings = frameState.virtualObjectMappings();
                     for (EscapeObjectState existingEscapeObjectState : virtualObjectMappings) {
                         if (existingEscapeObjectState.object() == lastSlot) {
+                            // in case we started from a VirtualObjectState
                             cycleDetected |= flood.isMarked(existingEscapeObjectState);
                             flood.add(existingEscapeObjectState);
                             break;
