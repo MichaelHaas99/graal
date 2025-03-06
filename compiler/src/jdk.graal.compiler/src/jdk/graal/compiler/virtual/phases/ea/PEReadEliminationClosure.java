@@ -142,10 +142,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
-        } /*
-           * else if (node instanceof IsNullNode) { deleted = processIsNullNode((IsNullNode) node,
-           * state, effects, lastFixedNode); }
-           */
+        }
 
         if (deleted) {
             effects.addLog(cfg.graph.getOptimizationLog(),
@@ -175,16 +172,18 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
 
-            // make sure to insert a null check in case the virtual object is nullable and no proxy
+            // insert a null check in case the virtual object is nullable and no proxy
             // is in between
             ObjectState obj = getObjectState(state, unproxiedObject);
             if (obj != null) {
                 assert !obj.isVirtual() : object;
                 if (!StampTool.isPointerNonNull(object)) {
-                    if (obj.getIsNotNull() != null && !(obj.getIsNotNull().isJavaConstant() && obj.getIsNotNull().asJavaConstant().asInt() == 1)) {
-                        LogicNode check = new IntegerEqualsNode(obj.getIsNotNull(), ConstantNode.forInt(0));
+                    ValueNode isNotNull = obj.getIsNotNull();
+                    assert isNotNull != null : "is not null info should be present";
+                    if (isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0) {
+                        LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1));
                         effects.ensureFloatingAdded(check);
-                        effects.addFixedNodeBefore(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true), load);
+                        effects.addFixedNodeBefore(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false), load);
                     }
                 }
             }
@@ -311,6 +310,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (load.index().isConstant()) {
             int index = ((JavaConstant) load.index().asConstant()).asInt();
             JavaKind elementKind = load.elementKind();
+            // ensure correct location identity for flat arrays
             LocationIdentity arrayLocation = load.getLocationIdentity();
             return processLoad(load, load.array(), arrayLocation, index, elementKind, state, effects);
         }
@@ -387,18 +387,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         }
     }
-
-/*
- * private boolean processIsNullNode(IsNullNode isNullNode, PEReadEliminationBlockState state,
- * GraphEffectList effects, FixedWithNextNode lastFixedNode) { ValueNode unproxiedObject =
- * GraphUtil.unproxify(isNullNode.getValue()); ObjectState obj = getObjectState(state,
- * unproxiedObject); if (obj != null) { assert !obj.isVirtual() : unproxiedObject; if
- * (!StampTool.isPointerNonNull(isNullNode.getValue())) { if (obj.getIsNotNull() != null) {
- * LogicNode check = IntegerEqualsNode.create(obj.getIsNotNull(), ConstantNode.forInt(0),
- * NodeView.DEFAULT); effects.ensureAdded(check, lastFixedNode); effects.replaceAtUsages(isNullNode,
- * check, lastFixedNode); addScalarAlias(isNullNode, check); return true; } } } return false; }
- */
-
     @Override
     protected PEReadEliminationBlockState cloneState(PEReadEliminationBlockState other) {
         return new PEReadEliminationBlockState(other);

@@ -25,11 +25,9 @@
 package jdk.graal.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.IntUnaryOperator;
 
 import org.graalvm.collections.EconomicMap;
@@ -918,7 +916,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          */
         @Override
         protected void merge(List<BlockT> statesList) {
-            // merge info
 
             PartialEscapeBlockState<?>[] states = new PartialEscapeBlockState<?>[statesList.size()];
             for (int i = 0; i < statesList.size(); i++) {
@@ -961,24 +958,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 materialized = false;
 
                 if (!forceMaterialization && PartialEscapeBlockState.identicalObjectStates(states)) {
-                    // use the state with the maximum number of oopOrHubs set
-                    Optional<PartialEscapeBlockState<?>> state = Arrays.stream(
-                                    states).max((s1, s2) -> Long.compare(Arrays.stream(virtualObjTemp).filter(v -> s1.getObjectState(v).getExistingOop() != null).count(),
-                                                    Arrays.stream(virtualObjTemp).filter(v -> s2.getObjectState(v).getExistingOop() != null).count()));
-                    newState.adoptAddObjectStates(state.get());
-                    // newState.adoptAddObjectStates(states[0]);
+                    newState.adoptAddObjectStates(states[0]);
                 } else {
 
                     for (int object : virtualObjTemp) {
                         if (!forceMaterialization && PartialEscapeBlockState.identicalObjectStates(states, object)) {
-                            // use the state with an oopOrHub if exists
-                            Optional<ObjectState> state = Arrays.stream(states).map(s -> s.getObjectState(object)).filter(s -> s.getExistingOop() != null).findFirst();
-                            if (state.isPresent()) {
-                                newState.addObject(object, state.get().share());
-                            } else {
-                                newState.addObject(object, states[0].getObjectState(object).share());
-                            }
-                            // newState.addObject(object, states[0].getObjectState(object).share());
+                            newState.addObject(object, states[0].getObjectState(object).share());
                             continue;
                         }
 
@@ -1322,7 +1307,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     valueIndex++;
                 }
 
-                // TODO: refactor code
 
                 // create two additional phi nodes for the isNotNull and existingOop information if
                 // necessary
@@ -1336,7 +1320,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         }
                     }
                 }
-                // PhiNode[] additionalPhis = getValuePhis(virtual, additionalPhisCount);
+
                 PhiNode[] additionalPhis = new ValuePhiNode[additionalPhisCount];
                 ValueNode oop = states[0].getObjectState(getObject.applyAsInt(0)).getExistingOop();
                 ValueNode isNotNull = states[0].getObjectState(getObject.applyAsInt(0)).getIsNotNull();
@@ -1359,7 +1343,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         }
                     }
 
-                    // create phi node if the values differ in the block states
+                    // create phi nodes if the values differ in the block states
                     for (int i = 1; i < states.length; i++) {
                         if (additionalPhis[additionalPhisIndex] == null) {
                             int object = getObject.applyAsInt(i);
@@ -1422,16 +1406,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     if (state.getExistingOop() == null) {
                                         // use the null pointer as default
                                         ValueNode intermediateOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
-                                        tool.ensureAdded(intermediateOop);
                                         setPhiInput(phi, i2, intermediateOop);
                                     } else {
                                         setPhiInput(phi, i2, state.getExistingOop());
                                     }
                                 } else {
                                     if (state.getIsNotNull() == null) {
-                                        // use 1 constant indication non-null as default
+                                        // use 1 constant indicating non-null as default
                                         ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
-                                        tool.ensureAdded(intermediateIsNotNull);
                                         setPhiInput(phi, i2, intermediateIsNotNull);
                                     } else {
                                         setPhiInput(phi, i2, state.getIsNotNull());
@@ -1450,14 +1432,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 if (additionalPhisCount > 0) {
                     // in case all entries were equal, just use the default values
                     if (oop == null) {
-                        ValueNode intermediateOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
-                        tool.ensureAdded(intermediateOop);
-                        oop = intermediateOop;
+                        oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
                     }
                     if (isNotNull == null) {
-                        ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
-                        tool.ensureAdded(intermediateIsNotNull);
-                        isNotNull = intermediateIsNotNull;
+                        isNotNull = ConstantNode.forInt(1, graph());
                     }
                     newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual, oop, isNotNull));
                 } else {
@@ -1604,8 +1582,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         VirtualObjectNode virtual = getValueObjectVirtual(phi, virtualObjs[0]);
                         // use a nullable virtual instance if it exists
                         for (int i = 0; i < virtualObjs.length; i++) {
-                            if (!StampTool.isPointerNonNull(getValueObjectVirtual(phi, virtualObjs[i]))) {
-                                virtual = getValueObjectVirtual(phi, virtualObjs[i]);
+                            VirtualObjectNode temp = getValueObjectVirtual(phi, virtualObjs[i]);
+                            if (!StampTool.isPointerNonNull(temp)) {
+                                virtual = temp;
                                 break;
                             }
                         }
