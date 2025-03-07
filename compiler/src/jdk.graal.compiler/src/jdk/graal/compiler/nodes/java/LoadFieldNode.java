@@ -217,15 +217,12 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
             if (fieldIndex != -1) {
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
-// if (!StampTool.isPointerNonNull(virtualObjectNode)) {
-// tool.createNullCheck(virtualObjectNode);
-// }
-                    // TODO: is fixed value anchor necessary for nullable scalarized inline objects?
-// tool.replaceWith(entry);
                     if (StampTool.isPointerNonNull(virtualObjectNode)) {
                         tool.replaceWith(entry);
                     } else {
                         tool.createNullCheck(virtualObjectNode);
+                        // TODO: is fixed value anchor necessary for nullable scalarized inline
+                        // objects?
                         ValueNode replacement = new FixedValueAnchorNode(entry);
                         tool.addNode(replacement);
                         tool.replaceWith(replacement);

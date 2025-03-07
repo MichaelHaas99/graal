@@ -669,10 +669,9 @@ public final class FrameState extends VirtualState implements IterableNodeType {
 
 
         if (virtualObject != null) {
-            // remove virtual object mapping created for a invoke node with a nullable scalarized
+            // remove virtual object mapping created for an invoke node with a nullable scalarized
             // inline object, when we pop the corresponding virtual object. E.g. caused by
             // duplicateModifiedDuringCall.
-            // TODO: is there a way to remove it automatically?
             assert virtualObjectMappings != null : "virtual object mapping must exist";
             List<EscapeObjectState> result = new ArrayList<>();
             result.addAll(virtualObjectMappings);

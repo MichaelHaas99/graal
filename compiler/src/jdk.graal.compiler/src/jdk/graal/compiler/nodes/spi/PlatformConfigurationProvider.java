@@ -82,5 +82,4 @@ public interface PlatformConfigurationProvider {
     default boolean areLocksSideEffectFree() {
         return true;
     }
-
 }

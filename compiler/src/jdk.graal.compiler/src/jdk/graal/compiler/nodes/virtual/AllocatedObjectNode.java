@@ -51,8 +51,6 @@ public final class AllocatedObjectNode extends FloatingNode implements Virtualiz
     @Input(Extension) CommitAllocationNode commit;
 
     public AllocatedObjectNode(VirtualObjectNode virtualObject) {
-        // super(TYPE,
-        // StampFactory.objectNonNull(TypeReference.createExactTrusted(virtualObject.type())));
         // virtual object can also be null due to nullable scalarized inline objects, therefore
         // just reuse the stamp
         super(TYPE, virtualObject.stamp(NodeView.DEFAULT));

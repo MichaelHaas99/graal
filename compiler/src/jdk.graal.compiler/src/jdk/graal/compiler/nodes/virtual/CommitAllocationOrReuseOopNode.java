@@ -14,7 +14,7 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 
 /**
- * Similar to {@link CommitAllocationNode} but also stores oopOrHub inputs to avoid unnecessary
+ * Similar to {@link CommitAllocationNode} but also stores existingOop inputs to avoid unnecessary
  * allocation and includes isNotNull information for nullable scalarized inline objects.
  */
 @NodeInfo(nameTemplate = "AllocOrReuse {i#virtualObjects}", allowedUsageTypes = {Extension,

@@ -17,7 +17,7 @@ import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.word.WordCastNode;
 
 /**
- * Sets the bit 0 of a {@link KlassPointer} to 1.
+ * Sets the bit zero of a {@link KlassPointer} to 1.
  */
 @NodeInfo(cycles = CYCLES_1, size = SIZE_1)
 public class TagHubNode extends FixedWithNextNode implements Lowerable {
