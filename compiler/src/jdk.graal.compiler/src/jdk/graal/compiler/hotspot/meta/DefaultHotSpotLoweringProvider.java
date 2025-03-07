@@ -87,7 +87,6 @@ import jdk.graal.compiler.hotspot.replacements.ClassGetHubNode;
 import jdk.graal.compiler.hotspot.replacements.DelayedRawComparisonSnippets;
 import jdk.graal.compiler.hotspot.replacements.DigestBaseSnippets;
 import jdk.graal.compiler.hotspot.replacements.FastNotifyNode;
-import jdk.graal.compiler.hotspot.replacements.FlatArrayComponentSizeSnippets;
 import jdk.graal.compiler.hotspot.replacements.HasIdentitySnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotAllocationSnippets;
 import jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets;
@@ -124,7 +123,6 @@ import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeadEndNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
-import jdk.graal.compiler.nodes.EnsureRuntimeHubUsageNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
@@ -164,7 +162,6 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
 import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
-import jdk.graal.compiler.nodes.extended.FlatArrayComponentSizeNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
@@ -300,7 +297,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected ObjectEqualsSnippets.Templates objectEqualsSnippets;
     protected IsFlatArraySnippets.Templates isFlatArraySnippets;
     protected IsNullFreeArraySnippets.Templates isNullFreeArraySnippets;
-    protected FlatArrayComponentSizeSnippets.Templates flatArrayComponentSizeSnippets;
     protected DelayedRawComparisonSnippets.Templates delayedRawcomparisonSnippets;
     protected HasIdentitySnippets.Templates hasIdentitySnippets;
     protected ReturnResultDeciderSnippets.Templates returnResultDeciderSnippets;
@@ -359,7 +355,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         objectEqualsSnippets = new ObjectEqualsSnippets.Templates(options, providers);
         isFlatArraySnippets = new IsFlatArraySnippets.Templates(options, providers, target);
         isNullFreeArraySnippets = new IsNullFreeArraySnippets.Templates(options, providers, target);
-        flatArrayComponentSizeSnippets = new FlatArrayComponentSizeSnippets.Templates(options, providers);
         delayedRawcomparisonSnippets = new DelayedRawComparisonSnippets.Templates(options, providers);
         returnResultDeciderSnippets = new ReturnResultDeciderSnippets.Templates(options, providers);
         hasIdentitySnippets = new HasIdentitySnippets.Templates(options, providers);
@@ -646,8 +641,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerIsFlatArray((IsFlatArrayNode) n, tool, graph);
         } else if (n instanceof IsNullFreeArrayNode) {
             lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool, graph);
-        } else if (n instanceof FlatArrayComponentSizeNode) {
-            lowerFlatArrayComponentSize((FlatArrayComponentSizeNode) n, tool, graph);
         } else if (n instanceof DelayedRawComparisonNode) {
             lowerDelayRawComparison((DelayedRawComparisonNode) n, tool, graph);
         } else if (n instanceof ReturnResultDeciderNode) {
@@ -830,9 +823,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         }
         ValueNode array = node.getValue();
         array = createNullCheckedValue(array, node, tool);
-// EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode =
-// graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
-// node.setValue(ensureRuntimeHubUsageNode);
         node.setValue(array);
         isFlatArraySnippets.lower(node, tool);
 
@@ -844,20 +834,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         }
         ValueNode array = node.getValue();
         array = createNullCheckedValue(array, node, tool);
-// EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode =
-// graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
         node.setValue(array);
         isNullFreeArraySnippets.lower(node, tool);
-
-    }
-
-    protected void lowerFlatArrayComponentSize(FlatArrayComponentSizeNode node, LoweringTool tool, StructuredGraph graph) {
-        ValueNode array = node.getValue();
-        assert node.getAnchor() instanceof FixedNode : "incorrect usage of flatArrayComponentSizeNode";
-        array = createNullCheckedValue(array, (FixedNode) node.getAnchor(), tool);
-        EnsureRuntimeHubUsageNode ensureRuntimeHubUsageNode = graph.addOrUnique(EnsureRuntimeHubUsageNode.create(array));
-        node.setValue(ensureRuntimeHubUsageNode);
-        flatArrayComponentSizeSnippets.lower(node, tool);
 
     }
 
