@@ -15,7 +15,7 @@ import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaType;
 
 /**
- * The {@link ReadMultiValueNode} represents one returned value from a MultiValueNode. A
+ * The {@code ReadMultiValueNode} represents one returned value from a MultiValueNode. A
  * MultiValueNode in this context is a node which returns a nullable scalarized inline object. E.g.
  * an InvokeNode which has a scalarized return can return multiple values in registers.
  */
@@ -55,8 +55,8 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
     }
 
     /**
-     * Due to the cycle InvokeNode -> Framestate -> ReadMultiValueNode -> InvokeNode, ProjNodes can
-     * be scheduled before the InvokeNode.
+     * Due to the cycle InvokeNode -> Framestate -> ReadMultiValueNode -> InvokeNode,
+     * ReadMultiValueNodes can be scheduled before the InvokeNode.
      */
     @Override
     public void generate(NodeLIRBuilderTool generator) {

@@ -479,9 +479,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 instanceofSnippets.lower((ClassIsAssignableFromNode) n, tool);
             }
         } else if (n instanceof InlineTypeNode) {
-// if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-// lowerInlineTypeNode((InlineTypeNode) n, tool);
-// }
             lowerInlineTypeNode((InlineTypeNode) n, tool);
         } else if (n instanceof NewInstanceNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
@@ -1296,7 +1293,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (address != null) {
                 WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, field.getJavaKind(), value), barrierType,
                                 MemoryOrderMode.PLAIN);
-                // graph.addAfterFixed(newObject, graph.add(write));
                 writes.add(graph.add(write));
             }
         }
