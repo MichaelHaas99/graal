@@ -106,6 +106,12 @@ public class CreateExceptionStub extends SnippetStub {
         return handleExceptionReturn(thread, deoptimized);
     }
 
+    protected static Object createIdentityException(Register threadRegister, Class<? extends Throwable> exception, KlassPointer klass) {
+        Word thread = HotSpotReplacementsUtil.registerAsWord(threadRegister);
+        int deoptimized = throwIdentityException(THROW_IDENTITY_EXCEPTION, thread, classAsCString(exception), klass);
+        return handleExceptionReturn(thread, deoptimized);
+    }
+
     private static Object handleExceptionReturn(Word thread, int deoptimized) {
         Object clearPendingException = HotSpotReplacementsUtil.clearPendingException(thread);
         // alwayDeoptimize is a testing option to force a deopt here but the code pattern should
@@ -125,6 +131,9 @@ public class CreateExceptionStub extends SnippetStub {
     private static final HotSpotForeignCallDescriptor THROW_CLASS_CAST_EXCEPTION = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, any(), "throw_class_cast_exception", int.class,
                     Word.class,
                     Word.class, KlassPointer.class, KlassPointer.class);
+    private static final HotSpotForeignCallDescriptor THROW_IDENTITY_EXCEPTION = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, any(), "throw_identity_exception", int.class,
+                    Word.class,
+                    Word.class, KlassPointer.class);
 
     @NodeIntrinsic(StubForeignCallNode.class)
     private static native int throwAndPostJvmtiException(@ConstantNodeParameter ForeignCallDescriptor d, Word thread, Word type, Word message);
@@ -135,9 +144,13 @@ public class CreateExceptionStub extends SnippetStub {
     @NodeIntrinsic(StubForeignCallNode.class)
     private static native int throwClassCastException(@ConstantNodeParameter ForeignCallDescriptor d, Word thread, Word type, KlassPointer objKlass, KlassPointer targetKlass);
 
+    @NodeIntrinsic(StubForeignCallNode.class)
+    private static native int throwIdentityException(@ConstantNodeParameter ForeignCallDescriptor d, Word thread, Word type, KlassPointer objKlass);
+
     public static void registerForeignCalls(GraalHotSpotVMConfig c, HotSpotForeignCallsProviderImpl foreignCalls) {
         foreignCalls.registerForeignCall(THROW_AND_POST_JVMTI_EXCEPTION, c.throwAndPostJvmtiExceptionAddress, NativeCall);
         foreignCalls.registerForeignCall(THROW_KLASS_EXTERNAL_NAME_EXCEPTION, c.throwKlassExternalNameExceptionAddress, NativeCall);
         foreignCalls.registerForeignCall(THROW_CLASS_CAST_EXCEPTION, c.throwClassCastExceptionAddress, NativeCall);
+        foreignCalls.registerForeignCall(THROW_IDENTITY_EXCEPTION, c.throwIdentityExceptionAddress, NativeCall);
     }
 }

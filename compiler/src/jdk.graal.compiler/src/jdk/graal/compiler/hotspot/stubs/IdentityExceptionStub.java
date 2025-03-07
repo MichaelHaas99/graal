@@ -29,12 +29,14 @@ import jdk.graal.compiler.api.replacements.Snippet.ConstantParameter;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.HotSpotForeignCallLinkage;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
+import jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil;
+import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.code.Register;
 
 /**
- * Stub to allocate a {@link NullPointerException} thrown by a bytecode.
+ * Stub to allocate a IdentityException thrown by a bytecode.
  */
 public class IdentityExceptionStub extends CreateExceptionStub {
 
@@ -42,19 +44,19 @@ public class IdentityExceptionStub extends CreateExceptionStub {
         super("createIdentityException", options, providers, linkage);
     }
 
+
     @Override
     protected Object getConstantParameterValue(int index, String name) {
-        GraalError.guarantee(index == 0, "unknown parameter %s at index %d", name, index);
+        GraalError.guarantee(index == 1, "unknown parameter %s at index %d", name, index);
         return providers.getRegisters().getThreadRegister();
     }
 
     static final Class<? extends Throwable> identityExceptionClass = InlineTypeUtil.getIdentityExceptionClass();
 
     @Snippet
-    private static Object createIdentityException(@ConstantParameter Register threadRegister) {
-        // TODO: change if Valhalla is bug free
-        return createException(threadRegister, identityExceptionClass/*
-                                                                      * IdentityException .class
-                                                                      */);
+    private static Object createIdentityException(@Snippet.NonNullParameter Object object, @ConstantParameter Register threadRegister) {
+        KlassPointer objKlass = HotSpotReplacementsUtil.loadHub(object);
+
+        return createIdentityException(threadRegister, identityExceptionClass, objKlass);
     }
 }

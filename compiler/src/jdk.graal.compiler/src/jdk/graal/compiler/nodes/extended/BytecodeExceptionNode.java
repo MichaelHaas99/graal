@@ -159,8 +159,11 @@ public final class BytecodeExceptionNode extends AbstractMemoryCheckpoint implem
          */
         UNSTRUCTURED_LOCKING(0, IllegalMonitorStateException.class, "Unstructured locking encountered. Native Image enforces structured locking (JVMS 2.11.10)"),
 
+        /**
+         * Represents an IdentityException with one required Object argument for the error message.
+         */
         // TODO: simplify to IdentityException.class at some point
-        IDENTITY(0, InlineTypeUtil.getIdentityExceptionClass());
+        IDENTITY(1, InlineTypeUtil.getIdentityExceptionClass());
 
         final int numArguments;
         final Class<? extends Throwable> exceptionClass;

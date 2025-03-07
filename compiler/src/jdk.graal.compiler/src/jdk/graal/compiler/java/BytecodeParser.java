@@ -1858,7 +1858,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
         ValueNode hasIdentity = append(new HasIdentityNode(object));
         LogicNode condition = genUnique(new IntegerEqualsNode(hasIdentity, ConstantNode.forInt(1, graph)));
-        AbstractBeginNode passingSuccessor = emitBytecodeExceptionCheck(condition, true, BytecodeExceptionKind.IDENTITY);
+        AbstractBeginNode passingSuccessor = emitBytecodeExceptionCheck(condition, true, BytecodeExceptionKind.IDENTITY, object);
         // TODO: save identity information in stamp
         return genUnique(PiNode.create(object, StampFactory.object(), passingSuccessor));
     }

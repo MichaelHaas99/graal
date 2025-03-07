@@ -1151,7 +1151,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             runtimeCalls.put(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY,
                             new ForeignCallSignature("createIllegalArgumentExceptionArgumentIsNotAnArray", IllegalArgumentException.class));
             // TODO: simplify to IdentityException.class at some point
-            runtimeCalls.put(BytecodeExceptionKind.IDENTITY, new ForeignCallSignature("createIdentityException", InlineTypeUtil.getIdentityExceptionClass()));
+            runtimeCalls.put(BytecodeExceptionKind.IDENTITY, new ForeignCallSignature("createIdentityException", InlineTypeUtil.getIdentityExceptionClass(), Object.class));
         }
     }
 

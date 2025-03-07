@@ -98,7 +98,7 @@ import static jdk.graal.compiler.word.Word.nullPointer;
 import static jdk.graal.compiler.word.Word.unsigned;
 import static jdk.graal.compiler.word.Word.zero;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.List;
@@ -247,7 +247,7 @@ public class MonitorSnippets implements Snippets {
         if (canBeInlineType) {
             // check mark word for inline type
             if (isInlineType || mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
-                DeoptimizeNode.deopt(InvalidateReprofile, RuntimeConstraint);
+                DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
         }
 
