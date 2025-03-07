@@ -79,7 +79,7 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
                 tool.delete();
             } else {
                 LogicNode node = LogicConstantNode.forBoolean(false, graph());
-                ValueNode deopt = new FixedGuardNode(node, DeoptimizationReason.RuntimeConstraint, DeoptimizationAction.InvalidateReprofile);
+                ValueNode deopt = new FixedGuardNode(node, DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile);
                 tool.replaceWith(deopt);
             }
         }
