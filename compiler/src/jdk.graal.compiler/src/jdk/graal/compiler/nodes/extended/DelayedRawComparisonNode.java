@@ -1,7 +1,6 @@
 package jdk.graal.compiler.nodes.extended;
 
-import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
-import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
+import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_1;
 
 import org.graalvm.word.LocationIdentity;
 
@@ -18,7 +17,13 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.JavaKind;
 
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+/**
+ * Determines if two objects contain the same field value. Waits until certain inputs are converted
+ * to {@code JavaConstant}. This is necessary e.g. in
+ * {@link jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets} where we need to wait until
+ * the actual argument (being an array of constants) is bound to the snippet parameter.
+ */
+@NodeInfo(cycles = CYCLES_1)
 public class DelayedRawComparisonNode extends FixedWithNextNode implements Canonicalizable, Lowerable {
     public static final NodeClass<DelayedRawComparisonNode> TYPE = NodeClass.create(DelayedRawComparisonNode.class);
 
