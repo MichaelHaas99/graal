@@ -39,6 +39,7 @@ import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -66,28 +67,27 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
         assert ((ObjectStamp) object.stamp(NodeView.DEFAULT)).nonNull();
     }
 
-    public static ValueNode tryFold(Assumptions assumptions, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, NodeView view, ValueNode object) {
+    public static ValueNode tryFold(Assumptions assumptions, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, NodeView view, ValueNode object,
+                    ValhallaOptionsProvider valhallaOptionsProvider) {
         if (metaAccess != null && object != null && object.stamp(view) instanceof ObjectStamp) {
             ObjectStamp objectStamp = (ObjectStamp) object.stamp(view);
             if (objectStamp.isExactType()) {
-                if (objectStamp.type().isArray())
+                if (objectStamp.type().isArray() && valhallaOptionsProvider.valhallaEnabled()) {
                     /*
                      * Regular, null-restricted and flat arrays have different class objects. Avoid
                      * folding. TODO check if the array cannot be null-restricted or flat, and if so
                      * allow folding.
                      */
                     return null;
+                }
+
                 return ConstantNode.forConstant(constantReflection.asJavaClass(objectStamp.type()), metaAccess);
             }
             TypeReference maybeExactType = TypeReference.createTrusted(assumptions, objectStamp.type());
             if (maybeExactType != null && maybeExactType.isExact()) {
-                if (maybeExactType.getType().isArray())
-                    /*
-                     * Regular, null-restricted and flat arrays have different class objects. Avoid
-                     * folding. TODO check if the array cannot be null-restricted or flat, and if so
-                     * allow folding.
-                     */
+                if (maybeExactType.getType().isArray() && valhallaOptionsProvider.valhallaEnabled()) {
                     return null;
+                }
                 return ConstantNode.forConstant(constantReflection.asJavaClass(maybeExactType.getType()), metaAccess);
             }
         }
@@ -97,7 +97,7 @@ public final class GetClassNode extends FloatingNode implements Lowerable, Canon
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         NodeView view = NodeView.from(tool);
-        ValueNode folded = tryFold(tool.getAssumptions(), tool.getMetaAccess(), tool.getConstantReflection(), view, getObject());
+        ValueNode folded = tryFold(tool.getAssumptions(), tool.getMetaAccess(), tool.getConstantReflection(), view, getObject(), tool.getValhallaOptionsProvider());
         return folded == null ? this : folded;
     }
 
