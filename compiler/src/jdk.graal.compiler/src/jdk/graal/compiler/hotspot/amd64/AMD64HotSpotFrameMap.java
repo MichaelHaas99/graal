@@ -160,6 +160,7 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
         deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
     }
 
+    @SuppressWarnings("this-escape")
     public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer, boolean stackRepair) {
         super(codeCache, registerConfig, referenceMapFactory, preserveFramePointer);
         // HotSpot is picky about the frame layout in the presence of nmethod entry barriers, so
@@ -171,6 +172,7 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
             assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
         }
         if (stackRepair) {
+            // stack increment needs to be located directly under rbp
             stackIncrement = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
         }
         deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
