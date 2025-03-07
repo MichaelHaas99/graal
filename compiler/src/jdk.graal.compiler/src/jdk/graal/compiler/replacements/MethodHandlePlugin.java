@@ -108,7 +108,7 @@ public class MethodHandlePlugin implements NodePlugin {
                     b.add(methodHandleNode.asNode());
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
-                    if (b.getValhallaOptionsProvider().returnCallingConventionEnabled() && invokeReturnStamp.getTrustedStamp().isObjectStamp()) {
+                    if (b.getValhallaOptionsProvider().returnConventionEnabled() && invokeReturnStamp.getTrustedStamp().isObjectStamp()) {
                         appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
                     }
                 }

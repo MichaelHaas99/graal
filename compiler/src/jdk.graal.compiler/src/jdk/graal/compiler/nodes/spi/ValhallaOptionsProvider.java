@@ -19,7 +19,11 @@ public interface ValhallaOptionsProvider {
      * {@code //Disable calling convention optimizations if inline types are not supported.} in
      * arguments.cpp
      */
-    default boolean returnCallingConventionEnabled() {
+    default boolean returnConventionEnabled() {
+        return false;
+    }
+
+    default boolean callingConventionEnabled() {
         return false;
     }
 
