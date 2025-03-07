@@ -223,7 +223,6 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
              * e.g. Object.toString with a Long receiver will be converted to Long.toString()
              * therefore we need to scalarize the boxed object
              */
-            // checkForNeededArgsScalarization(specialCallTarget, false);
             InlineTypeUtil.handleDevirtualizationOnCallTarget(this, this.targetMethod, specialCallTarget, false);
             this.setTargetMethod(specialCallTarget);
             setInvokeKind(InvokeKind.Special);

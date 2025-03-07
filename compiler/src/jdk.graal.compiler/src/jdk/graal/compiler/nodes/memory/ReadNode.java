@@ -261,7 +261,7 @@ public class ReadNode extends FloatableAccessNode
                 long displacement = offset.asJavaConstant().asLong();
                 int stableDimension = ((ConstantNode) object).getStableDimension();
 
-                if ((locationIdentity.isImmutable() || stableDimension > 0)) {
+                if (locationIdentity.isImmutable() || stableDimension > 0) {
                     Constant constant = resultStamp.readConstant(constantReflection.getMemoryAccessProvider(), object.asConstant(), displacement, accessStamp);
                     boolean isDefaultStable = locationIdentity.isImmutable() || ((ConstantNode) object).isDefaultStable();
                     if (constant != null && (isDefaultStable || !constant.isDefaultForKind())) {

@@ -63,6 +63,7 @@ public class WriteNode extends AbstractWriteNode implements LIRLowerableAccess, 
 
     private final LocationIdentity killedLocationIdentity;
     private MemoryOrderMode memoryOrder;
+
     public WriteNode(AddressNode address, LocationIdentity location, ValueNode value, BarrierType barrierType, MemoryOrderMode memoryOrder) {
         this(TYPE, address, location, location, value, barrierType, memoryOrder);
     }

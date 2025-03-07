@@ -285,7 +285,7 @@ public class StampTool {
      * stamp whose values can be inline types. Similar to {@code TypeOopPtr::can_be_inline_type}.
      *
      * @param stamp the stamp to check
-     * @param valhallaOptionsProvider options specific for the valhalla
+     * @param valhallaOptionsProvider options specific for valhalla
      * @return true if this stamp represents a legal object stamp whose values can be an inline type
      */
     public static boolean canBeInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
@@ -306,7 +306,7 @@ public class StampTool {
      * stamp whose values are known to be inline types
      *
      * @param stamp the stamp to check
-     * @param valhallaOptionsProvider options specific for the valhalla
+     * @param valhallaOptionsProvider options specific for valhalla
      * @return true if this stamp represents a legal object stamp whose values are known to be
      *         inline types
      */
@@ -329,7 +329,7 @@ public class StampTool {
      * {@code TypeOopPtr::can_be_inline_array}.
      *
      * @param stamp the stamp to check
-     * @param valhallaOptionsProvider options specific for the valhalla
+     * @param valhallaOptionsProvider options specific for valhalla
      * @return true if this stamp represents a legal object stamp whose values can be arrays with an
      *         inline type as component type.
      */
@@ -351,7 +351,7 @@ public class StampTool {
      * stamp whose values are known to be arrays with an inline type as component type.
      *
      * @param stamp the stamp to check
-     * @param valhallaOptionsProvider options specific for the valhalla
+     * @param valhallaOptionsProvider options specific for valhalla
      * @return true if this stamp represents a legal object stamp whose values are known to be
      *         arrays with an inline type as component type.
      */

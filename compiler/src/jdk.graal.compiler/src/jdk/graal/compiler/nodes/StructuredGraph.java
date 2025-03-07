@@ -69,7 +69,9 @@ import jdk.graal.compiler.nodes.spi.TrackedUnsafeAccess;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.phases.common.inlining.info.MultiTypeGuardInlineInfo;
 import jdk.graal.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.Assumption;
@@ -573,8 +575,15 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     private boolean[] scalarizeParameters = null;
-    private boolean scalarizationIsSet = false;
 
+    /**
+     * During inlining we want to avoid mismatches of parameters. E.g. considering
+     * {@link MultiTypeGuardInlineInfo} it can occur that the original method does not have a
+     * scalarized receiver, but the inlinee method does. Therefore scalarization of a parameter
+     * should be only allowed if the parameter was also scalarized in the original method.
+     * 
+     * @param method the original method
+     */
     public void setScalarizeParameters(ResolvedJavaMethod method) {
         boolean[] result = new boolean[method.getSignature().getParameterCount(!method.isStatic())];
         for (int i = 0; i < result.length; i++) {
@@ -585,8 +594,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     /**
-     * Disallow scalrization of inline type parameters e.g. for method handles, parameters stay
-     * boxed although we have ResolvedMethodHandleCallTargetNode.
+     * Disallow scalarization of inline type parameters e.g. for method handles, parameters stay
+     * boxed although we the handle is resolved to {@link ResolvedMethodHandleCallTargetNode}.
      */
     public void dontScalarizeParameters() {
         boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
@@ -596,6 +605,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
     public boolean[] getScalarizeParameters() {
         if (scalarizeParameters == null) {
+            // set all to true
             boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
             Arrays.fill(result, true);
             scalarizeParameters = result;

@@ -133,9 +133,6 @@ public class ObjectCloneSnippets implements Snippets {
     public static Object[] objectArrayClone(Object[] src) {
         /* Since this snippet is lowered early the array must be initialized */
         // slow path
-// if (IsFlatArrayNode.isFlatArray(src) || IsNullFreeArrayNode.isNullFreeArray(src)) {
-// return src.clone();
-// }
         Object[] result = (Object[]) DynamicNewArrayNode.newArray(GraalDirectives.guardingNonNull(src.getClass().getComponentType()), src.length, JavaKind.Object);
         ArrayCopyCallNode.disjointUninitializedArraycopy(src, 0, result, 0, src.length, JavaKind.Object, HotSpotReplacementsUtil.getHeapWordSize(INJECTED_VMCONFIG));
         return result;

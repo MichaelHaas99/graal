@@ -5,6 +5,7 @@ import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -17,7 +18,7 @@ import jdk.vm.ci.meta.JavaType;
 /**
  * The {@code ReadMultiValueNode} represents one returned value from a MultiValueNode. A
  * MultiValueNode in this context is a node which returns a nullable scalarized inline object. E.g.
- * an InvokeNode which has a scalarized return can return multiple values in registers.
+ * an {@link InvokeNode} which has a scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ReadMultiValue#{p#index}")
 public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable {

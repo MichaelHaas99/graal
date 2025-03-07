@@ -1,8 +1,6 @@
 package jdk.graal.compiler.nodes.util;
 
 import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
-import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,9 +8,6 @@ import java.util.List;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.GraalError;
-import jdk.graal.compiler.graph.Node;
-import jdk.graal.compiler.graph.NodeClass;
-import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.CallTargetNode;
 import jdk.graal.compiler.nodes.ConstantNode;
@@ -40,10 +35,6 @@ import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.WriteNode;
-import jdk.graal.compiler.nodes.spi.Canonicalizable;
-import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
-import jdk.graal.compiler.nodes.spi.LIRLowerable;
-import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
@@ -98,10 +89,7 @@ public class InlineTypeUtil {
     public static void boxScalarizedArgs(Invoke invoke) {
         StructuredGraph graph = invoke.asNode().graph();
         CallTargetNode callTarget = invoke.callTarget();
-        // assert callTarget instanceof ResolvedMethodHandleCallTargetNode : "expected resolved
-        // method handle call target";
-        // ResolvedMethodHandleCallTargetNode methodHandleCallTargetNode =
-        // (ResolvedMethodHandleCallTargetNode) callTarget;
+
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
         List<ValueNode> arguments = callTarget.arguments();
@@ -128,7 +116,6 @@ public class InlineTypeUtil {
         }
         callTarget.arguments().clear();
         callTarget.arguments().addAll(newArguments);
-        // return newArguments.toArray(new ValueNode[newArguments.size()]);
     }
 
     private static ResolvedJavaType getParameterType(ResolvedJavaMethod method, int index, boolean indexIncludesReceiverIfExists) {
@@ -144,9 +131,8 @@ public class InlineTypeUtil {
     }
 
     /**
-     * Responsible for the scalarization of the receiver after devirtualization of the method
-     * happend. According to the calling convention an inline type receiver is expected to be
-     * scalarized.
+     * Responsible for the scalarization of the receiver after devirtualization happened. According
+     * to the calling convention an inline type receiver is expected to be scalarized.
      *
      * @param callTargetNode the call target of whose receiver was devirtualized
      * @param oldMethod the old method before devirtualization
@@ -158,8 +144,6 @@ public class InlineTypeUtil {
         if (nothingScalarizedYet) {
             if (callTargetNode.arguments().size() != parameterLength)
                 throw new GraalError("Expected actual argument size to be equal to signature parameter size" + callTargetNode.toString() + "\n" + callTargetNode.arguments() + "\n");
-            // assert callTargetNode.arguments().size() == parameterLength : "Expected actual
-            // argument size to be equal to signature parameter size";
         }
         boolean[] scalarizeParameters = new boolean[parameterLength];
         int argumentIndex = 0;
@@ -189,6 +173,17 @@ public class InlineTypeUtil {
     }
 
     /**
+     * Can be used to scalarize the arguments of a method during parsing.
+     *
+     * @param callTargetNode the call target of whose arguments need to be scalarized.
+     * @param method the old method before devirtualization
+     *
+     */
+    public static void scalarizeInvokeArgs(CallTargetNode callTargetNode, ResolvedJavaMethod method) {
+        handleDevirtualizationOnCallTarget(callTargetNode, method, method, true);
+    }
+
+    /**
      *
      * Similar to
      * {@link #createScalarizationCFGForInvokeArg(FixedNode, ValueNode, ResolvedJavaMethod, int)}
@@ -202,8 +197,8 @@ public class InlineTypeUtil {
     /**
      *
      * @param addBefore the node before the diamond should be inserted into the graph
-     * @param arg the object who's field values should be loaded
-     * @param targetMethod he argument's method
+     * @param arg the object whose field values should be loaded
+     * @param targetMethod the argument's method
      * @param signatureIndex the argument's index in the method signature including the receiver if
      *            it exits.
      * @return the phi nodes representing the field values of the argument
@@ -231,7 +226,7 @@ public class InlineTypeUtil {
      * Scalarizes an object into it's field values.
      *
      * @param addBefore the node before the diamond should be inserted into the graph
-     * @param object the object who's field values should be loaded
+     * @param object the object whose field values should be loaded
      * @param isNotNull condition used as branch condition, indicating if the object is not null
      * @param fields the resolved filed
      * @param assumeObjectNonNull true if no diamond should be created
@@ -326,136 +321,12 @@ public class InlineTypeUtil {
         return phis;
     }
 
-    /**
-     * Can be used to scalarize the arguments of a method during parsing.
-     *
-     * @param callTargetNode the call target of whose arguments need to be scalarized.
-     * @param method the old method before devirtualization
-     *
-     */
-    public static void scalarizeInvokeArgs(CallTargetNode callTargetNode, ResolvedJavaMethod method) {
-        handleDevirtualizationOnCallTarget(callTargetNode, method, method, true);
-    }
-
-    public static ValueNode[] scalarizeInvokeArgs(GraphBuilderContext b, ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod, CallTargetNode.InvokeKind invokeKind) {
-        FixedNode addBefore = null;
-        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(invokeArgs.length);
-        int signatureIndex = 0;
-        if (targetMethod.hasReceiver()) {
-            ValueNode nonNullReceiver = b.nullCheckedValue(invokeArgs[0]);
-            if (targetMethod.hasScalarizedReceiver()) {
-                assert invokeKind == CallTargetNode.InvokeKind.Special : "Invoke kind should be special if we know that we can scalarize the receiver";
-
-// ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, nonNullReceiver,
-// ConstantNode.forBoolean(false,
-// graph), ConstantNode.forBoolean(true, graph)));
-                addBefore = b.add(new DummyScalarizationHandle());
-                ValueNode[] scalarized = createScalarizationCFGForInvokeArg(addBefore, nonNullReceiver, targetMethod, signatureIndex);
-                scalarizedArgs.addAll(List.of(scalarized));
-            } else {
-                scalarizedArgs.add(nonNullReceiver);
-            }
-            signatureIndex++;
-        }
-        if (addBefore == null)
-            addBefore = b.add(new DummyScalarizationHandle());
-        for (; signatureIndex < invokeArgs.length; signatureIndex++) {
-            if (targetMethod.isScalarizedParameter(signatureIndex, true)) {
-                ValueNode[] scalarized = createScalarizationCFGForInvokeArg(addBefore, invokeArgs[signatureIndex], targetMethod, signatureIndex);
-                scalarizedArgs.addAll(List.of(scalarized));
-            } else {
-                scalarizedArgs.add(invokeArgs[signatureIndex]);
-            }
-
-        }
-        return scalarizedArgs.toArray(new ValueNode[scalarizedArgs.size()]);
-    }
-
-    /**
-     *
-     *
-     * @param b the context
-     * @param arg the argument to be scalarized
-     * @param targetMethod the argument's method
-     * @param signatureIndex the argument's index in the method signature including the receiver if
-     *            it exits.
-     * @return the phi nodes representing the field values of the argument
-     */
-    private static ValueNode[] scalarizeInlineTypeArg(GraphBuilderContext b, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
-        StructuredGraph graph = b.getGraph();
-        boolean nullFree = targetMethod.isParameterNullFree(signatureIndex, true);
-
-        ResolvedJavaField[] fields = targetMethod.getScalarizedParameterFields(signatureIndex, true);
-
-        if (nullFree) {
-            // argument is null free, just directly produce loads
-
-            ValueNode[] loads = new ValueNode[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), arg, fields[i]));
-                loads[i] = load;
-            }
-            return loads;
-        }
-
-        // argument can be null create diamond
-        BeginNode trueBegin = b.getGraph().add(new BeginNode());
-        BeginNode falseBegin = b.getGraph().add(new BeginNode());
-
-        IfNode ifNode = b.add(new IfNode(b.add(LogicNegationNode.create(b.add(new IsNullNode(arg)))), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-
-        // get a valid framestate for the merge node
-        FrameState framestate = GraphUtil.findLastFrameState(ifNode);
-
-        ValueNode[] loads = new ValueNode[fields.length];
-        ValueNode[] consts = new ValueNode[fields.length];
-
-        // true branch - inline object is non-null, load the field values
-
-        ValueNode nonNull = PiNode.create(arg, objectNonNull(), trueBegin);
-        for (int i = 0; i < fields.length; i++) {
-            LoadFieldNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNull, fields[i]));
-            loads[i] = load;
-            if (trueBegin.next() == null)
-                trueBegin.setNext(load);
-        }
-        EndNode trueEnd = b.add(new EndNode());
-
-        // check maybe needed for empty inline objects?
-        if (trueBegin.next() == null)
-            trueBegin.setNext(trueEnd);
-
-        // false branch - inline object is null, use default values of fields
-
-        for (int i = 0; i < fields.length; i++) {
-            ConstantNode load = b.add(ConstantNode.defaultForKind(fields[i].getJavaKind()));
-            consts[i] = load;
-        }
-        EndNode falseEnd = b.add(new EndNode());
-        if (falseBegin.next() == null)
-            falseBegin.setNext(falseEnd);
-
-        // merge
-        MergeNode merge = b.append(new MergeNode());
-        merge.setStateAfter(framestate);
-
-        // produces phi nodes
-        ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
-        phis[0] = b.add(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
-        for (int i = 0; i < fields.length; i++) {
-            phis[i + 1] = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
-        }
-
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        return phis;
-    }
 
     /**
      * This function handles the case that an {@link Invoke} returns a nullable scalarized inline
      * object. It appends multiple {@link jdk.graal.compiler.nodes.extended.ReadMultiValueNode} to
      * the invoke node and creates an {@link InlineTypeNode} which gets these nodes as input. To
-     * model the concept of a nullable scalarized inline object after an invoke a
+     * model the concept of a nullable scalarized inline object after an invoke, a
      * {@link VirtualInstanceNode} is pushed onto the framestate.
      */
     public static void handleScalarizedReturnOnInvoke(GraphBuilderContext b, Invoke invoke, JavaKind resultType) {
@@ -539,7 +410,7 @@ public class InlineTypeUtil {
             assert type != null : "type for lowering inline type expected";
             newInstanceNode = graph.add(new NewInstanceNode(type, true));
         }
-        // addWrites(graph, writes);
+
 
         if (isAlreadyBuffered.isContradiction()) {
             graph.addBeforeFixed(addBefore, newInstanceNode);
@@ -605,10 +476,6 @@ public class InlineTypeUtil {
 
         LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
         assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
-// if (isAlreadyBuffered.isTautology())
-// return;
-
-        // addWrites(graph, writes);
 
         if (isAlreadyBuffered.isContradiction()) {
             for (WriteNode w : writes) {
@@ -654,12 +521,6 @@ public class InlineTypeUtil {
         merge.setNext(addBefore);
     }
 
-    private static void addWrites(StructuredGraph graph, List<WriteNode> writes) {
-        for (WriteNode w : writes) {
-            if (!w.isAlive())
-                graph.add(w);
-        }
-    }
 
     public static class InlineTypeInfo {
         public InlineTypeInfo(ValueNode isNotNull, ValueNode existingOop) {
@@ -684,24 +545,6 @@ public class InlineTypeUtil {
         }
     }
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
-    static final class DummyScalarizationHandle extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
-        public static final NodeClass<DummyScalarizationHandle> TYPE = NodeClass.create(DummyScalarizationHandle.class);
-
-        public DummyScalarizationHandle() {
-            super(TYPE, StampFactory.forVoid());
-        }
-
-        @Override
-        public Node canonical(CanonicalizerTool tool) {
-            return null;
-        }
-
-        @Override
-        public void generate(NodeLIRBuilderTool generator) {
-
-        }
-    }
 
     public static boolean needsSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
         return StampTool.canBeInlineType(x, valhallaOptionsProvider) && StampTool.canBeInlineType(y, valhallaOptionsProvider);

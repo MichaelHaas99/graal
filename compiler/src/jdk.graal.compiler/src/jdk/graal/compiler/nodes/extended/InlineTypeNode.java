@@ -20,17 +20,13 @@ import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
-import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
@@ -50,7 +46,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * called isInit).
  *
  * An {@link Invoke} is responsible for setting the {@link #isNotNull} output correctly based on the
- * {@link #existingOop}, because the information doesn't exist as return value. It also has set the
+ * {@link #existingOop}, because the information doesn't exist as return value. It also sets the
  * tagged hub to a null pointer.
  *
  * For a null-restricted flat field only the {@link #scalarizedInlineObject} will be set.
@@ -176,30 +172,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return newInstance;
     }
 
-    public static InlineTypeNode createFromFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
-        assert StampTool.isPointerNonNull(object) : "expect an already null-checked object";
-
-        // only support null-restricted flat fields for now
-
-        HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
-        ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
-        LoadFieldNode[] loads = new LoadFieldNode[innerFields.length];
-
-        int srcOff = field.getOffset();
-
-        for (int i = 0; i < innerFields.length; i++) {
-            ResolvedJavaField innerField = innerFields[i];
-            assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
-
-            // returned fields include a header offset of their holder
-            int off = innerField.getOffset() - fieldType.firstFieldOffset();
-
-            // holder has no header so remove the header offset
-            loads[i] = b.add(LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off)));
-        }
-
-        return b.append(new InlineTypeNode(fieldType, null, loads, null));
-    }
 
     public void removeOnInlining() {
         assert existingOop instanceof ReadMultiValueNode : "oopOrHub has to be a ProjNode";
@@ -208,7 +180,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
         replaceAtUsages(invoke);
 
-        // remove inputs of ProjNodes to MultiNode
+        // remove inputs of ReadMultiValueNode to MultiValueNode
         ((ReadMultiValueNode) existingOop).delete();
         ((ReadMultiValueNode) isNotNull).delete();
         for (ValueNode p : scalarizedInlineObject) {
@@ -221,22 +193,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    /**
-     * Needed for replacement with a {@link CommitAllocationNode}
-     */
     @Override
     public LocationIdentity getKilledLocationIdentity() {
         return LocationIdentity.init();
     }
 
-// @Override
-// public Node canonical(CanonicalizerTool tool) {
-// // TODO: produces error in TestCallingConvention test49
-//// if (tool.allUsagesAvailable() && hasNoUsages()) {
-//// return null;
-//// }
-// return this;
-// }
 
     // comment to see inline type node getting materialized to null for test6_verifier
     @Override
@@ -301,11 +262,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             // a parameter only includes the isNotNull information so use the null pointer constant
             if (oop == null && notNull != null) {
                 oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
-                tool.ensureAdded(oop);
             }
             if (oop != null && notNull == null) {
                 notNull = ConstantNode.forInt(1, graph());
-                tool.ensureAdded(notNull);
             }
 
             // create virtual object and hand over existing oop

@@ -76,7 +76,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         return substitutabilityCheck;
     }
 
-    public void reEvaluateSubstituabilityCheck(ValhallaOptionsProvider valhallaOptionsProvider) {
+    public void reevaluateSubstituabilityCheck(ValhallaOptionsProvider valhallaOptionsProvider) {
         substitutabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, valhallaOptionsProvider);
     }
 
@@ -120,7 +120,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         // set the substitutability check to false in case valhalla is disabled
-        reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+        reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
 
         ValueNode updatedX = null;
         if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !StampTool.canBeInlineType(xAnchorNode, tool.getValhallaOptionsProvider())) {
@@ -136,7 +136,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             LogicNode replacement = create(tool.getConstantReflection(), tool.getMetaAccess(),
                             tool.getOptions(), updatedX == null ? forX : updatedX, updatedY == null ? forY : updatedY, NodeView.DEFAULT);
             if (replacement instanceof ObjectEqualsNode objectEqualsNode) {
-                objectEqualsNode.reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+                objectEqualsNode.reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
             }
             return replacement;
         }
@@ -147,7 +147,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         tool.getValhallaOptionsProvider());
         if (value != null) {
             if (value instanceof ObjectEqualsNode objectEqualsNode) {
-                objectEqualsNode.reEvaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+                objectEqualsNode.reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
             }
             return value;
         }
@@ -261,7 +261,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         assert xIsNotNull != null && yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
                         isNotNullComparison = new IntegerEqualsNode(xIsNotNull, yIsNotNull);
 
-                        // needs to make field comparison true, in case both are null
+                        // need to make field comparison true, in case both are null
                         orWithFieldComparison = new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(0));
                     } else if (StampTool.isPointerNonNull(xVirtual) && StampTool.isPointerNonNull(yVirtual)) {
                         // nothing to do both are non-null
@@ -282,9 +282,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                         xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0) == JavaKind.Long : Assertions.errorMessage(x, y, xVirtual);
                         fieldComparison = LogicNode.andWithoutGraphAdd(fieldComparison, new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0)),
                                         ProfileData.BranchProbabilityData.unknown());
-                        // return LogicNode.andWithoutGraphAdd(isNotNullComparison, new
-                        // IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual,
-                        // 0)), ProfileData.BranchProbabilityData.unknown());
+
                     } else {
                         boolean comparisonResultUnknown = false;
 
@@ -351,9 +349,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         if (comparisonResultUnknown)
                             return null;
 
-                        // comparison = LogicNode.orWithoutGraphAdd(comparison, orComparison,
-                        // ProfileData.BranchProbabilityData.unknown());
-                        // return comparison;
                     }
                     return LogicNode.andWithoutGraphAdd(isNotNullComparison, LogicNode.orWithoutGraphAdd(orWithFieldComparison, fieldComparison, ProfileData.BranchProbabilityData.unknown()),
                                     ProfileData.BranchProbabilityData.unknown());
