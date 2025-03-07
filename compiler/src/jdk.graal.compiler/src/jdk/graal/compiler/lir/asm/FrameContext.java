@@ -43,11 +43,11 @@ public interface FrameContext {
     /**
      * Same as {@link FrameContext#enter(CompilationResultBuilder)} but additionally allows to set a
      * {@code stackIncrement} which will be stored directly under the rbp and will be used on method
-     * leave to repair the stack. Entry Points other than the verified entry points need to emit a
-     * dummy frame because the nmethod entry point is expected to be at the same offset for all
+     * leave to repair the stack. Entry points other than the verified entry point need to emit a
+     * dummy frame because the nmethod entry barrier is expected to be at the same offset for all
      * entry points.
      *
-     * @param stackIncrement indicates if stack repair is allowed when leaving a method
+     * @param stackIncrement the stack increment that should be stored under the rbp
      * @param emitEntryBarrier true if the nmethod entry barrier should be emitted
      */
     default void enter(CompilationResultBuilder crb, int stackIncrement, boolean emitEntryBarrier) {
@@ -69,7 +69,7 @@ public interface FrameContext {
      * Same as {@link FrameContext#leave(CompilationResultBuilder)} but with an additional parameter
      * to control if code for stack repair should be emitted. E.g. For the dummy frames needed for
      * the nmethod entry barrier the stack increment is known to be zero so no stack repair code
-     * needs to be emitted
+     * needs to be emitted.
      *
      * @param allowStackRepair indicates if stack repair is allowed when leaving a method
      */
