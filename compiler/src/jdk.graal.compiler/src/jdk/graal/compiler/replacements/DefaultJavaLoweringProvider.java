@@ -595,7 +595,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public void lowerLoadIndexedNode(LoadIndexedNode loadIndexed, LoweringTool tool) {
-        int arrayBaseOffset = loadIndexed.isFlatAccess() ? metaAccess.getFlatArrayBaseOffset() + loadIndexed.getAdditionalOffset() : metaAccess.getArrayBaseOffset(loadIndexed.elementKind());
+        int arrayBaseOffset = metaAccess.getArrayBaseOffset(loadIndexed.elementKind());
         lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
     }
 
@@ -644,7 +644,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             JavaKind storageKind = storeIndexed.elementKind();
             ValueNode value = storeIndexed.value();
 
-            int arrayBaseOffset = metaAccess.getFlatArrayBaseOffset() + storeIndexed.getAdditionalOffset();
+            int arrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Object) + storeIndexed.getAdditionalOffset();
 
             BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
             AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
