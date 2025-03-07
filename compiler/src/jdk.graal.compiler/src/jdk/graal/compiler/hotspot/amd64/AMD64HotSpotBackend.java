@@ -1040,8 +1040,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         if (rootMethod == null)
             return false;
         CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this);
-        CallingConvention ccScalarized = CodeUtil.getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
-        CallingConvention ccScalarizedWithoutReceiver = CodeUtil.getScalarizedCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
+        CallingConvention ccScalarized = CodeUtil.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
+        CallingConvention ccScalarizedWithoutReceiver = CodeUtil.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
 
         return ccScalarized.getStackSize() > cc.getStackSize() || ccScalarized.getStackSize() > ccScalarizedWithoutReceiver.getStackSize();
     }
