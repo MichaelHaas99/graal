@@ -1,9 +1,10 @@
 package jdk.graal.compiler.nodes.extended;
 
-import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
+import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
 
 import jdk.graal.compiler.graph.NodeClass;
+import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -15,7 +16,10 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.word.WordCastNode;
 
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+/**
+ * Sets the bit 0 of a {@link KlassPointer} to 1.
+ */
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
 public class TagHubNode extends FixedWithNextNode implements Lowerable {
 
     public static final NodeClass<TagHubNode> TYPE = NodeClass.create(TagHubNode.class);
