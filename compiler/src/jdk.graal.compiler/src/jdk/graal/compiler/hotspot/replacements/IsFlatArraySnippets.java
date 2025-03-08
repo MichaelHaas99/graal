@@ -1,7 +1,7 @@
 package jdk.graal.compiler.hotspot.replacements;
 
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_ACCESS_FLAGS_LOCATION;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_KIND_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayKlassKind;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayPattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.klassKindOffset;
@@ -76,7 +76,7 @@ public class IsFlatArraySnippets implements Snippets {
     public static boolean isFlatArrayFromKlass(Object object) {
         HotSpotReplacementsUtil.verifyOop(object);
         KlassPointer hub = loadHub(object);
-        return hub.readInt(klassKindOffset(INJECTED_VMCONFIG), KLASS_ACCESS_FLAGS_LOCATION) == flatArrayKlassKind(INJECTED_VMCONFIG);
+        return hub.readInt(klassKindOffset(INJECTED_VMCONFIG), KLASS_KIND_LOCATION) == flatArrayKlassKind(INJECTED_VMCONFIG);
 
     }
 

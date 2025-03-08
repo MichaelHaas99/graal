@@ -42,4 +42,7 @@ public class HasIdentityNode extends FixedWithNextNode implements Lowerable, Can
         return this;
     }
 
+    @NodeIntrinsic
+    public static native boolean hasIdentity(Object node);
+
 }
