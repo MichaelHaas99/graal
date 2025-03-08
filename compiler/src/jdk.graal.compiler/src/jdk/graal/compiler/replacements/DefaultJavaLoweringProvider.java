@@ -595,7 +595,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public void lowerLoadIndexedNode(LoadIndexedNode loadIndexed, LoweringTool tool) {
-        int arrayBaseOffset = metaAccess.getArrayBaseOffset(loadIndexed.elementKind());
+        int arrayBaseOffset = metaAccess.getArrayBaseOffset(loadIndexed.elementKind()) + (loadIndexed.isFlatAccess() ? loadIndexed.getAdditionalOffset() : 0);
         lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
     }
 
