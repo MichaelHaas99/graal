@@ -847,6 +847,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     protected void lowerHasIdentity(HasIdentityNode node, LoweringTool tool) {
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
+            return;
+        }
         hasIdentitySnippets.lower(node, tool);
     }
 

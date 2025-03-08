@@ -50,7 +50,6 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OB
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJECT_MONITOR_SUCC_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.diagnoseSyncOnValueBasedClasses;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.heldMonitorCountOffset;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.isCAssertEnabled;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.javaThreadLockStackEndOffset;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.javaThreadLockStackTopOffset;
@@ -91,6 +90,7 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.VERY_FAST_PATH_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
+import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 import static jdk.graal.compiler.nodes.extended.MembarNode.memoryBarrier;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static jdk.graal.compiler.replacements.nodes.CStringConstant.cstring;
@@ -135,11 +135,14 @@ import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ReturnNode;
+import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.debug.DynamicCounterNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
+import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
@@ -228,7 +231,8 @@ public class MonitorSnippets implements Snippets {
      * CAS operation.
      */
     @Snippet
-    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter boolean canBeInlineType, @ConstantParameter boolean isInlineType, @ConstantParameter int lockDepth,
+    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter boolean canBeInlineType, @ConstantParameter boolean isInlineType,
+                    @ConstantParameter int lockDepth,
                     @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
                     @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
         HotSpotReplacementsUtil.verifyOop(object);
@@ -244,9 +248,13 @@ public class MonitorSnippets implements Snippets {
 
         incCounter();
 
+
         if (canBeInlineType) {
-            // check mark word for inline type
-            if (isInlineType || mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
+            // check if object has no identity
+
+            GuardingNode anchorNode = SnippetAnchorNode.anchor();
+            object = PiNode.piCastNonNull(object, anchorNode);
+            if (isInlineType || !hasIdentity(object)) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
         }

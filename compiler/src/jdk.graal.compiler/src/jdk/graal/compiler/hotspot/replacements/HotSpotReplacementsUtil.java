@@ -50,7 +50,6 @@ import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode;
 import jdk.graal.compiler.hotspot.nodes.type.KlassPointerStamp;
-import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.hotspot.word.PointerCastNode;
 import jdk.graal.compiler.nodes.CanonicalizableLocation;
@@ -372,8 +371,9 @@ public class HotSpotReplacementsUtil {
 
     public static final LocationIdentity PROTOTYPE_MARK_WORD_LOCATION = NamedLocationIdentity.mutable("PrototypeMarkWord");
 
-    public static final LocationIdentity KLASS_ACCESS_FLAGS_LOCATION = NamedLocationIdentity.immutable("Klass::_access_flags");
+    public static final LocationIdentity KLASS_ACCESS_FLAGS_LOCATION = NamedLocationIdentity.immutable("Klass::");
     public static final LocationIdentity KLASS_MISC_FLAGS_LOCATION = NamedLocationIdentity.immutable("Klass::_misc_flags");
+    public static final LocationIdentity KLASS_KIND_LOCATION = NamedLocationIdentity.immutable("Klass::_kind");
 
     @Fold
     public static boolean shouldUseKlassMiscFlags() {

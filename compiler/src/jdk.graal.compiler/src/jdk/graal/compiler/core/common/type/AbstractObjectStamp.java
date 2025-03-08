@@ -100,7 +100,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             return false;
 
         if (!isAlwaysArray()) {
-            if (type() == null && exactType) {
+            if (type() == null && !exactType) {
                 // Object is the base class of all arrays
                 return true;
             }
