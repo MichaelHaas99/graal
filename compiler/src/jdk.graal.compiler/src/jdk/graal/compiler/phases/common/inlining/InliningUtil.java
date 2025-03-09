@@ -898,7 +898,7 @@ public class InliningUtil extends ValueMergeUtil {
             FrameState frameState = (FrameState) duplicates.get(original);
             if (frameState != null && frameState.isAlive()) {
                 if (outerFrameState == null) {
-                    outerFrameState = stateAtReturn.duplicateModifiedDuringCall(invoke.bci(), invokeReturnKind);
+                    outerFrameState = stateAtReturn.duplicateModifiedDuringCall(invoke.bci(), invokeReturnKind, invoke.hasScalarizedReturn());
                 }
                 processFrameState(frameState, invoke, replacements, inlineGraph.method(), stateAtExceptionEdge, outerFrameState, alwaysDuplicateStateAfter, invoke.callTarget().targetMethod(),
                                 invoke.callTarget().arguments());

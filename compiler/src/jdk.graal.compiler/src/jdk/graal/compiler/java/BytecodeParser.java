@@ -1079,7 +1079,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         FrameStateBuilder startFrameStateNonVirtual = null;
         ArrayList<VirtualObjectState> states = null;
-        if (graph.hasScalarizedParameters() && !parsingIntrinsic() && entryBCI == INVOCATION_ENTRY_BCI) {
+        if (getValhallaOptionsProvider().callingConventionEnabled() && graph.hasScalarizedParameters() && !parsingIntrinsic() && entryBCI == INVOCATION_ENTRY_BCI) {
             // Create an InlineTypeNode for each scalarized parameter and set it as local in the
             // framestate. This framestate will then be used during building.
             startFrameStateNonVirtual = new FrameStateBuilder(this, code, graph, graphBuilderConfig.retainLocalVariables());
@@ -2359,7 +2359,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
 
-        if (targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
+        if (getValhallaOptionsProvider().callingConventionEnabled() && targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
         }
 
@@ -2382,7 +2382,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             invoke = append(createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge));
         }
 
-        if (callTarget.targetMethod().hasScalarizedReturn() && !fromMethodHandle) {
+        if (getValhallaOptionsProvider().returnConventionEnabled() && callTarget.targetMethod().hasScalarizedReturn() && !fromMethodHandle) {
             InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
         } else {
             frameState.pushReturn(resultType, invoke.asNode());
@@ -3061,7 +3061,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         frameState.clearStack();
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
-            if (method.hasScalarizedReturn()) {
+            if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn()) {
                 ReturnScalarizedNode.createAndAppend(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
             } else {
                 append(new ReturnNode(realReturnVal));
