@@ -1,8 +1,8 @@
 package jdk.graal.compiler.hotspot.replacements;
 
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.LIKELY_PROBABILITY;
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
-
-import org.graalvm.word.WordFactory;
 
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
@@ -51,7 +51,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
          * }
          */
         // @formatter:on
-        if (isNotNull == 1) {
+        if (probability(LIKELY_PROBABILITY, isNotNull == 1)) {
             Word wordOop = Word.objectToTrackedPointer(existingOop);
             Word wordHub = hub.asWord();
             Word wordTaggedHub = wordHub.or(1);
@@ -61,7 +61,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
                 return wordOop;
             }
         } else {
-            return WordFactory.nullPointer();
+            return Word.nullPointer();
         }
     }
 }

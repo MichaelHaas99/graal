@@ -250,11 +250,11 @@ public class MonitorSnippets implements Snippets {
 
 
         if (canBeInlineType) {
-            // check if object has no identity
 
+            // check if object has no identity
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             object = PiNode.piCastNonNull(object, anchorNode);
-            if (isInlineType || !hasIdentity(object)) {
+            if (probability(NOT_FREQUENT_PROBABILITY, isInlineType || !hasIdentity(object))) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
         }

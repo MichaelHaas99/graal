@@ -503,7 +503,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                     }
                     VirtualObjectNode virtual = new VirtualInstanceNode(method.getDeclaringClass(), false);
                     virtual.setObjectId(index);
-                    graph.addOrUnique(virtual);
+                    virtual = graph.addOrUnique(virtual);
 
                     ValueNode[] newEntries = new ValueNode[receiverTypes.length];
 
@@ -572,7 +572,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                     }
                     VirtualObjectNode virtual = new VirtualInstanceNode(method.getSignature().getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()), false);
                     virtual.setObjectId(index);
-                    graph.addOrUnique(virtual);
+                    virtual = graph.addOrUnique(virtual);
 
                     ValueNode[] newEntries = new ValueNode[parameterTypes.length];
 

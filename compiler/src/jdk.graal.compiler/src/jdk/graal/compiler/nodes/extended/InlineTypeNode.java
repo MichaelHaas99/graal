@@ -1,5 +1,8 @@
 package jdk.graal.compiler.nodes.extended;
 
+import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
+import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
+
 import java.lang.ref.Reference;
 import java.util.Collections;
 import java.util.List;
@@ -58,7 +61,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * information can be loaded directly from the flat field.
  *
  */
-@NodeInfo(nameTemplate = "InlineTypeNode")
+@NodeInfo(nameTemplate = "InlineTypeNode", cycles = CYCLES_8, cyclesRationale = "tlab alloc + header init", size = SIZE_8)
 public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);

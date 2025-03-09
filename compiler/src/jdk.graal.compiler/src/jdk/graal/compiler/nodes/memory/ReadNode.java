@@ -284,7 +284,8 @@ public class ReadNode extends FloatableAccessNode
          * Regular, null-restricted and flat arrays have different class objects. Avoid folding.
          * TODO check if the array cannot be null-restricted or flat, and if so allow folding.
          */
-        if (locationIdentity instanceof CanonicalizableLocation && !StampTool.canBeInlineTypeArray(object, tool.getValhallaOptionsProvider()) && locationIdentity != KLASS_LAYOUT_HELPER_LOCATION) {
+        if (locationIdentity instanceof CanonicalizableLocation && !StampTool.canBeInlineTypeArray(object, tool.getValhallaOptionsProvider()) &&
+                        !locationIdentity.equals(KLASS_LAYOUT_HELPER_LOCATION)) {
             CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
             ValueNode result = canonicalize.canonicalizeRead(read, object, offset, view, tool);
             assert result != null;

@@ -1,8 +1,12 @@
 package jdk.graal.compiler.nodes.extended;
 
+import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_0;
+import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
+
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
+import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.NodeView;
@@ -16,7 +20,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 
-@NodeInfo()
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0, allowedUsageTypes = {InputType.Anchor})
 public final class FixedInlineTypeEqualityAnchorNode extends FixedWithNextNode implements Virtualizable, AnchoringNode, LIRLowerable, Canonicalizable {
 
     public static final NodeClass<FixedInlineTypeEqualityAnchorNode> TYPE = NodeClass.create(FixedInlineTypeEqualityAnchorNode.class);

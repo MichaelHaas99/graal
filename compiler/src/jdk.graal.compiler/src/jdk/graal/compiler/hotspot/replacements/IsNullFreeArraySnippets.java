@@ -13,8 +13,6 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.re
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.unlockedValue;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
-import org.graalvm.word.WordFactory;
-
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
@@ -66,8 +64,8 @@ public class IsNullFreeArraySnippets implements Snippets {
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
         final Word lockBits = mark.and(Word.unsigned(markWordLockMaskInPlace(INJECTED_VMCONFIG)));
-        if (lockBits.equal(WordFactory.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
-            return mark.and(WordFactory.unsigned(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG))).equal(WordFactory.unsigned(nullFreeArrayPattern(INJECTED_VMCONFIG)));
+        if (lockBits.equal(Word.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
+            return mark.and(Word.unsigned(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG))).equal(Word.unsigned(nullFreeArrayPattern(INJECTED_VMCONFIG)));
         }
         return isNullFreeArrayFromKlass(object);
     }
@@ -78,8 +76,8 @@ public class IsNullFreeArraySnippets implements Snippets {
 
         KlassPointer hub = loadHub(object);
         int layoutHelper = readLayoutHelper(hub);
-        return WordFactory.signed(layoutHelper).signedShiftRight(WordFactory.signed(layoutHelperNullFreeShift(INJECTED_VMCONFIG))).and(
-                        WordFactory.signed(layoutHelperNullFreeMask(INJECTED_VMCONFIG))).greaterThan(0);
+        return Word.signed(layoutHelper).signedShiftRight(Word.signed(layoutHelperNullFreeShift(INJECTED_VMCONFIG))).and(
+                        Word.signed(layoutHelperNullFreeMask(INJECTED_VMCONFIG))).greaterThan(0);
 
     }
 

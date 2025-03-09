@@ -411,11 +411,6 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static long flatArrayMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.flatArrayMaskInPlace;
-    }
-
-    @Fold
     public static long nullFreeArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.nullFreeArrayPattern;
     }
@@ -625,11 +620,6 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int inlineTypePattern(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.inlineTypePattern;
-    }
-
-    @Fold
-    public static int inlineTypeBitInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
-        return config.inlineTypeBitInPlace;
     }
 
     @Fold

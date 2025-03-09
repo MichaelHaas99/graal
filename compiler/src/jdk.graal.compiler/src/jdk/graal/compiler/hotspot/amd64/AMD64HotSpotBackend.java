@@ -597,7 +597,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             state[toValueIndex] = State.WRITTEN;
             progress = true;
 
-            if (fromReg == Register.None) {
+            if (fromReg.equals(Register.None)) {
                 if (ValueUtil.isRegister(fromValue)) {
                     fromReg = ValueUtil.asRegister(fromValue);
                 } else {
