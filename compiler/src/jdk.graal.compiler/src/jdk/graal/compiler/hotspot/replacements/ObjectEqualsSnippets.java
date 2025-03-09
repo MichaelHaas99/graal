@@ -286,7 +286,7 @@ public class ObjectEqualsSnippets implements Snippets {
                     boolean inlineComparison,
                     long[] offsets,
                     JavaKind[] kinds,
-                    @VarargsParameter LocationIdentity[] identities) {
+                    LocationIdentity[] identities) {
         trace(trace, "check both operands against null");
         if (xPointer.isNull() || yPointer.isNull())
             return falseValue;

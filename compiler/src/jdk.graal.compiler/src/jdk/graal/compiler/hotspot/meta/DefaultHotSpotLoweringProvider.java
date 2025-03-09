@@ -127,7 +127,6 @@ import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GetObjectAddressNode;
-import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
@@ -1266,10 +1265,12 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         return graph.add(new WriteNode(address, HUB_WRITE_LOCATION, writeValue, BarrierType.NONE, MemoryOrderMode.PLAIN));
     }
 
+    @SuppressWarnings("try")
     private void lowerInlineTypeNode(InlineTypeNode inlineTypeNode, LoweringTool tool) {
         StructuredGraph graph = inlineTypeNode.graph();
-        if (graph.getGuardsStage() != GraphState.GuardsStage.FIXED_DEOPTS)
+        if (graph.getGuardsStage().allowsFloatingGuards()) {
             return;
+        }
         if (InlineTypeUtil.isAlreadyBuffered(graph, inlineTypeNode.getIsNotNull(), inlineTypeNode.getExistingOop()) == TriState.TRUE) {
             inlineTypeNode.replaceAtUsages(inlineTypeNode.getExistingOop());
             graph.removeFixed(inlineTypeNode);

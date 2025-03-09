@@ -12,8 +12,6 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.ma
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.unlockedValue;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
-import org.graalvm.word.WordFactory;
-
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
@@ -65,8 +63,8 @@ public class IsFlatArraySnippets implements Snippets {
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
         final Word lockBits = mark.and(Word.unsigned(markWordLockMaskInPlace(INJECTED_VMCONFIG)));
-        if (lockBits.equal(WordFactory.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
-            return mark.and(WordFactory.unsigned(flatArrayPattern(INJECTED_VMCONFIG))).equal(WordFactory.unsigned(flatArrayPattern(INJECTED_VMCONFIG)));
+        if (lockBits.equal(Word.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
+            return mark.and(Word.unsigned(flatArrayPattern(INJECTED_VMCONFIG))).equal(Word.unsigned(flatArrayPattern(INJECTED_VMCONFIG)));
         }
         return isFlatArrayFromKlass(object);
 

@@ -227,9 +227,7 @@ public abstract class ArrayCopySnippets implements Snippets {
         elementKindCounter.inc();
         elementKindCopiedCounter.add(checkedLength);
 
-        boolean oneArrayIsFlat = isFlatArray(src) || isFlatArray(dest);
-
-        if (oneArrayIsFlat) {
+        if (probability(NOT_FREQUENT_PROBABILITY, isFlatArray(src)) || probability(NOT_FREQUENT_PROBABILITY, isFlatArray(dest))) {
             // e.g. copy values from flat array to object array, need to buffer the elements from
             // src array first
             System.arraycopy(src, srcPos, dest, destPos, length);

@@ -1,6 +1,7 @@
 package jdk.graal.compiler.nodes.extended;
 
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_1;
+import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
 
 import org.graalvm.word.LocationIdentity;
 
@@ -23,7 +24,7 @@ import jdk.vm.ci.meta.JavaKind;
  * {@link jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets} where we need to wait until
  * the actual argument (being an array of constants) is bound to the snippet parameter.
  */
-@NodeInfo(cycles = CYCLES_1)
+@NodeInfo(cycles = CYCLES_1, size = SIZE_1)
 public class DelayedRawComparisonNode extends FixedWithNextNode implements Canonicalizable, Lowerable {
     public static final NodeClass<DelayedRawComparisonNode> TYPE = NodeClass.create(DelayedRawComparisonNode.class);
 
