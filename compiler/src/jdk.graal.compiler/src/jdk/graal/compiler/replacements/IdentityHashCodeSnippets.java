@@ -25,12 +25,8 @@
 package jdk.graal.compiler.replacements;
 
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
-import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 
@@ -50,24 +46,29 @@ import jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates;
 import jdk.graal.compiler.replacements.SnippetTemplate.Arguments;
 import jdk.graal.compiler.replacements.SnippetTemplate.SnippetInfo;
 import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
-import jdk.graal.compiler.word.Word;
 
 public abstract class IdentityHashCodeSnippets implements Snippets {
 
     @Snippet
-    private int identityHashCodeSnippet(final Object thisObj, @Snippet.ConstantParameter boolean canBeInlineType, @Snippet.ConstantParameter boolean isInlineType) {
+    private int identityHashCodeSnippet(final Object thisObj) {
+        if (probability(NOT_FREQUENT_PROBABILITY, thisObj == null)) {
+            return 0;
+        }
+        return computeIdentityHashCode(thisObj);
+    }
+
+    protected abstract int computeIdentityHashCode(Object thisObj);
+
+    @Snippet
+    private int valhallaIdentityHashCodeSnippet(final Object thisObj, @Snippet.ConstantParameter boolean canBeInlineType, @Snippet.ConstantParameter boolean isInlineType) {
         if (probability(NOT_FREQUENT_PROBABILITY, thisObj == null)) {
             return 0;
         }
 
-        // check mark word for inline type
-        if (canBeInlineType) {
-            Word mark = loadWordFromObject(thisObj, markOffset(INJECTED_VMCONFIG));
-            if (isInlineType || mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG))) {
-                return valueObjectHashCodeStubC(VALUEOBJECTHASHCODE, thisObj);
-            }
-        }
+        return computeValhallaIdentityHashCode(thisObj, canBeInlineType, isInlineType);
+    }
 
+    protected int computeValhallaIdentityHashCode(Object thisObj, boolean canBeInlineType, boolean isInlineType) {
         return computeIdentityHashCode(thisObj);
     }
 
@@ -75,9 +76,7 @@ public abstract class IdentityHashCodeSnippets implements Snippets {
                     Object.class);
 
     @Node.NodeIntrinsic(ForeignCallNode.class)
-    private static native int valueObjectHashCodeStubC(@Node.ConstantNodeParameter ForeignCallDescriptor descriptor, Object x);
-
-    protected abstract int computeIdentityHashCode(Object thisObj);
+    protected static native int valueObjectHashCodeStubC(@Node.ConstantNodeParameter ForeignCallDescriptor descriptor, Object x);
 
     public static class Templates extends AbstractTemplates {
 
@@ -87,20 +86,32 @@ public abstract class IdentityHashCodeSnippets implements Snippets {
         public Templates(IdentityHashCodeSnippets receiver, OptionValues options, Providers providers, LocationIdentity locationIdentity) {
             super(options, providers);
 
-            identityHashCodeSnippet = snippet(providers,
-                            IdentityHashCodeSnippets.class,
-                            "identityHashCodeSnippet",
-                            null,
-                            receiver,
-                            locationIdentity);
+            if (providers.getValhallaOptionsProvider().valhallaEnabled()) {
+                identityHashCodeSnippet = snippet(providers,
+                                IdentityHashCodeSnippets.class,
+                                "valhallaIdentityHashCodeSnippet",
+                                null,
+                                receiver,
+                                locationIdentity);
+            } else {
+                identityHashCodeSnippet = snippet(providers,
+                                IdentityHashCodeSnippets.class,
+                                "identityHashCodeSnippet",
+                                null,
+                                receiver,
+                                locationIdentity);
+            }
+
         }
 
         public void lower(IdentityHashCodeNode node, LoweringTool tool) {
             StructuredGraph graph = node.graph();
             Arguments args = new Arguments(identityHashCodeSnippet, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("thisObj", node.object());
-            args.add("canBeInlineType", StampTool.canBeInlineType(node.object(), tool.getValhallaOptionsProvider()));
-            args.add("isInlineType", StampTool.isInlineType(node.object(), tool.getValhallaOptionsProvider()));
+            if (tool.getValhallaOptionsProvider().valhallaEnabled()) {
+                args.add("canBeInlineType", StampTool.canBeInlineType(node.object(), tool.getValhallaOptionsProvider()));
+                args.add("isInlineType", StampTool.isInlineType(node.object(), tool.getValhallaOptionsProvider()));
+            }
             SnippetTemplate template = template(tool, node, args);
             template.instantiate(tool.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
