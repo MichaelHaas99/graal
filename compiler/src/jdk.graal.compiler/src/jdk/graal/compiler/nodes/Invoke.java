@@ -116,9 +116,14 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
         return state.getMethod();
     }
 
+    default boolean hasScalarizedReturn() {
+        ResolvedJavaMethod targetMethod = getTargetMethod();
+        return targetMethod != null && targetMethod.hasScalarizedReturn();
+    }
+
     @Override
     default void computeStateDuring(FrameState stateAfter) {
-        FrameState newStateDuring = stateAfter.duplicateModifiedDuringCall(bci(), asNode().getStackKind());
+        FrameState newStateDuring = stateAfter.duplicateModifiedDuringCall(bci(), asNode().getStackKind(), hasScalarizedReturn());
         setStateDuring(newStateDuring);
     }
 
@@ -148,7 +153,7 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
     @Override
     default void generate(NodeLIRBuilderTool gen) {
-        if (!callTarget().targetMethod().hasScalarizedReturn()) {
+        if (!gen.getLIRGeneratorTool().getValhallaOptionsProvider().returnConventionEnabled() || !callTarget().targetMethod().hasScalarizedReturn()) {
             gen.emitInvoke(this);
             return;
         }

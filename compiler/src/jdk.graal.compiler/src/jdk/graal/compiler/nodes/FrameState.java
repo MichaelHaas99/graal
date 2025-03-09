@@ -552,6 +552,17 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         return duplicateModified(graph(), newBci, StackState.AfterPop, popKind, null, null, null);
     }
 
+    /**
+     * The additional option {@code removeTopVirtualObjectMapping} becomes effective if a virtual
+     * object is popped. The option specifies if its virtual object mapping should be removed as
+     * well from the framestate. E.g. The virtual object mapping created for an invoke node with a
+     * nullable scalarized inline object as return value, can be removed, when the
+     * {@code stateDuring} is computed.
+     */
+    public FrameState duplicateModifiedDuringCall(int newBci, JavaKind popKind, boolean removeTopVirtualObjectMapping) {
+        return duplicateModified(graph(), newBci, StackState.AfterPop, popKind, null, null, null, removeTopVirtualObjectMapping);
+    }
+
     public FrameState duplicateModifiedBeforeCall(int newBci,
                     JavaKind popKind,
                     JavaKind[] pushedSlotKinds,
@@ -580,7 +591,17 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     JavaKind[] pushedSlotKinds,
                     ValueNode[] pushedValues,
                     List<EscapeObjectState> pushedVirtualObjectMappings) {
-        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true);
+        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true, false);
+    }
+
+    public FrameState duplicateModified(StructuredGraph graph,
+                    int newBci,
+                    StackState newStackState,
+                    JavaKind popKind,
+                    JavaKind[] pushedSlotKinds,
+                    ValueNode[] pushedValues,
+                    List<EscapeObjectState> pushedVirtualObjectMappings, boolean removeTopVirtualObjectMapping) {
+        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true, removeTopVirtualObjectMapping);
     }
 
     /**
@@ -596,7 +617,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     JavaKind[] pushedSlotKinds,
                     ValueNode[] pushedValues,
                     List<EscapeObjectState> pushedVirtualObjectMappings,
-                    boolean checkStackDepth) {
+                    boolean checkStackDepth, boolean removeTopVirtualObjectMapping) {
         // Compute size of stack to copy (accounting for popping)
         // and final stack size after pushing
         int copyStackSize;
@@ -668,9 +689,10 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         assert !checkStackDepth || checkStackDepth(bci, stackSize, stackState, newBci, newStackSize, newStackState);
 
 
-        if (virtualObject != null) {
+        if (virtualObject != null && removeTopVirtualObjectMapping) {
             // remove virtual object mapping created for an invoke node with a nullable scalarized
-            // inline object, when we pop the corresponding virtual object. E.g. caused by
+            // inline object as return value, when we pop the corresponding virtual object. E.g.
+            // caused by
             // duplicateModifiedDuringCall.
             assert virtualObjectMappings != null : "virtual object mapping must exist";
             List<EscapeObjectState> result = new ArrayList<>();
