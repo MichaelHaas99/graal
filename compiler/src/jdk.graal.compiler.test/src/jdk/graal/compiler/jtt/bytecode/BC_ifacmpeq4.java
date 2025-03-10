@@ -1651,7 +1651,32 @@ public class BC_ifacmpeq4 extends JTTTest {
             if (parameterCount == 1) {
                 // Null checks
                 // Avoid acmp in the computation of the expected result!
-                test(m.getName(), args[i]);
+                test(getInitialOptions(), EnumSet.allOf(DeoptimizationReason.class), m.getName(), args[i]);
+            } else {
+                // Equality checks
+                for (int j = 0; j < args.length; ++j) {
+                    if (args[j] != null && !parameterTypes[1].isInstance(args[j])) {
+                        continue;
+                    }
+                    if (args[j] == null && parameterTypes[1] == MyValue1.class) {
+                        continue;
+                    }
+                    // Avoid acmp in the computation of the expected result!
+                    test(getInitialOptions(), EnumSet.allOf(DeoptimizationReason.class), m.getName(), args[i], args[j]);
+                }
+            }
+        }
+
+        for (int i = start; i < end; ++i) {
+            if (args[i] != null && !parameterTypes[0].isInstance(args[i])) {
+                continue;
+            }
+            if (args[i] == null && parameterTypes[0] == MyValue1.class) {
+                continue;
+            }
+            if (parameterCount == 1) {
+                // Null checks
+                // Avoid acmp in the computation of the expected result!
                 test(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), m.getName(), args[i]);
             } else {
                 // Equality checks
@@ -1663,7 +1688,6 @@ public class BC_ifacmpeq4 extends JTTTest {
                         continue;
                     }
                     // Avoid acmp in the computation of the expected result!
-                    test(m.getName(), args[i], args[j]);
                     test(WITHOUT_PEA, EnumSet.allOf(DeoptimizationReason.class), m.getName(), args[i], args[j]);
                 }
             }

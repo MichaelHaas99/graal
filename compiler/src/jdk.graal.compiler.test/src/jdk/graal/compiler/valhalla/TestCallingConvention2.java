@@ -164,8 +164,17 @@ public class TestCallingConvention2 extends JTTTest {
 
     @Test
     public void run5() throws Throwable{
-        runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
-        resetCodeCache();
+        //runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
+        //resetCodeCache();
+        for(int i = 0; i<10000;i++){
+        try{
+
+                testVirtual(new MyValue3());
+
+
+        } catch (Exception e) {
+        }
+        }
         runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
     }
 

@@ -12,6 +12,7 @@ import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.InvalidInstalledCodeException;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -902,6 +903,44 @@ public class TestLWorld extends JTTTest {
         //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
         InstalledCode c = getCode(getResolvedJavaMethod("test23"), null, true, true, getInitialOptions());
         //c.executeVarargs(this);
+    }
+
+    public static void test599(Object o, boolean b) {
+        MyValue1 vt = MyValue1.createWithFieldsInline(rI, rL);
+        Object sync = b ? vt : o;
+        synchronized (sync) {
+            if (b) {
+                throw new RuntimeException("test59 failed: synchronization on inline type should not succeed");
+            }
+        }
+    }
+
+    @Test
+    public void run36() throws InvalidInstalledCodeException {
+        for(int i =0; i<1000;i++){
+            try{
+                test599(new Object(), true);
+            } catch (Exception e) {
+
+            }
+        }
+        InstalledCode c = getCode(getResolvedJavaMethod("test599"), null, true, false, getInitialOptions());
+        c.executeVarargs(new Object(), false);
+        //test59(new Object(), false);
+        try {
+            c.executeVarargs(new Object(), true);
+            //test59(new Object(), true);
+            throw new RuntimeException("test59 failed: no exception thrown");
+        } catch (IdentityException ex) {
+            // Expected
+        }
+    }
+
+    @Test
+    public void run37() throws  Throwable{
+        resetCache();
+
+        InstalledCode c = getCode(getResolvedJavaMethod(java.io.ObjectStreamField.class, "toString"), null, true, true, getInitialOptions());
     }
 
 }
