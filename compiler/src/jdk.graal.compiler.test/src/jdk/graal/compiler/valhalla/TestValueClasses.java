@@ -462,4 +462,58 @@ java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileD
         new Container(null);
         InstalledCode c = getCode(getResolvedJavaMethod("testCommitAlloc2"), null, true, true, getInitialOptions());
     }
+
+    static MyValueClass2Inline staticTest1;
+    static MyValueClass2Inline staticTest2;
+
+    public double testBranch(int number){
+        MyValueClass2Inline a= MyValueClass2Inline.createDefault();
+        //MyValueClass2Inline b= MyValueClass2Inline.createWithFieldsInline(rI, rL);
+        if(number>3){
+            staticTest1= a;
+        }else{
+            staticTest2= a;
+        }
+        return a.d;
+    }
+
+    @Test
+    public void run9() throws  Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod("testBranch"), null, true, true, getInitialOptions());
+    }
+
+    public void testIdentityException(){
+        Object a;
+        a = MyValueClass2Inline.createDefault();
+        synchronized (a){}
+
+    }
+
+    @Test
+    public void run10() throws  Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod("testIdentityException"), null, true, true, getInitialOptions());
+        try{
+            testIdentityException();
+        } catch (Exception e) {
+            //
+        }
+        c = getCode(getResolvedJavaMethod("testIdentityException"), null, true, true, getInitialOptions());
+        try{
+            testIdentityException();
+        } catch (Exception e) {
+            //
+        }
+    }
+
+
+    @Test
+    public void run11() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod(String.class, "getBytes", byte[].class, int.class, byte.class), null, true, true, getInitialOptions());
+        //c.executeVarargs(this);
+    }
 }

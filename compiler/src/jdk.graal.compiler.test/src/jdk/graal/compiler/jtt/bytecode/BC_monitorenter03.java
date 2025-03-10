@@ -54,6 +54,14 @@ public class BC_monitorenter03 extends JTTTest {
 
     @Test
     public void run7() throws Throwable {
+        for(int i =0; i<1000;i++){
+            try{
+                test(Integer.valueOf(42));
+            } catch (Exception e) {
+
+            }
+        }
+
         runTest(WITHOUT_PEA, "test", Integer.valueOf(42));
     }
 
