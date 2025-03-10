@@ -79,12 +79,16 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     public boolean canBeInlineType() {
         // empty type or array or null can't be inline types
-        if (isEmpty() || isAlwaysArray() || alwaysNull())
+        if (isEmpty() || isAlwaysArray() || alwaysNull()) {
             return false;
+        }
+
         if (!isExactType()) {
             // merge which resulted in object class as superclass
-            if (type() == null)
+            if (type() == null) {
                 return true;
+            }
+
         }
         // abstract class also needs to specify value keyword, interface does not have identity
         return !type().isIdentity();
@@ -96,8 +100,9 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
     public boolean canBeInlineTypeArray() {
         // empty type, null, no array can't be inline type arrays
-        if (isEmpty() || alwaysNull())
+        if (isEmpty() || alwaysNull()) {
             return false;
+        }
 
         if (!isAlwaysArray()) {
             if (type() == null && !exactType) {
@@ -108,27 +113,32 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             return false;
         }
 
-        if (type() == null || type().getComponentType() == null)
+        if (type() == null || type().getComponentType() == null) {
             return true;
+        }
 
         ResolvedJavaType componentType = type().getComponentType();
 
         // multidimensional array and array of primitives can't be inline type arrays
-        if (componentType.isArray() || componentType.isPrimitive())
+        if (componentType.isArray() || componentType.isPrimitive()) {
             return false;
+        }
 
         if (!isExactType()) {
             // merge which resulted in object class as superclass for array elements
-            if (componentType.isJavaLangObject())
+            if (componentType.isJavaLangObject()) {
                 return true;
+            }
 
         }
         return !componentType.isIdentity();
     }
 
     public boolean isInlineTypeArray() {
-        if (type() == null || type().getComponentType() == null)
+        if (type() == null || type().getComponentType() == null) {
             return false;
+        }
+
         ResolvedJavaType componentType = type().getComponentType();
         return isAlwaysArray() && nonNull() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
     }

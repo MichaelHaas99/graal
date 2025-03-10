@@ -883,7 +883,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     /**
      * Tries to resolve circular dependencies by spilling.
      *
-     * @return true if spilling was performed, false otherwise
+     * @return true if spilling shouldn't be performed again in the current round, false otherwise
      */
     public boolean shuffleInlineArgsSpill(AMD64MacroAssembler asm, State[] state, AllocatableValue[] currentArguments,
                     JavaType[] currentParameterTypes, int fromIndex) {
