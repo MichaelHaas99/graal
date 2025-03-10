@@ -43,6 +43,9 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probabilit
 import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 
 import jdk.graal.compiler.lir.SyncPort;
+import jdk.graal.compiler.nodes.PiNode;
+import jdk.graal.compiler.nodes.SnippetAnchorNode;
+import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.replacements.IdentityHashCodeSnippets;
 import jdk.graal.compiler.word.Word;
 
@@ -91,9 +94,11 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
     }
 
     @Override
-    protected int computeValhallaIdentityHashCode(final Object x, boolean canBeInlineType, boolean isInlineType) {
+    protected int computeValhallaIdentityHashCode(Object x, boolean canBeInlineType, boolean isInlineType) {
         // check if object has no identity
         if (canBeInlineType) {
+            GuardingNode anchorNode = SnippetAnchorNode.anchor();
+            x = PiNode.piCastNonNull(x, anchorNode);
             if (probability(NOT_LIKELY_PROBABILITY, isInlineType || !hasIdentity(x))) {
                 return valueObjectHashCodeStubC(VALUEOBJECTHASHCODE, x);
             }
