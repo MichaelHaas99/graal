@@ -19,45 +19,45 @@ suite = {
     "write" : "git@github.com:oracle/graal.git",
   },
 
-    "imports": {
-        "suites": [
-            {
-                "name": "truffle",
-                "subdir": True,
-            },
-            {
-                "name": "regex",
-                "subdir": True
-            },
-            {
-                "name": "sdk",
-                "subdir": True
-            }
-        ]
+  "imports" : {
+    "suites": [
+      {
+        "name" : "truffle",
+        "subdir": True,
+      },
+      {
+        "name" : "regex",
+        "subdir": True
+      },
+      {
+        "name" : "sdk",
+        "subdir": True
+      }
+    ]
+  },
+
+  "defaultLicense" : "GPLv2-CPE",
+  "snippetsPattern" : ".*JavadocSnippets.*",
+  "javac.lint.overrides": "-path",
+
+  "libraries" : {
+
+    # ------------- Libraries -------------
+
+    "JAVA_ALLOCATION_INSTRUMENTER" : {
+      "digest" : "sha512:25fe57cd6d3ecabb52f411c884f801109ece37570a2dd19fa1e5b83cc2039ed02a90787600eb9303eaa730aabf0dc70b506fb9fe40ca6c3417428bb89c2c8940",
+      "maven" : {
+        "groupId" : "com.google.code.java-allocation-instrumenter",
+        "artifactId" : "java-allocation-instrumenter",
+        "version" : "3.1.0",
+      },
+      "bootClassPathAgent" : "true",
     },
 
-    "defaultLicense": "GPLv2-CPE",
-    "snippetsPattern": ".*JavadocSnippets.*",
-    "javac.lint.overrides": "-path",
-
-    "libraries": {
-
-        # ------------- Libraries -------------
-
-        "JAVA_ALLOCATION_INSTRUMENTER": {
-            "digest": "sha512:25fe57cd6d3ecabb52f411c884f801109ece37570a2dd19fa1e5b83cc2039ed02a90787600eb9303eaa730aabf0dc70b506fb9fe40ca6c3417428bb89c2c8940",
-            "maven": {
-                "groupId": "com.google.code.java-allocation-instrumenter",
-                "artifactId": "java-allocation-instrumenter",
-                "version": "3.1.0",
-            },
-            "bootClassPathAgent": "true",
-        },
-
-        "HCFDIS": {
-            "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/hcfdis/hcfdis-3.jar"],
-            "digest": "sha512:207b178aaab27754e331e9ce9e931ccda1cd4906aeb96f425028f58b3865f8527e8564757c10a8acdcbba9808abaaf5d55d9663d597dab029785da1e12cae20d",
-        },
+    "HCFDIS" : {
+      "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/hcfdis/hcfdis-3.jar"],
+      "digest" : "sha512:207b178aaab27754e331e9ce9e931ccda1cd4906aeb96f425028f58b3865f8527e8564757c10a8acdcbba9808abaaf5d55d9663d597dab029785da1e12cae20d",
+    },
 
     "C1VISUALIZER_DIST" : {
       "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/c1visualizer/c1visualizer-1.10.zip"],
@@ -70,20 +70,20 @@ suite = {
       "packedResource": True,
     },
 
-        "JOL_CLI": {
-            "digest": "sha512:aeefbf80b51e6aa546f7522b7dfd6a405529fc0d07be4b11fda56103b5b187a03f3b202c1d7ab65ffaa166630a0ec9a4684efccdf224743a3f79b4ca7504819c",
-            "maven": {
-                "groupId": "org.openjdk.jol",
-                "artifactId": "jol-cli",
-                "version": "0.9",
-                "classifier": "full",
-            },
-        },
+    "JOL_CLI" : {
+      "digest" : "sha512:aeefbf80b51e6aa546f7522b7dfd6a405529fc0d07be4b11fda56103b5b187a03f3b202c1d7ab65ffaa166630a0ec9a4684efccdf224743a3f79b4ca7504819c",
+      "maven" : {
+        "groupId" : "org.openjdk.jol",
+        "artifactId" : "jol-cli",
+        "version" : "0.9",
+        "classifier" : "full",
+      },
+    },
 
-        "BATIK": {
-            "digest": "sha512:cefc274dab0f3cd8064f135a8a3bccb59b8168864acd2143f8a5563c6feacd9651a740bcfc9998031d78b6c219168b7e5ba3341d1d11e429f1bf53629000566d",
-            "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/batik-all-1.7.jar"],
-        },
+    "BATIK" : {
+      "digest" : "sha512:cefc274dab0f3cd8064f135a8a3bccb59b8168864acd2143f8a5563c6feacd9651a740bcfc9998031d78b6c219168b7e5ba3341d1d11e429f1bf53629000566d",
+      "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/batik-all-1.7.jar"],
+    },
 
     "ASM_9.7.1" : {
       "digest" : "sha512:4767b01603dad5c79cc1e2b5f3722f72b1059d928f184f446ba11badeb1b381b3a3a9a801cc43d25d396df950b09d19597c73173c411b1da890de808b94f1f50",
@@ -120,49 +120,49 @@ suite = {
       "license" : "BSD-new",
     },
 
-        "HSDIS": {
-            "urlbase": "https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/hsdis",
-            "packedResource": True,
-            "os_arch": {
-                "linux": {
-                    "amd64": {
-                        "digest": "sha512:38c2af202546d2c2fd2bb6936f028b1feda8a5da40e2e374f2ad9caddb639988fac26bacf87925ff76cf7f88537f4f55206c50e0f9dffb290f0c630992582e76",
-                        "urls": ["{urlbase}/intel/hsdis-amd64-linux-0d031013db9a80d6c88330c42c983fbfa7053193.tar.gz"],
-                    },
-                    "aarch64": {
-                        "digest": "sha512:422e1078fe5d9e2f71c04ca2bbefef4e09cf9675d132c7531f1fb17330e2b1f9441470541b66c8db2f3d8e105d167e25a78dc11aada524ed623b1ae9a4cfdeeb",
-                        "urls": ["{urlbase}/hsdis-aarch64-linux-fcc9b70ac91c00db8a50b0d4345490a68e3743e1.tar.gz"],
-                    },
-                    "riscv64": {
-                        "optional": True,
-                    }
-                },
-                "darwin": {
-                    "amd64": {
-                        "digest": "sha512:754931b55975ceb47f46d4803930c915d48aaf04d6633944751ff9e7f8c2df076473f0a134f77aab80d54159ec6a011ada6b44cf10a3bbe55d0356c9c22cfa86",
-                        "urls": ["{urlbase}/intel/hsdis-amd64-darwin-67f6d23cbebd8998450a88b5bef362171f66f11a.tar.gz"],
-                    },
-                    "aarch64": {
-                        "digest": "sha512:2ce96d16865a180cb6352377aea1c2e4a85ebbd8b57bd157eafb551188d3bd005d1ca7118fe99480ccca0f59d1c128c25a5612bc809077cbac3c19b6a6d4246b",
-                        "urls": ["{urlbase}/hsdis-aarch64-darwin-073b5f6f10a4c8530417f165d03c19093a2c0680.tar.gz"],
-                    }
-                },
-                "windows": {
-                    "amd64": {
-                        "digest": "sha512:92d79ec235cbe4480c6887d92003519f0340f571a55207d326b59d42163ecb984752d5d614d590400542a9097f1ea8233720c18f85728eaccce86225930918fe",
-                        "urls": ["{urlbase}/intel/hsdis-amd64-windows-6a388372cdd5fe905c1a26ced614334e405d1f30-2.zip"],
-                    },
-                    "aarch64": {
-                        "optional": True,
-                    }
-                },
-            },
+    "HSDIS" : {
+      "urlbase" : "https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/hsdis",
+      "packedResource" : True,
+      "os_arch" : {
+        "linux" : {
+          "amd64" : {
+            "digest" : "sha512:38c2af202546d2c2fd2bb6936f028b1feda8a5da40e2e374f2ad9caddb639988fac26bacf87925ff76cf7f88537f4f55206c50e0f9dffb290f0c630992582e76",
+            "urls" : ["{urlbase}/intel/hsdis-amd64-linux-0d031013db9a80d6c88330c42c983fbfa7053193.tar.gz"],
+          },
+          "aarch64" : {
+            "digest" : "sha512:422e1078fe5d9e2f71c04ca2bbefef4e09cf9675d132c7531f1fb17330e2b1f9441470541b66c8db2f3d8e105d167e25a78dc11aada524ed623b1ae9a4cfdeeb",
+            "urls" : ["{urlbase}/hsdis-aarch64-linux-fcc9b70ac91c00db8a50b0d4345490a68e3743e1.tar.gz"],
+          },
+          "riscv64" : {
+            "optional" : True,
+          }
         },
+        "darwin" : {
+          "amd64" : {
+            "digest" : "sha512:754931b55975ceb47f46d4803930c915d48aaf04d6633944751ff9e7f8c2df076473f0a134f77aab80d54159ec6a011ada6b44cf10a3bbe55d0356c9c22cfa86",
+            "urls" : ["{urlbase}/intel/hsdis-amd64-darwin-67f6d23cbebd8998450a88b5bef362171f66f11a.tar.gz"],
+          },
+          "aarch64" : {
+            "digest" : "sha512:2ce96d16865a180cb6352377aea1c2e4a85ebbd8b57bd157eafb551188d3bd005d1ca7118fe99480ccca0f59d1c128c25a5612bc809077cbac3c19b6a6d4246b",
+            "urls" : ["{urlbase}/hsdis-aarch64-darwin-073b5f6f10a4c8530417f165d03c19093a2c0680.tar.gz"],
+          }
+        },
+        "windows" : {
+          "amd64" : {
+            "digest" : "sha512:92d79ec235cbe4480c6887d92003519f0340f571a55207d326b59d42163ecb984752d5d614d590400542a9097f1ea8233720c18f85728eaccce86225930918fe",
+            "urls" : ["{urlbase}/intel/hsdis-amd64-windows-6a388372cdd5fe905c1a26ced614334e405d1f30-2.zip"],
+          },
+          "aarch64" : {
+            "optional" : True,
+          }
+        },
+      },
     },
+  },
 
-    "projects": {
+  "projects" : {
 
-        # ------------- Graal -------------
+    # ------------- Graal -------------
 
     "jdk.graal.compiler" : {
       "subDir" : "src",
@@ -232,16 +232,16 @@ suite = {
       ],
     },
 
-        "jdk.graal.compiler.processor": {
-            "subDir": "src",
-            "sourceDirs": ["src"],
-            "requires": [
-                "java.compiler"  # javax.annotation.processing.*
-            ],
-            "checkPackagePrefix": "false",
-            "checkstyle": "jdk.graal.compiler",
-            "javaCompliance": "21+",
-        },
+    "jdk.graal.compiler.processor" : {
+      "subDir" : "src",
+      "sourceDirs" : ["src"],
+      "requires" : [
+        "java.compiler" # javax.annotation.processing.*
+      ],
+      "checkPackagePrefix": "false",
+      "checkstyle" : "jdk.graal.compiler",
+      "javaCompliance" : "21+",
+    },
 
     "jdk.graal.compiler.test" : {
       "subDir" : "src",
@@ -270,7 +270,7 @@ suite = {
           "jdk.internal.misc",
           "jdk.internal.util",
           "jdk.internal.vm.annotation",
-            "jdk.internal.value",
+          "jdk.internal.value",
         ],
         "java.instrument" : [
           "sun.instrument",
@@ -301,24 +301,24 @@ suite = {
       "javaPreviewNeeded": "21+",
     },
 
-        "jdk.graal.compiler.management": {
-            "subDir": "src",
-            "sourceDirs": ["src"],
-            "dependencies": [
-                "jdk.graal.compiler",
-            ],
-            "requires": [
-                "jdk.internal.vm.ci",
-                "jdk.management",
-            ],
-            "checkPackagePrefix": "false",
-            "checkstyle": "jdk.graal.compiler",
-            "annotationProcessors": [
-                "GRAAL_PROCESSOR",
-            ],
-            "javaCompliance": "21+",
-            "workingSets": "Graal,HotSpot",
-        },
+    "jdk.graal.compiler.management" : {
+      "subDir" : "src",
+      "sourceDirs" : ["src"],
+      "dependencies" : [
+        "jdk.graal.compiler",
+      ],
+      "requires" : [
+        "jdk.internal.vm.ci",
+        "jdk.management",
+      ],
+      "checkPackagePrefix": "false",
+      "checkstyle" : "jdk.graal.compiler",
+      "annotationProcessors" : [
+        "GRAAL_PROCESSOR",
+      ],
+      "javaCompliance" : "21+",
+      "workingSets" : "Graal,HotSpot",
+    },
 
     "jdk.graal.compiler.hotspot.jdk21.test" : {
       "testProject" : True,
@@ -370,18 +370,18 @@ suite = {
       "javaPreviewNeeded": "21+",
     },
 
-        "jdk.graal.compiler.virtual.bench": {
-            "subDir": "src",
-            "sourceDirs": ["src"],
-            "dependencies": ["mx:JMH_1_21", "jdk.graal.compiler.microbenchmarks"],
-            "checkstyle": "jdk.graal.compiler",
-            "javaCompliance": "21+",
-            "annotationProcessors": ["mx:JMH_1_21"],
-            "spotbugsIgnoresGenerated": True,
-            "workingSets": "Graal,Bench",
-            "testProject": True,
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "jdk.graal.compiler.virtual.bench" : {
+      "subDir" : "src",
+      "sourceDirs" : ["src"],
+      "dependencies" : ["mx:JMH_1_21", "jdk.graal.compiler.microbenchmarks"],
+      "checkstyle" : "jdk.graal.compiler",
+      "javaCompliance" : "21+",
+      "annotationProcessors" : ["mx:JMH_1_21"],
+      "spotbugsIgnoresGenerated" : True,
+      "workingSets" : "Graal,Bench",
+      "testProject" : True,
+      "graalCompilerSourceEdition": "ignore",
+    },
 
     "jdk.graal.compiler.microbenchmarks" : {
       "subDir" : "src",
@@ -407,35 +407,35 @@ suite = {
       "graalCompilerSourceEdition": "ignore",
     },
 
-        # ------------- blackbox micro benchmarks -------------
+    # ------------- blackbox micro benchmarks -------------
 
-        "org.graalvm.micro.benchmarks": {
-            "subDir": "src",
-            "sourceDirs": ["src"],
-            "dependencies": [
-                "mx:JMH_1_21",
-            ],
-            "checkstyle": "jdk.graal.compiler",
-            "javaCompliance": "21+",
-            "checkPackagePrefix": "false",
-            "annotationProcessors": ["mx:JMH_1_21"],
-            "spotbugsIgnoresGenerated": True,
-            "workingSets": "Graal,Bench",
-            "testProject": True,
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "org.graalvm.micro.benchmarks" : {
+      "subDir" : "src",
+      "sourceDirs" : ["src"],
+      "dependencies" : [
+        "mx:JMH_1_21",
+      ],
+      "checkstyle" : "jdk.graal.compiler",
+      "javaCompliance" : "21+",
+      "checkPackagePrefix" : "false",
+      "annotationProcessors" : ["mx:JMH_1_21"],
+      "spotbugsIgnoresGenerated" : True,
+      "workingSets" : "Graal,Bench",
+      "testProject" : True,
+      "graalCompilerSourceEdition": "ignore",
+    },
 
-        "org.graalvm.profdiff": {
-            "subDir": "src",
-            "sourceDirs": ["src"],
-            "dependencies": [
-                "jdk.graal.compiler",
-                "sdk:COLLECTIONS",
-            ],
-            "checkstyle": "jdk.graal.compiler",
-            "javaCompliance": "21+",
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "org.graalvm.profdiff" : {
+      "subDir" : "src",
+      "sourceDirs" : ["src"],
+      "dependencies" : [
+        "jdk.graal.compiler",
+        "sdk:COLLECTIONS",
+      ],
+      "checkstyle" : "jdk.graal.compiler",
+      "javaCompliance" : "21+",
+      "graalCompilerSourceEdition": "ignore",
+    },
 
     "org.graalvm.profdiff.test" : {
       "subDir" : "src",
@@ -530,9 +530,9 @@ suite = {
     },
   },
 
-    "distributions": {
+  "distributions" : {
 
-        # ------------- Distributions -------------
+    # ------------- Distributions -------------
 
     "GRAAL_TEST" : {
       "subDir" : "src",
@@ -575,23 +575,23 @@ suite = {
       "graalCompilerSourceEdition": "ignore",
     },
 
-        "GRAAL_PROCESSOR": {
-            "subDir": "src",
-            "dependencies": [
-                "jdk.graal.compiler.processor",
-            ],
-            "maven": False,
-        },
+    "GRAAL_PROCESSOR" : {
+      "subDir": "src",
+      "dependencies" : [
+        "jdk.graal.compiler.processor",
+       ],
+      "maven": False,
+    },
 
-        "GRAAL_VERSION": {
-            "type": "dir",
-            "platformDependent": False,
-            "layout": {
-                "META-INF/graalvm/jdk.graal.compiler/version": "dependency:sdk:VERSION/version",
-            },
-            "description": "Compiler version.",
-            "maven": False,
-        },
+    "GRAAL_VERSION": {
+      "type": "dir",
+      "platformDependent": False,
+      "layout": {
+        "META-INF/graalvm/jdk.graal.compiler/version": "dependency:sdk:VERSION/version",
+      },
+      "description": "Compiler version.",
+      "maven": False,
+    },
 
     "GRAAL" : {
       # This distribution defines a module.
@@ -657,25 +657,25 @@ suite = {
       },
     },
 
-        "GRAAL_MANAGEMENT": {
-            # This distribution defines a module.
-            "moduleInfo": {
-                "name": "jdk.graal.compiler.management",
-            },
-            "subDir": "src",
-            "dependencies": [
-                "jdk.graal.compiler.management",
-            ],
-            "distDependencies": [
-                "GRAAL",
-            ],
-            "allowsJavadocWarnings": True,
-            "description": "The GraalVM compiler Management Bean.",
-            "maven": {
-                "artifactId": "compiler-management",
-                "tag": ["default", "public"],
-            },
-        },
+    "GRAAL_MANAGEMENT" : {
+      # This distribution defines a module.
+      "moduleInfo" : {
+        "name" : "jdk.graal.compiler.management",
+      },
+      "subDir" : "src",
+      "dependencies" : [
+        "jdk.graal.compiler.management",
+      ],
+      "distDependencies" : [
+        "GRAAL",
+      ],
+      "allowsJavadocWarnings": True,
+      "description":  "The GraalVM compiler Management Bean.",
+      "maven" : {
+        "artifactId" : "compiler-management",
+        "tag": ["default", "public"],
+      },
+    },
 
     "LIBGRAAL_LOADER" : {
       "subDir": "src",
@@ -725,67 +725,67 @@ suite = {
       "graalCompilerSourceEdition": "ignore",
     },
 
-        "GRAAL_COMPILER_MICRO_BENCHMARKS": {
-            "subDir": "src",
-            "dependencies": ["org.graalvm.micro.benchmarks"],
-            "testDistribution": True,
-            "maven": False,
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "GRAAL_COMPILER_MICRO_BENCHMARKS" : {
+      "subDir" : "src",
+      "dependencies" : ["org.graalvm.micro.benchmarks"],
+      "testDistribution" : True,
+      "maven": False,
+      "graalCompilerSourceEdition": "ignore",
+    },
 
-        "HSDIS_GRAALVM_SUPPORT": {
-            "native": True,
-            "description": "Disassembler support distribution for the GraalVM",
-            "os_arch": {
-                "linux": {
-                    "riscv64": {
-                        "optional": True,
-                    },
-                    "<others>": {
-                        "layout": {
-                            "hsdis-<arch>.so": "file:<path:HSDIS>/*",
-                        },
-                    },
-                },
-                "<others>": {
-                    "amd64": {
-                        "layout": {
-                            "<libsuffix:hsdis-amd64>": "file:<path:HSDIS>/*",
-                        },
-                    },
-                    "aarch64": {
-                        "layout": {
-                            "<libsuffix:hsdis-aarch64>": "file:<path:HSDIS>/*",
-                        },
-                    },
-                },
+    "HSDIS_GRAALVM_SUPPORT" : {
+      "native" : True,
+      "description" : "Disassembler support distribution for the GraalVM",
+      "os_arch" : {
+        "linux" : {
+          "riscv64" : {
+            "optional" : True,
+          },
+          "<others>" : {
+            "layout" : {
+              "hsdis-<arch>.so" : "file:<path:HSDIS>/*",
             },
+          },
         },
+        "<others>" : {
+          "amd64" : {
+            "layout" : {
+              "<libsuffix:hsdis-amd64>" : "file:<path:HSDIS>/*",
+            },
+          },
+          "aarch64" : {
+            "layout" : {
+              "<libsuffix:hsdis-aarch64>" : "file:<path:HSDIS>/*",
+            },
+          },
+        },
+      },
+    },
 
-        "GRAAL_PROFDIFF": {
-            "subDir": "src",
-            "dependencies": [
-                "org.graalvm.profdiff",
-            ],
-            "distDependencies": [
-                "sdk:COLLECTIONS",
-                "GRAAL",
-            ],
-            "maven": False,
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "GRAAL_PROFDIFF": {
+      "subDir" : "src",
+      "dependencies" : [
+        "org.graalvm.profdiff",
+      ],
+      "distDependencies" : [
+        "sdk:COLLECTIONS",
+        "GRAAL",
+      ],
+      "maven" : False,
+      "graalCompilerSourceEdition": "ignore",
+    },
 
-        "GRAAL_IGVUTIL": {
-            "subDir": "src",
-            "dependencies": [
-                "org.graalvm.igvutil",
-            ],
-            "distDependencies": [
-                "GRAAL",
-            ],
-            "maven": False,
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "GRAAL_IGVUTIL": {
+      "subDir" : "src",
+      "dependencies" : [
+        "org.graalvm.igvutil",
+      ],
+      "distDependencies" : [
+        "GRAAL",
+      ],
+      "maven" : False,
+      "graalCompilerSourceEdition": "ignore",
+    },
 
     "GRAAL_PROFDIFF_TEST" : {
       "subDir" : "src",
@@ -803,20 +803,20 @@ suite = {
       "graalCompilerSourceEdition": "ignore",
     },
 
-        "GRAAL_IGVUTIL_TEST": {
-            "subDir": "src",
-            "dependencies": [
-                "org.graalvm.igvutil.test",
-            ],
-            "distDependencies": [
-                "GRAAL_IGVUTIL",
-            ],
-            "exclude": [
-                "mx:JUNIT",
-            ],
-            "unittestConfig": "graal",
-            "maven": False,
-            "graalCompilerSourceEdition": "ignore",
-        },
+    "GRAAL_IGVUTIL_TEST" : {
+      "subDir" : "src",
+      "dependencies" : [
+        "org.graalvm.igvutil.test",
+      ],
+      "distDependencies" : [
+        "GRAAL_IGVUTIL",
+      ],
+      "exclude" : [
+        "mx:JUNIT",
+      ],
+      "unittestConfig": "graal",
+      "maven": False,
+      "graalCompilerSourceEdition": "ignore",
     },
+  },
 }
