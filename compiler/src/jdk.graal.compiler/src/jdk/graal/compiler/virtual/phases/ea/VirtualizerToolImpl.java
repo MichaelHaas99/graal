@@ -352,7 +352,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized,
-                    ValueNode oopOrHub, ValueNode nonNull) {
+                    ValueNode oop, ValueNode nonNull) {
         VirtualUtil.trace(options, debug, "{{%s}} ", current);
         if (!virtualObject.isAlive()) {
             effects.addFloatingNode(virtualObject, "newVirtualObject");
@@ -367,7 +367,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             closure.virtualObjects.add(virtualObject);
             virtualObject.setObjectId(id);
         }
-        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oopOrHub, nonNull));
+        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oop, nonNull));
         closure.addVirtualAlias(virtualObject, virtualObject);
         PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment(debug);
         effects.addVirtualizationDelta(1);
