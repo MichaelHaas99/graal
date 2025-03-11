@@ -32,7 +32,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
             args = new SnippetTemplate.Arguments(returnResultSnippet, graph.getGuardsStage(), tool.getLoweringStage());
 
             args.add("isNotNull", node.getIsNotNull());
-            args.add("existingOop", node.getExistingOop());
+            args.add("oop", node.getOop());
             args.add("hub", node.getHub());
             template(tool, node, args).instantiate(tool.getMetaAccess(), node, DEFAULT_REPLACER, args);
         }
@@ -40,11 +40,11 @@ public class ReturnResultDeciderSnippets implements Snippets {
     }
 
     @Snippet
-    public static Word returnResultSnippet(int isNotNull, Object existingOop, KlassPointer hub) {
+    public static Word returnResultSnippet(int isNotNull, Object oop, KlassPointer hub) {
         // @formatter:off
         /*
          * if(scalarized inline object is not null){
-         *      if(existingOop is not null) return existingOop;
+         *      if(oop is not null) return oop;
          *      else return taggedHub;
          * } else {
          *      return null;
@@ -52,7 +52,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
          */
         // @formatter:on
         if (probability(LIKELY_PROBABILITY, isNotNull == 1)) {
-            Word wordOop = Word.objectToTrackedPointer(existingOop);
+            Word wordOop = Word.objectToTrackedPointer(oop);
             Word wordHub = hub.asWord();
             Word wordTaggedHub = wordHub.or(1);
             if (wordOop.isNull()) {

@@ -159,16 +159,16 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
         }
 
         JavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
-        int existingOopIndex = 0;
-        ReadMultiValueNode existingOop = null;
+        int oopIndex = 0;
+        ReadMultiValueNode oop = null;
         int isNotNullIndex = types.length;
         ReadMultiValueNode isNotNull = null;
 
         List<ReadMultiValueNode> readMultiValue = new ArrayList<>(types.length - 1);
         for (Node usage : asNode().usages()) {
             if (usage instanceof ReadMultiValueNode readMultiValueNode) {
-                if (readMultiValueNode.getIndex() == existingOopIndex) {
-                    existingOop = readMultiValueNode;
+                if (readMultiValueNode.getIndex() == oopIndex) {
+                    oop = readMultiValueNode;
                 } else if (readMultiValueNode.getIndex() == isNotNullIndex) {
                     isNotNull = readMultiValueNode;
                 } else {
@@ -177,6 +177,6 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
             }
         }
 
-        gen.emitInvokeWithScalarizedReturn(this, existingOop, readMultiValue.toArray(new ReadMultiValueNode[readMultiValue.size()]), isNotNull, types);
+        gen.emitInvokeWithScalarizedReturn(this, oop, readMultiValue.toArray(new ReadMultiValueNode[readMultiValue.size()]), isNotNull, types);
     }
 }

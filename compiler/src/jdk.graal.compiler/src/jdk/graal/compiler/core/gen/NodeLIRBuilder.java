@@ -672,7 +672,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode existingOop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode isNotNull, JavaType[] types) {
+    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode isNotNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
@@ -728,9 +728,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         Variable temp = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
         setResult(x.asNode(), temp);
 
-        if (existingOop != null) {
-            assert isLegal(results[existingOop.getIndex()]) : "expected legal Value for oop";
-            setResult(existingOop, operand(x.asNode()));
+        if (oop != null) {
+            assert isLegal(results[oop.getIndex()]) : "expected legal Value for oop";
+            setResult(oop, operand(x.asNode()));
         }
 
         for (int i = 0; i < fieldValues.length; i++) {

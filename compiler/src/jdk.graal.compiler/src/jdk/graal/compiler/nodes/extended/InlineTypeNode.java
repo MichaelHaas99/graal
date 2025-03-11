@@ -38,22 +38,22 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@link InlineTypeNode} represents a (nullable) scalarized inline object. It takes an optional
- * object {@link #existingOop} (in C2 it is called Oop) and the field values {@link #fieldValues} as
- * well as an isNotNull information as input. If the object represents a null value then the input
- * {@link #existingOop} will be null at runtime. If the bit 0 of {@link #existingOop} is set at
- * runtime, no oop exists and the object needs to be reconstructed by the scalarized field values,
- * if needed. If an oop exists it is up to the compiler to either use the oop or the scalarized
- * field values. The isNotNull information indicates if the inline object is null or not, and can be
- * used e.g. for null checks or for the debugInfo (in C2 it is called isInit).
+ * object {@link #oop} (in C2 it is called Oop) and the field values {@link #fieldValues} as well as
+ * an isNotNull information as input. If the object represents a null value then the input
+ * {@link #oop} will be null at runtime. If the bit 0 of {@link #oop} is set at runtime, no oop
+ * exists and the object needs to be reconstructed by the scalarized field values, if needed. If an
+ * oop exists it is up to the compiler to either use the oop or the scalarized field values. The
+ * isNotNull information indicates if the inline object is null or not, and can be used e.g. for
+ * null checks or for the debugInfo (in C2 it is called isInit).
  *
  * An {@link Invoke} is responsible for setting the {@link #isNotNull} output correctly based on the
- * {@link #existingOop}, because the information doesn't exist as return value. It also sets the
- * tagged hub to a null pointer.
+ * {@link #oop}, because the information doesn't exist as return value. It also sets the tagged hub
+ * to a null pointer.
  *
  * For a null-restricted flat field only the {@link #fieldValues} will be set.
  *
  * For a scalarized method parameter, the {@link #fieldValues} and the {@link #isNotNull} fields
- * will be directly set by passed parameters. The {@link #existingOop} will stay empty.
+ * will be directly set by passed parameters. The {@link #oop} will stay empty.
  *
  * For a nullable flat field, the {@link #fieldValues} and the {@link #isNotNull} information can be
  * loaded directly from the flat field.
@@ -64,19 +64,19 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @OptionalInput ValueNode existingOop;
+    @OptionalInput ValueNode oop;
     @OptionalInput NodeInputList<ValueNode> fieldValues;
     @OptionalInput ValueNode isNotNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode existingOop, ValueNode[] fieldValues, ValueNode isNotNull) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode isNotNull) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), isNotNull == null));
-        this.existingOop = existingOop;
+        this.oop = oop;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
         this.type = type;
         this.isNotNull = isNotNull;
-        assert isNotNull == null && existingOop == null || isNotNull != null && existingOop != null : "both should be either null or not null";
+        assert isNotNull == null && oop == null || isNotNull != null && oop != null : "both should be either null or not null";
     }
 
     public void setFieldValue(ResolvedJavaField field, ValueNode value) {
@@ -95,8 +95,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     }
 
-    public ValueNode getExistingOop() {
-        return existingOop;
+    public ValueNode getOop() {
+        return oop;
     }
 
     public ValueNode getIsNotNull() {
@@ -129,10 +129,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return isNotNull != null && isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0;
     }
 
-    public boolean hasNoExistingOop() {
-        return existingOop == null || existingOop.isNullConstant();
-    }
-
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode isNotNull) {
         return new InlineTypeNode(type, oopOrHub, new ValueNode[type.getInstanceFields(true).length], isNotNull);
     }
@@ -153,7 +149,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
 
         // can also represent an oop or a null pointer
-        ReadMultiValueNode existingOop = b.add(new ReadMultiValueNode(returnType, b.getAssumptions(), invoke.asNode(), 0));
+        ReadMultiValueNode oop = b.add(new ReadMultiValueNode(returnType, b.getAssumptions(), invoke.asNode(), 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ReadMultiValueNode[] projs = new ReadMultiValueNode[fields.length];
@@ -166,7 +162,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ReadMultiValueNode isNotNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, existingOop, projs, isNotNull));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, projs, isNotNull));
 // b.append(new ForeignCallNode(LOG_OBJECT, oopOrHub, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
@@ -175,14 +171,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
 
     public void removeOnInlining() {
-        assert existingOop instanceof ReadMultiValueNode : "oop has to be a ReadMultiValueNode";
+        assert oop instanceof ReadMultiValueNode : "oop has to be a ReadMultiValueNode";
         assert isNotNull instanceof ReadMultiValueNode : "isNotNull has to be a ReadMultiValueNode";
-        ValueNode invoke = ((ReadMultiValueNode) existingOop).getMultiValueNode();
+        ValueNode invoke = ((ReadMultiValueNode) oop).getMultiValueNode();
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
         replaceAtUsages(invoke);
 
         // remove inputs of ReadMultiValueNode to MultiValueNode
-        ((ReadMultiValueNode) existingOop).delete();
+        ((ReadMultiValueNode) oop).delete();
         ((ReadMultiValueNode) isNotNull).delete();
         for (ValueNode p : fieldValues) {
             assert p instanceof ReadMultiValueNode : "scalarized value has to be a ProjNode";
@@ -228,14 +224,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         if (tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
-            ValueNode oop = this.existingOop;
+            ValueNode oop = this.oop;
             ValueNode notNull = this.isNotNull;
             if (insertGuardBeforeVirtualize) {
                 if (!isNullFree()) {
                     // Because the node can represent a null value, insert a guard before we
                     // virtualize
                     tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
-                    if (existingOop == null) {
+                    if (oop == null) {
                         notNull = null;
                     } else {
                         notNull = ConstantNode.forInt(1, graph());
@@ -263,7 +259,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 notNull = ConstantNode.forInt(1, graph());
             }
 
-            // create virtual object and hand over existing oop
+            // create virtual object and hand over oop and non-null info
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, notNull);
             tool.replaceWithVirtual(virtualObject);
         }

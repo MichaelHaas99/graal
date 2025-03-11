@@ -105,9 +105,9 @@ public interface VirtualizerTool extends CoreProviders {
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
-    boolean hasNoExistingOop(VirtualObjectNode virtualObject);
+    boolean hasNullOop(VirtualObjectNode virtualObject);
 
-    ValueNode getExistingOop(VirtualObjectNode virtualObject);
+    ValueNode getOop(VirtualObjectNode virtualObject);
 
     ValueNode getIsNotNull(VirtualObjectNode virtualObject);
 
