@@ -576,7 +576,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         boolean markDone = true;
         AllocatableValue toValue = null;
 
-        // receiver is null-free
+        // receiver is non-null
         boolean nullCheck = !rootMethod.isParameterNullFree(signatureIndex, true);
 
         for (int i = 0; i < types.length; i++) {

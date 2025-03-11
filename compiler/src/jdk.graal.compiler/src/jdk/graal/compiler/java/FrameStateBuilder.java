@@ -352,7 +352,7 @@ public final class FrameStateBuilder implements SideEffectsState {
 // newStartPosition = foreign;
 // }
                     }
-                    InlineTypeNode inlineTypeNode = graph.add(InlineTypeNode.createNullFreeWithoutOop(method.getDeclaringClass(), scalarizedValues));
+                    InlineTypeNode inlineTypeNode = graph.add(InlineTypeNode.createNonNullWithoutOop(method.getDeclaringClass(), scalarizedValues));
                     newStartPosition.setNext(inlineTypeNode);
                     newStartPosition = inlineTypeNode;
                     receiver = inlineTypeNode;

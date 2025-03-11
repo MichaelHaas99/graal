@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.Node;
@@ -28,6 +29,7 @@ import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -77,6 +79,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         this.type = type;
         this.isNotNull = isNotNull;
         assert isNotNull == null && oop == null || isNotNull != null && oop != null : "both should be either null or not null";
+        inferStamp();
     }
 
     public void setFieldValue(ResolvedJavaField field, ValueNode value) {
@@ -103,8 +106,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return isNotNull;
     }
 
-    public LogicNode createIsNullCheck() {
-        assert !isNullFree() : "should only be called if node is not null free";
+    public LogicNode createNullCheck() {
+        assert !StampTool.isPointerNonNull(this) : "should only be called if node is not non-null";
         return graph().addOrUnique(new IntegerEqualsNode(isNotNull, ConstantNode.forInt(0, graph())));
     }
 
@@ -121,24 +124,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return fieldValues.get(index);
     }
 
-    public boolean isNullFree() {
-        return isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
-    }
 
-    public boolean isNull() {
-        return isNotNull != null && isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0;
-    }
 
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode isNotNull) {
         return new InlineTypeNode(type, oopOrHub, new ValueNode[type.getInstanceFields(true).length], isNotNull);
     }
 
-    public static InlineTypeNode createNullFree(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] fieldValues) {
+    public static InlineTypeNode createNonNull(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] fieldValues) {
         return new InlineTypeNode(type, oopOrHub, fieldValues, null);
     }
 
-    public static InlineTypeNode createNullFreeWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues) {
-        return InlineTypeNode.createNullFree(type, null, fieldValues);
+    public static InlineTypeNode createNonNullWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues) {
+        return InlineTypeNode.createNonNull(type, null, fieldValues);
     }
 
     public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues, ValueNode isNotNull) {
@@ -199,7 +196,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     // comment to see inline type node getting materialized to null for test6_verifier
     @Override
     public void simplify(SimplifierTool tool) {
-        if (isNull()) {
+        if (StampTool.isPointerAlwaysNull(this)) {
             List<Node> inputSnapshot = inputs().snapshot();
             List<Node> usages = this.usages().snapshot();
 
@@ -211,7 +208,29 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 tool.removeIfUnused(input);
             }
         }
+    }
 
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(computeStamp());
+    }
+
+    private Stamp computeStamp() {
+        if (isNonNull()) {
+            return StampFactory.objectNonNull().improveWith(stamp);
+        }
+        if (isNull()) {
+            return StampFactory.alwaysNull();
+        }
+        return stamp;
+    }
+
+    private boolean isNonNull() {
+        return isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
+    }
+
+    private boolean isNull() {
+        return isNotNull != null && isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0;
     }
 
     private boolean virtualize = true;
@@ -227,10 +246,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             ValueNode oop = this.oop;
             ValueNode notNull = this.isNotNull;
             if (insertGuardBeforeVirtualize) {
-                if (!isNullFree()) {
+                if (!StampTool.isPointerNonNull(this)) {
                     // Because the node can represent a null value, insert a guard before we
                     // virtualize
-                    tool.addNode(new FixedGuardNode(createIsNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
+                    tool.addNode(new FixedGuardNode(createNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
                     if (oop == null) {
                         notNull = null;
                     } else {
@@ -242,7 +261,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             }
 
             // virtualize
-            VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false, isNullFree() || insertGuardBeforeVirtualize);
+            VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false, StampTool.isPointerNonNull(this) || insertGuardBeforeVirtualize);
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
