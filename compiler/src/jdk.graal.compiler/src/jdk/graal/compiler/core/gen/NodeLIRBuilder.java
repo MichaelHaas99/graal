@@ -672,7 +672,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode existingOop, ReadMultiValueNode[] scalarizedInlineObject, ReadMultiValueNode isNotNull, JavaType[] types) {
+    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode existingOop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode isNotNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
@@ -733,9 +733,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             setResult(existingOop, operand(x.asNode()));
         }
 
-        for (int i = 0; i < scalarizedInlineObject.length; i++) {
-            assert isLegal(results[scalarizedInlineObject[i].getIndex()]) : "expected legal Value for scalarized inline type";
-            setResult(scalarizedInlineObject[i], gen.emitMove(results[scalarizedInlineObject[i].getIndex()]));
+        for (int i = 0; i < fieldValues.length; i++) {
+            assert isLegal(results[fieldValues[i].getIndex()]) : "expected legal Value for scalarized inline type";
+            setResult(fieldValues[i], gen.emitMove(results[fieldValues[i].getIndex()]));
         }
 
         if (x instanceof InvokeWithExceptionNode) {

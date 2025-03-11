@@ -299,13 +299,13 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    public void emitScalarizedReturn(JavaKind kind, Value input, JavaKind[] scalarizedKinds, Value[] scalarizedInputs) {
-        assert input != null : "return with scalarized values expected non-null value";
-        AllocatableValue operand = resultOperandFor(kind, input.getValueKind());
-        emitMove(operand, input);
-        AllocatableValue[] scalarizedOperands = resultOperandsFor(scalarizedKinds, scalarizedInputs);
-        for (int i = 0; i < scalarizedKinds.length; i++) {
-            emitMove(scalarizedOperands[i], scalarizedInputs[i]);
+    public void emitScalarizedReturn(JavaKind oopOrTaggedHubKind, Value oopOrTaggedHub, JavaKind[] fieldKinds, Value[] fieldValues) {
+        assert oopOrTaggedHub != null : "return with scalarized values expected oop or hub value";
+        AllocatableValue operand = resultOperandFor(oopOrTaggedHubKind, oopOrTaggedHub.getValueKind());
+        emitMove(operand, oopOrTaggedHub);
+        AllocatableValue[] fieldOperands = resultOperandsFor(fieldKinds, fieldValues);
+        for (int i = 0; i < fieldKinds.length; i++) {
+            emitMove(fieldOperands[i], fieldValues[i]);
         }
         if (pollOnReturnScratchRegister == null) {
             pollOnReturnScratchRegister = findPollOnReturnScratchRegister();
@@ -315,7 +315,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             append(new AMD64RestoreRegistersOp(saveOnEntry.getSlots(), saveOnEntry));
         }
         Register thread = getProviders().getRegisters().getThreadRegister();
-        append(new AMD64HotSpotReturnOp(operand, scalarizedOperands, getStub() != null, thread, pollOnReturnScratchRegister, config, getResult().requiresReservedStackAccessCheck()));
+        append(new AMD64HotSpotReturnOp(operand, fieldOperands, getStub() != null, thread, pollOnReturnScratchRegister, config, getResult().requiresReservedStackAccessCheck()));
     }
 
     @Override
