@@ -44,7 +44,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.TriState;
 
 /**
  * Contains utility functions often needed in conjunction with inline types.
@@ -357,7 +356,7 @@ public class InlineTypeUtil {
     /**
      * Create as {@link LogicNode} indicating if an inline object is already allocated.
      */
-    public static LogicNode createIsAlreadyBufferedCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
+    public static LogicNode createIsAllocatedOrNullCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
         assert isNotNull == null && oop == null || isNotNull != null && oop != null : "both should be either null or not null";
         if (isNotNull == null && oop == null) {
             return graph.addOrUnique(LogicConstantNode.contradiction());
@@ -371,14 +370,11 @@ public class InlineTypeUtil {
     }
 
     /**
-     * Determines if it is known at compile time if a scalarized inline object is already buffered.
-     * E.g. this can be the case if the inline object is constant null.
+     * Determines if it is known at compile time if a scalarized inline object is already allocated
+     * or null. E.g. this can be the case if the inline object is constant null.
      */
-    public static TriState isAlreadyBuffered(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
-        if (createIsAlreadyBufferedCheck(graph, isNotNull, oop).isTautology()) {
-            return TriState.TRUE;
-        }
-        return TriState.UNKNOWN;
+    public static boolean isAllocatedOrNull(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
+        return createIsAllocatedOrNullCheck(graph, isNotNull, oop).isTautology();
     }
 
     /**
@@ -401,9 +397,9 @@ public class InlineTypeUtil {
         StructuredGraph graph = addBefore.graph();
 
 
-        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, oop);
+        LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, isNotNull, oop);
 
-        assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
+        assert !isAllocatedOrNull.isTautology() : "should have been checked for tautology before";
         assert newInstanceNode != null && newInstanceNode.isAlive() : "NewInstanceNode should be alive";
 
         if (newInstanceNode == null) {
@@ -412,7 +408,7 @@ public class InlineTypeUtil {
         }
 
 
-        if (isAlreadyBuffered.isContradiction()) {
+        if (isAllocatedOrNull.isContradiction()) {
             graph.addBeforeFixed(addBefore, newInstanceNode);
             for (WriteNode w : writes) {
                 assert w != null && w.isAlive() : "WriteNode should be alive";
@@ -430,15 +426,15 @@ public class InlineTypeUtil {
 
         BeginNode trueBegin = graph.add(new BeginNode());
         BeginNode falseBegin = graph.add(new BeginNode());
-        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        IfNode ifNode = graph.add(new IfNode(isAllocatedOrNull, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
         ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
 
-        // true branch - inline object is already buffered (oop or null) or is null
+        // true branch - inline object is already allocated or is null
 
         EndNode trueEnd = graph.add(new EndNode());
         trueBegin.setNext(trueEnd);
 
-        // false branch - inline object is not buffered
+        // false branch - inline object is not yet allocated
 
         EndNode falseEnd = graph.add(new EndNode());
 
@@ -474,10 +470,10 @@ public class InlineTypeUtil {
     public static void insertLateInitWrites(FixedNode addBefore, ValueNode isNotNull, ValueNode oop, List<WriteNode> writes) {
         StructuredGraph graph = addBefore.graph();
 
-        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, oop);
-        assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
+        LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, isNotNull, oop);
+        assert !isAllocatedOrNull.isTautology() : "should have been checked for tautology before";
 
-        if (isAlreadyBuffered.isContradiction()) {
+        if (isAllocatedOrNull.isContradiction()) {
             for (WriteNode w : writes) {
                 assert w != null && w.isAlive() : "WriteNode should be alive";
                 graph.addBeforeFixed(addBefore, w);
@@ -490,15 +486,15 @@ public class InlineTypeUtil {
         BeginNode trueBegin = graph.add(new BeginNode());
         BeginNode falseBegin = graph.add(new BeginNode());
 
-        IfNode ifNode = graph.add(new IfNode(isAlreadyBuffered, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        IfNode ifNode = graph.add(new IfNode(isAllocatedOrNull, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
         ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
 
-        // true branch - inline object is already buffered (oop or null) or is null
+        // true branch - inline object is already allocated or is null
 
         EndNode trueEnd = graph.add(new EndNode());
         trueBegin.setNext(trueEnd);
 
-        // false branch - inline object is not buffered
+        // false branch - inline object is not yet allocated
 
         EndNode falseEnd = graph.add(new EndNode());
 

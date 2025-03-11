@@ -134,8 +134,9 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void createNullCheck(VirtualObjectNode virtualObject) {
-        if (StampTool.isPointerNonNull(virtualObject))
+        if (StampTool.isPointerNonNull(virtualObject)) {
             return;
+        }
         ValueNode isNotNull = state.getObjectState(virtualObject).getIsNotNull();
         assert isNotNull != null : "nullable scalarized inline object expect isNotNull information to be set";
         LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1));
