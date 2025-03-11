@@ -46,10 +46,10 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         return values;
     }
 
-    @OptionalInput ValueNode isNotNull;
+    @OptionalInput ValueNode nonNull;
 
-    public ValueNode getIsNotNull() {
-        return isNotNull;
+    public ValueNode getNonNull() {
+        return nonNull;
     }
 
     public VirtualObjectState(VirtualObjectNode object, ValueNode[] values) {
@@ -58,14 +58,14 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
         this.values = new NodeInputList<>(this, values);
     }
 
-    public VirtualObjectState(VirtualObjectNode object, ValueNode[] values, ValueNode isNotNull) {
+    public VirtualObjectState(VirtualObjectNode object, ValueNode[] values, ValueNode nonNull) {
         this(object, values);
-        this.isNotNull = isNotNull;
+        this.nonNull = nonNull;
     }
 
-    public VirtualObjectState(VirtualObjectNode object, List<ValueNode> values, ValueNode isNotNull) {
+    public VirtualObjectState(VirtualObjectNode object, List<ValueNode> values, ValueNode nonNull) {
         this(object, values);
-        this.isNotNull = isNotNull;
+        this.nonNull = nonNull;
     }
 
     public VirtualObjectState(VirtualObjectNode object, List<ValueNode> values) {
@@ -76,7 +76,7 @@ public final class VirtualObjectState extends EscapeObjectState implements Node.
 
     @Override
     public VirtualObjectState duplicateWithVirtualState() {
-        return graph().addWithoutUnique(new VirtualObjectState(object(), values, isNotNull));
+        return graph().addWithoutUnique(new VirtualObjectState(object(), values, nonNull));
     }
 
 }

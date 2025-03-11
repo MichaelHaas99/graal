@@ -216,46 +216,46 @@ public class InlineTypeUtil {
      * See
      * {@link #createScalarizationCFG(FixedNode, ValueNode, LogicNode, ResolvedJavaField[], boolean, boolean)}
      */
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, LogicNode isNotNull, ResolvedJavaField[] fields) {
-        return createScalarizationCFG(addBefore, object, isNotNull, fields, false, false);
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, LogicNode nonNull, ResolvedJavaField[] fields) {
+        return createScalarizationCFG(addBefore, object, nonNull, fields, false, false);
     }
 
     /**
-     *
      * Scalarizes an object into it's field values.
      *
      * @param addBefore the node before the diamond should be inserted into the graph
      * @param object the object whose field values should be loaded
-     * @param isNotNull condition used as branch condition, indicating if the object is not null
+     * @param nonNullCheck condition used as branch condition, indicating if the object is not null
      * @param fields the resolved filed
      * @param assumeObjectNonNull true if no diamond should be created
-     * @param includeIsNotNullPhi true if the isNotNull information should be included in the return
-     *            phis at position 1
+     * @param includeNonNullPhi true if the nonNull information should be included in the return
+     *            phis at position zero
      * @return The field values of the object
      */
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, LogicNode isNotNull, ResolvedJavaField[] fields, boolean assumeObjectNonNull, boolean includeIsNotNullPhi) {
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, LogicNode nonNullCheck, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
+                    boolean includeNonNullPhi) {
         StructuredGraph graph = addBefore.graph();
-        if (isNotNull.isTautology() || assumeObjectNonNull) {
+        if (nonNullCheck.isTautology() || assumeObjectNonNull) {
             assert StampTool.isPointerNonNull(object) : "expected parameter to be non-null, insert a null check";
-            ValueNode[] loads = new ValueNode[fields.length + (includeIsNotNullPhi ? 1 : 0)];
-            if (includeIsNotNullPhi) {
+            ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+            if (includeNonNullPhi) {
                 loads[0] = ConstantNode.forByte((byte) 1, graph);
             }
             for (int i = 0; i < fields.length; i++) {
                 LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields[i]));
-                loads[i + (includeIsNotNullPhi ? 1 : 0)] = load;
+                loads[i + (includeNonNullPhi ? 1 : 0)] = load;
                 graph.addBeforeFixed(addBefore, load);
             }
             return loads;
         }
-        if (isNotNull.isContradiction()) {
-            ValueNode[] loads = new ValueNode[fields.length + (includeIsNotNullPhi ? 1 : 0)];
-            if (includeIsNotNullPhi) {
+        if (nonNullCheck.isContradiction()) {
+            ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+            if (includeNonNullPhi) {
                 loads[0] = ConstantNode.forByte((byte) 0, graph);
             }
             for (int i = 0; i < fields.length; i++) {
                 ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
-                loads[i + (includeIsNotNullPhi ? 1 : 0)] = load;
+                loads[i + (includeNonNullPhi ? 1 : 0)] = load;
             }
             return loads;
         }
@@ -263,7 +263,7 @@ public class InlineTypeUtil {
         BeginNode trueBegin = graph.add(new BeginNode());
         BeginNode falseBegin = graph.add(new BeginNode());
 
-        IfNode ifNode = graph.add(new IfNode(graph.addOrUnique(isNotNull), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        IfNode ifNode = graph.add(new IfNode(graph.addOrUnique(nonNullCheck), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
         ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
 
         // get a valid framestate for the merge node
@@ -301,7 +301,7 @@ public class InlineTypeUtil {
 
         // produces phi nodes
         ValuePhiNode[] phis;
-        if (includeIsNotNullPhi) {
+        if (includeNonNullPhi) {
             phis = new ValuePhiNode[fields.length + 1];
             phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
             for (int i = 0; i < fields.length; i++) {
@@ -346,7 +346,7 @@ public class InlineTypeUtil {
         // create a framestate for invoke with virtual object
         b.push(resultType, virtual);
         b.setStateAfter(invoke);
-        invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getIsNotNull())));
+        invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getNonNull())));
         b.pop(resultType);
 
         // push the InlineTypeNode as result
@@ -356,12 +356,12 @@ public class InlineTypeUtil {
     /**
      * Create as {@link LogicNode} indicating if an inline object is already allocated.
      */
-    public static LogicNode createIsAllocatedOrNullCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
-        assert isNotNull == null && oop == null || isNotNull != null && oop != null : "both should be either null or not null";
-        if (isNotNull == null && oop == null) {
+    public static LogicNode createIsAllocatedOrNullCheck(StructuredGraph graph, ValueNode nonNull, ValueNode oop) {
+        assert nonNull == null && oop == null || nonNull != null && oop != null : "both should be either null or not null";
+        if (nonNull == null && oop == null) {
             return graph.addOrUnique(LogicConstantNode.contradiction());
         }
-        LogicNode notNull = graph.addOrUnique(IntegerEqualsNode.create(isNotNull, ConstantNode.forInt(1, graph), NodeView.DEFAULT));
+        LogicNode notNull = graph.addOrUnique(IntegerEqualsNode.create(nonNull, ConstantNode.forInt(1, graph), NodeView.DEFAULT));
         LogicNode oopIsNull = graph.addOrUnique(IsNullNode.create(oop));
         LogicNode check = graph.addOrUniqueWithInputs(
                         LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
@@ -373,8 +373,8 @@ public class InlineTypeUtil {
      * Determines if it is known at compile time if a scalarized inline object is already allocated
      * or null. E.g. this can be the case if the inline object is constant null.
      */
-    public static boolean isAllocatedOrNull(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
-        return createIsAllocatedOrNullCheck(graph, isNotNull, oop).isTautology();
+    public static boolean isAllocatedOrNull(StructuredGraph graph, ValueNode nonNull, ValueNode oop) {
+        return createIsAllocatedOrNullCheck(graph, nonNull, oop).isTautology();
     }
 
     /**
@@ -384,7 +384,7 @@ public class InlineTypeUtil {
      *
      *
      * @param addBefore the node before the diamond should be inserted into the graph
-     * @param isNotNull node indicating if the inline object is null or not
+     * @param nonNull node indicating if the inline object is null or not
      * @param oop represents either an inline object or null at runtime
      * @param writes write operations that should be performed on the allocation branch
      * @param addMembar true if a membar should be inserted on the allocation branch
@@ -392,12 +392,12 @@ public class InlineTypeUtil {
      * @param type the type of the inline object
      * @return the phi node of the diamond representing the inline object
      */
-    public static ValueNode createAllocationDiamond(FixedNode addBefore, ValueNode isNotNull, ValueNode oop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
+    public static ValueNode createAllocationDiamond(FixedNode addBefore, ValueNode nonNull, ValueNode oop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
                     ResolvedJavaType type) {
         StructuredGraph graph = addBefore.graph();
 
 
-        LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, isNotNull, oop);
+        LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, nonNull, oop);
 
         assert !isAllocatedOrNull.isTautology() : "should have been checked for tautology before";
         assert newInstanceNode != null && newInstanceNode.isAlive() : "NewInstanceNode should be alive";
@@ -467,10 +467,10 @@ public class InlineTypeUtil {
 
     }
 
-    public static void insertLateInitWrites(FixedNode addBefore, ValueNode isNotNull, ValueNode oop, List<WriteNode> writes) {
+    public static void insertLateInitWrites(FixedNode addBefore, ValueNode nonNull, ValueNode oop, List<WriteNode> writes) {
         StructuredGraph graph = addBefore.graph();
 
-        LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, isNotNull, oop);
+        LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, nonNull, oop);
         assert !isAllocatedOrNull.isTautology() : "should have been checked for tautology before";
 
         if (isAllocatedOrNull.isContradiction()) {
@@ -519,17 +519,17 @@ public class InlineTypeUtil {
 
 
     public static class InlineTypeInfo {
-        public InlineTypeInfo(ValueNode isNotNull, ValueNode oop) {
-            this.isNotNull = isNotNull;
+        public InlineTypeInfo(ValueNode nonNull, ValueNode oop) {
+            this.nonNull = nonNull;
             this.oop = oop;
         }
 
-        private ValueNode isNotNull;
+        private ValueNode nonNull;
         private ValueNode oop;
         private List<WriteNode> writes = new ArrayList<>();
 
-        public ValueNode getIsNotNull() {
-            return isNotNull;
+        public ValueNode getNonNull() {
+            return nonNull;
         }
 
         public ValueNode getOop() {

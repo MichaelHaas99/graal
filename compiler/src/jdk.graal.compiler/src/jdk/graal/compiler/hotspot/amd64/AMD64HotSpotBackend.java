@@ -560,7 +560,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         assert !ValueUtil.isIllegal(fromValue) : "source must be valid";
         boolean progress = false;
         final Label labelIsNull = new Label();
-        final Label labelIsNotNull = new Label();
+        final Label labelNonNull = new Label();
         // Don't use r14 as tmp because it's used for spilling spillRegFor
 
         Register tmp1 = r10;
@@ -644,9 +644,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         }
         if (progress && nullCheck) {
             if (done) {
-                asm.jmp(labelIsNotNull);
+                asm.jmp(labelNonNull);
                 asm.bind(labelIsNull);
-                // Set IsNotNull field to zero to signal that the argument is null.
+                // Set NonNull field to zero to signal that the argument is null.
                 // Also set all oop fields to zero to make the GC happy.
                 for (int i = 0; i < types.length; i++) {
                     JavaKind kind = types[types.length - i - 1].getJavaKind();
@@ -660,7 +660,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                         }
                     }
                 }
-                asm.bind(labelIsNotNull);
+                asm.bind(labelNonNull);
             } else {
                 asm.bind(labelIsNull);
             }

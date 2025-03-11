@@ -128,8 +128,8 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
-    public ValueNode getIsNotNull(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).getIsNotNull();
+    public ValueNode getNonNull(VirtualObjectNode virtualObject) {
+        return state.getObjectState(virtualObject).getNonNull();
     }
 
     @Override
@@ -137,9 +137,9 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         if (StampTool.isPointerNonNull(virtualObject)) {
             return;
         }
-        ValueNode isNotNull = state.getObjectState(virtualObject).getIsNotNull();
-        assert isNotNull != null : "nullable scalarized inline object expect isNotNull information to be set";
-        LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1));
+        ValueNode nonNull = state.getObjectState(virtualObject).getNonNull();
+        assert nonNull != null : "nullable scalarized inline object expect nonNull information to be set";
+        LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
         ensureAdded(check);
         addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false));
     }
@@ -352,7 +352,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized,
-                    ValueNode oopOrHub, ValueNode isNotNull) {
+                    ValueNode oopOrHub, ValueNode nonNull) {
         VirtualUtil.trace(options, debug, "{{%s}} ", current);
         if (!virtualObject.isAlive()) {
             effects.addFloatingNode(virtualObject, "newVirtualObject");
@@ -367,7 +367,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             closure.virtualObjects.add(virtualObject);
             virtualObject.setObjectId(id);
         }
-        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oopOrHub, isNotNull));
+        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oopOrHub, nonNull));
         closure.addVirtualAlias(virtualObject, virtualObject);
         PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment(debug);
         effects.addVirtualizationDelta(1);
@@ -393,7 +393,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         ObjectState state = this.state.getObjectState(from).cloneState();
         ValueNode constOne = ConstantNode.forInt(1);
         ensureAdded(constOne);
-        state.setIsNotNull(constOne);
+        state.setNonNull(constOne);
         this.state.addObject(id, state);
         return virtualObject;
     }

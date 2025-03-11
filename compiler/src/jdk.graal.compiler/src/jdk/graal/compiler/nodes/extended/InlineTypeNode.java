@@ -41,23 +41,23 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 /**
  * The {@link InlineTypeNode} represents a (nullable) scalarized inline object. It takes an optional
  * object {@link #oop} (in C2 it is called Oop) and the field values {@link #fieldValues} as well as
- * an isNotNull information as input. If the object represents a null value then the input
+ * an nonNull information as input. If the object represents a null value then the input
  * {@link #oop} will be null at runtime. If the bit 0 of {@link #oop} is set at runtime, no oop
  * exists and the object needs to be reconstructed by the scalarized field values, if needed. If an
  * oop exists it is up to the compiler to either use the oop or the scalarized field values. The
- * isNotNull information indicates if the inline object is null or not, and can be used e.g. for
- * null checks or for the debugInfo (in C2 it is called isInit).
+ * nonNull information indicates if the inline object is null or not, and can be used e.g. for null
+ * checks or for the debugInfo (in C2 it is called isInit).
  *
- * An {@link Invoke} is responsible for setting the {@link #isNotNull} output correctly based on the
+ * An {@link Invoke} is responsible for setting the {@link #nonNull} output correctly based on the
  * {@link #oop}, because the information doesn't exist as return value. It also sets the tagged hub
  * to a null pointer.
  *
  * For a null-restricted flat field only the {@link #fieldValues} will be set.
  *
- * For a scalarized method parameter, the {@link #fieldValues} and the {@link #isNotNull} fields
- * will be directly set by passed parameters. The {@link #oop} will stay empty.
+ * For a scalarized method parameter, the {@link #fieldValues} and the {@link #nonNull} fields will
+ * be directly set by passed parameters. The {@link #oop} will stay empty.
  *
- * For a nullable flat field, the {@link #fieldValues} and the {@link #isNotNull} information can be
+ * For a nullable flat field, the {@link #fieldValues} and the {@link #nonNull} information can be
  * loaded directly from the flat field.
  *
  */
@@ -68,17 +68,17 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @OptionalInput ValueNode oop;
     @OptionalInput NodeInputList<ValueNode> fieldValues;
-    @OptionalInput ValueNode isNotNull;
+    @OptionalInput ValueNode nonNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode isNotNull) {
-        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), isNotNull == null));
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull) {
+        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
         this.type = type;
-        this.isNotNull = isNotNull;
-        assert isNotNull == null && oop == null || isNotNull != null && oop != null : "both should be either null or not null";
+        this.nonNull = nonNull;
+        assert nonNull == null && oop == null || nonNull != null && oop != null : "both should be either null or not null";
         inferStamp();
     }
 
@@ -102,13 +102,13 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return oop;
     }
 
-    public ValueNode getIsNotNull() {
-        return isNotNull;
+    public ValueNode getNonNull() {
+        return nonNull;
     }
 
     public LogicNode createNullCheck() {
         assert !StampTool.isPointerNonNull(this) : "should only be called if node is not non-null";
-        return graph().addOrUnique(new IntegerEqualsNode(isNotNull, ConstantNode.forInt(0, graph())));
+        return graph().addOrUnique(new IntegerEqualsNode(nonNull, ConstantNode.forInt(0, graph())));
     }
 
     public List<ValueNode> getFieldValues() {
@@ -126,8 +126,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
 
 
-    public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode isNotNull) {
-        return new InlineTypeNode(type, oopOrHub, new ValueNode[type.getInstanceFields(true).length], isNotNull);
+    public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode nonNull) {
+        return new InlineTypeNode(type, oopOrHub, new ValueNode[type.getInstanceFields(true).length], nonNull);
     }
 
     public static InlineTypeNode createNonNull(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] fieldValues) {
@@ -138,8 +138,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return InlineTypeNode.createNonNull(type, null, fieldValues);
     }
 
-    public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues, ValueNode isNotNull) {
-        return new InlineTypeNode(type, ConstantNode.forConstant(JavaConstant.NULL_POINTER, null), fieldValues, isNotNull);
+    public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues, ValueNode nonNull) {
+        return new InlineTypeNode(type, ConstantNode.forConstant(JavaConstant.NULL_POINTER, null), fieldValues, nonNull);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
@@ -156,10 +156,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         }
 
-        ReadMultiValueNode isNotNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
+        ReadMultiValueNode nonNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, projs, isNotNull));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, projs, nonNull));
 // b.append(new ForeignCallNode(LOG_OBJECT, oopOrHub, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
@@ -169,14 +169,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public void removeOnInlining() {
         assert oop instanceof ReadMultiValueNode : "oop has to be a ReadMultiValueNode";
-        assert isNotNull instanceof ReadMultiValueNode : "isNotNull has to be a ReadMultiValueNode";
+        assert nonNull instanceof ReadMultiValueNode : "nonNull has to be a ReadMultiValueNode";
         ValueNode invoke = ((ReadMultiValueNode) oop).getMultiValueNode();
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
         replaceAtUsages(invoke);
 
         // remove inputs of ReadMultiValueNode to MultiValueNode
         ((ReadMultiValueNode) oop).delete();
-        ((ReadMultiValueNode) isNotNull).delete();
+        ((ReadMultiValueNode) nonNull).delete();
         for (ValueNode p : fieldValues) {
             assert p instanceof ReadMultiValueNode : "scalarized value has to be a ProjNode";
             ((ReadMultiValueNode) p).delete();
@@ -226,11 +226,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     private boolean isNonNull() {
-        return isNotNull == null || isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 1;
+        return nonNull == null || nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1;
     }
 
     private boolean isNull() {
-        return isNotNull != null && isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0;
+        return nonNull != null && nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0;
     }
 
     private boolean virtualize = true;
@@ -244,7 +244,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         if (tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
             ValueNode oop = this.oop;
-            ValueNode notNull = this.isNotNull;
+            ValueNode notNull = this.nonNull;
             if (insertGuardBeforeVirtualize) {
                 if (!StampTool.isPointerNonNull(this)) {
                     // Because the node can represent a null value, insert a guard before we
@@ -270,7 +270,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
             // make sure both values are either null or set
             // after an invoke we already have both
-            // a parameter only includes the isNotNull information so use the null pointer constant
+            // a parameter only includes the nonNull information so use the null pointer constant
             if (oop == null && notNull != null) {
                 oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
             }

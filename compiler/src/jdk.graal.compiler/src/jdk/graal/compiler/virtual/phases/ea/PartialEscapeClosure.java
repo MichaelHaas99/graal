@@ -1308,13 +1308,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
 
 
-                // create two additional phi nodes for the isNotNull and oop information if
+                // create two additional phi nodes for the nonNull and oop information if
                 // necessary
                 int additionalPhisCount = 0;
                 for (int i = 0; i < states.length; i++) {
                     int object = getObject.applyAsInt(i);
                     if (object != -1) {
-                        if (states[i].getObjectState(object).getIsNotNull() != null) {
+                        if (states[i].getObjectState(object).getNonNull() != null) {
                             additionalPhisCount = 2;
                             break;
                         }
@@ -1323,12 +1323,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                 PhiNode[] additionalPhis = new ValuePhiNode[additionalPhisCount];
                 ValueNode oop = states[0].getObjectState(getObject.applyAsInt(0)).getOop();
-                ValueNode isNotNull = states[0].getObjectState(getObject.applyAsInt(0)).getIsNotNull();
+                ValueNode nonNull = states[0].getObjectState(getObject.applyAsInt(0)).getNonNull();
 
                 int additionalPhisIndex = 0;
                 while (additionalPhisIndex < additionalPhisCount) {
                     ValueNode value = additionalPhisIndex == 0 ? states[0].getObjectState(getObject.applyAsInt(0)).getOop()
-                                    : states[0].getObjectState(getObject.applyAsInt(0)).getIsNotNull();
+                                    : states[0].getObjectState(getObject.applyAsInt(0)).getNonNull();
                     // make sure the value is set to a default value in case it is null for non-null
                     // virtual objects
                     if (value == null) {
@@ -1337,9 +1337,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             tool.ensureAdded(intermediateOop);
                             value = intermediateOop;
                         } else {
-                            ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
-                            tool.ensureAdded(intermediateIsNotNull);
-                            value = intermediateIsNotNull;
+                            ValueNode intermediateNonNull = ConstantNode.forInt(1, graph());
+                            tool.ensureAdded(intermediateNonNull);
+                            value = intermediateNonNull;
                         }
                     }
 
@@ -1348,7 +1348,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         if (additionalPhis[additionalPhisIndex] == null) {
                             int object = getObject.applyAsInt(i);
                             if (object != -1) {
-                                ValueNode field = additionalPhisIndex == 0 ? states[i].getObjectState(object).getOop() : states[i].getObjectState(object).getIsNotNull();
+                                ValueNode field = additionalPhisIndex == 0 ? states[i].getObjectState(object).getOop() : states[i].getObjectState(object).getNonNull();
                                 if (value != field) {
                                     additionalPhis[additionalPhisIndex] = createValuePhi(value.stamp(NodeView.DEFAULT).unrestricted());
                                 }
@@ -1411,12 +1411,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                         setPhiInput(phi, i2, state.getOop());
                                     }
                                 } else {
-                                    if (state.getIsNotNull() == null) {
+                                    if (state.getNonNull() == null) {
                                         // use 1 constant indicating non-null as default
-                                        ValueNode intermediateIsNotNull = ConstantNode.forInt(1, graph());
-                                        setPhiInput(phi, i2, intermediateIsNotNull);
+                                        ValueNode intermediateNonNull = ConstantNode.forInt(1, graph());
+                                        setPhiInput(phi, i2, intermediateNonNull);
                                     } else {
-                                        setPhiInput(phi, i2, state.getIsNotNull());
+                                        setPhiInput(phi, i2, state.getNonNull());
                                     }
                                 }
                             }
@@ -1424,7 +1424,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         if (i == 0) {
                             oop = phi;
                         } else {
-                            isNotNull = phi;
+                            nonNull = phi;
                         }
                     }
                 }
@@ -1434,10 +1434,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     if (oop == null) {
                         oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
                     }
-                    if (isNotNull == null) {
-                        isNotNull = ConstantNode.forInt(1, graph());
+                    if (nonNull == null) {
+                        nonNull = ConstantNode.forInt(1, graph());
                     }
-                    newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual, oop, isNotNull));
+                    newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual, oop, nonNull));
                 } else {
                     newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual));
                 }

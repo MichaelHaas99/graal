@@ -182,9 +182,9 @@ public class DebugInfoBuilder {
 
                 // Also add non-null info if exists. Produced for a framestate of an InvokeNode
                 // which has a nullable scalarized inline object as return.
-                ValueNode isNotNull = ((VirtualObjectState) objectStates.get(vobjNode)).getIsNotNull();
-                if (isNotNull != null) {
-                    vobjValue.setIsNotNull(new JavaValue[]{toJavaValue(isNotNull)});
+                ValueNode nonNull = ((VirtualObjectState) objectStates.get(vobjNode)).getNonNull();
+                if (nonNull != null) {
+                    vobjValue.setNonNull(new JavaValue[]{toJavaValue(nonNull)});
                 }
             }
 

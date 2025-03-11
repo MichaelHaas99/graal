@@ -178,10 +178,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             if (obj != null) {
                 assert !obj.isVirtual() : object;
                 if (!StampTool.isPointerNonNull(object)) {
-                    ValueNode isNotNull = obj.getIsNotNull();
-                    assert isNotNull != null : "is not null info should be present";
-                    if (isNotNull.isJavaConstant() && isNotNull.asJavaConstant().asInt() == 0) {
-                        LogicNode check = new IntegerEqualsNode(isNotNull, ConstantNode.forInt(1));
+                    ValueNode nonNull = obj.getNonNull();
+                    assert nonNull != null : "is not null info should be present";
+                    if (nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0) {
+                        LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
                         effects.ensureFloatingAdded(check);
                         effects.addFixedNodeBefore(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false), load);
                     }

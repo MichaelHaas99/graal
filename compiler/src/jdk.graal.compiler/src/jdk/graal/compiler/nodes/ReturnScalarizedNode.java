@@ -54,11 +54,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
-        LogicNode isNotNull = b.add(new LogicNegationNode(b.add(new IsNullNode(result))));
+        LogicNode nonNull = b.add(new LogicNegationNode(b.add(new IsNullNode(result))));
 
         // PEA will replace oop with tagged hub if it is virtual
         ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, isNotNull, fields);
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, nonNull, fields);
         returnNode.fieldValues.clear();
         returnNode.fieldValues.addAll(List.of(phis));
         return returnNode;
@@ -98,15 +98,15 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 // nullable scalarized inline object or non-null scalarized inline object including
                 // oop
                 ValueNode oop = tool.getOop((VirtualObjectNode) alias);
-                ValueNode isNotNull = tool.getIsNotNull((VirtualObjectNode) alias);
-                assert oop != null && isNotNull != null : "nullable scalarized object expected oop and isNotNull information to be set";
+                ValueNode nonNull = tool.getNonNull((VirtualObjectNode) alias);
+                assert oop != null && nonNull != null : "nullable scalarized object expected oop and nonNull information to be set";
 
                 // get hub
                 ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
                                 tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
                 tool.addNode(hub);
 
-                ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), isNotNull, oop, hub);
+                ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
                 tool.ensureAdded(returnResultDecider);
                 tool.replaceFirstInput(result, returnResultDecider);
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
