@@ -258,7 +258,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
                     LogicNode orWithFieldComparison = LogicConstantNode.contradiction();
                     if (!StampTool.isPointerNonNull(xVirtual) && !StampTool.isPointerNonNull(yVirtual)) {
-                        assert xNonNull != null && yNonNull != null : "nullable scalarized object expected nonNull information to be set";
+                        assert xNonNull != null && yNonNull != null : "nullable scalarized object expected non-null information to be set";
                         nonNullComparison = new IntegerEqualsNode(xNonNull, yNonNull);
 
                         // need to make field comparison true, in case both are null
@@ -267,11 +267,11 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         // nothing to do both are non-null
                     } else if (!StampTool.isPointerNonNull(xVirtual)) {
                         // x may be null, y is not therefore x needs to be non-null
-                        assert xNonNull != null : "nullable scalarized object expected nonNull information to be set";
+                        assert xNonNull != null : "nullable scalarized object expected non-null information to be set";
                         nonNullComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(1));
                     } else {
                         // y may be null, x is not therefore y needs to be non-null
-                        assert yNonNull != null : "nullable scalarized object expected nonNull information to be set";
+                        assert yNonNull != null : "nullable scalarized object expected non-null information to be set";
                         nonNullComparison = new IntegerEqualsNode(yNonNull, ConstantNode.forInt(1));
                     }
 

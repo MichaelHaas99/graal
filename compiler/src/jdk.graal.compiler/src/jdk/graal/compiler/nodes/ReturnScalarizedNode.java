@@ -99,7 +99,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 // oop
                 ValueNode oop = tool.getOop((VirtualObjectNode) alias);
                 ValueNode nonNull = tool.getNonNull((VirtualObjectNode) alias);
-                assert oop != null && nonNull != null : "nullable scalarized object expected oop and nonNull information to be set";
+                assert oop != null && nonNull != null : "nullable scalarized object expected oop and non-null information to be set";
 
                 // get hub
                 ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),

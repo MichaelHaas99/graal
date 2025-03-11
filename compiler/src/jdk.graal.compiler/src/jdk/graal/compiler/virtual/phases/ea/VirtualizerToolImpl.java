@@ -138,7 +138,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             return;
         }
         ValueNode nonNull = state.getObjectState(virtualObject).getNonNull();
-        assert nonNull != null : "nullable scalarized inline object expect nonNull information to be set";
+        assert nonNull != null : "nullable scalarized inline object expect non-null information to be set";
         LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
         ensureAdded(check);
         addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false));
