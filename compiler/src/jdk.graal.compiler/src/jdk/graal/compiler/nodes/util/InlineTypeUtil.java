@@ -337,10 +337,10 @@ public class InlineTypeUtil {
         virtual.setObjectId(0);
         b.append(virtual);
 
-        ValueNode[] newEntries = new ValueNode[result.getScalarizedInlineObject().size()];
+        ValueNode[] newEntries = new ValueNode[result.getFieldValues().size()];
 
         for (int i = 0; i < newEntries.length; i++) {
-            ValueNode entry = result.getScalarizedInlineObject().get(i);
+            ValueNode entry = result.getFieldValues().get(i);
             newEntries[i] = entry;
         }
 

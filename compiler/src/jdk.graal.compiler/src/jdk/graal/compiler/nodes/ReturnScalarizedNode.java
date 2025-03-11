@@ -35,11 +35,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static final NodeClass<ReturnScalarizedNode> TYPE = NodeClass.create(ReturnScalarizedNode.class);
 
 
-    @OptionalInput private NodeInputList<ValueNode> scalarizedInlineObject;
+    @OptionalInput private NodeInputList<ValueNode> fieldValues;
 
-    public ReturnScalarizedNode(ValueNode result, List<ValueNode> scalarizedInlineObject) {
+    public ReturnScalarizedNode(ValueNode result, List<ValueNode> fieldValues) {
         super(TYPE, result);
-        this.scalarizedInlineObject = new NodeInputList<>(this, scalarizedInlineObject);
+        this.fieldValues = new NodeInputList<>(this, fieldValues);
     }
 
     public void setResult(ValueNode newResult) {
@@ -48,7 +48,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     }
 
     public ValueNode getField(int index) {
-        return scalarizedInlineObject.get(index);
+        return fieldValues.get(index);
     }
 
     public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
@@ -59,8 +59,8 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         // PEA will replace oop with tagged hub if it is virtual
         ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
         ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, isNotNull, fields);
-        returnNode.scalarizedInlineObject.clear();
-        returnNode.scalarizedInlineObject.addAll(List.of(phis));
+        returnNode.fieldValues.clear();
+        returnNode.fieldValues.addAll(List.of(phis));
         return returnNode;
     }
 
@@ -68,7 +68,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public void generate(NodeLIRBuilderTool gen) {
 
         // get stack kinds and operands of the scalarized inline object
-        int size = scalarizedInlineObject.size();
+        int size = fieldValues.size();
         JavaKind[] stackKinds = new JavaKind[size];
         Value[] operands = new Value[size];
         for (int i = 0; i < size; i++) {
@@ -123,7 +123,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                     for (int i = 0; i < fields.length; i++) {
                         int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(fields[i]);
                         ValueNode entry = tool.getEntry(virtualObjectNode, fieldIndex);
-                        tool.replaceFirstInput(scalarizedInlineObject.get(i), entry);
+                        tool.replaceFirstInput(fieldValues.get(i), entry);
                     }
                 }
                 return;

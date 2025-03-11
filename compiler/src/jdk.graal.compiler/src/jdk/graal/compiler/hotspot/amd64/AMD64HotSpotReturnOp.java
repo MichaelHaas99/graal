@@ -63,11 +63,11 @@ final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp implemen
     private final GraalHotSpotVMConfig config;
     private final boolean requiresReservedStackAccessCheck;
 
-    AMD64HotSpotReturnOp(Value value, Value[] scalarizedValues, boolean isStub, Register thread, Register scratchForSafepointOnReturn, GraalHotSpotVMConfig config,
+    AMD64HotSpotReturnOp(Value value, Value[] additionalValues, boolean isStub, Register thread, Register scratchForSafepointOnReturn, GraalHotSpotVMConfig config,
                     boolean requiresReservedStackAccessCheck) {
         super(TYPE);
         this.value = value;
-        this.scalarizedValues = scalarizedValues;
+        this.scalarizedValues = additionalValues;
         this.isStub = isStub;
         this.thread = thread;
         this.scratchForSafepointOnReturn = scratchForSafepointOnReturn;

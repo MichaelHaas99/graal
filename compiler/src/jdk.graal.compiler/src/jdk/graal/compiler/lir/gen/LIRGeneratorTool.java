@@ -185,7 +185,7 @@ public interface LIRGeneratorTool extends CoreProviders, DiagnosticLIRGeneratorT
      * Emits a return instruction with a nullable scalarized inline object as result.
      * Implementations need to insert moves if the inputs are not in the correct location.
      */
-    default void emitScalarizedReturn(JavaKind kind, Value input, JavaKind[] scalarizedKinds, Value[] scalarizedInputs) {
+    default void emitScalarizedReturn(JavaKind oopOrTaggedHubKind, Value oopOrTaggedHub, JavaKind[] fieldKinds, Value[] fieldValues) {
         throw new UnsupportedOperationException("Scalarized return not implemented yet");
     }
 

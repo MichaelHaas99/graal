@@ -1281,7 +1281,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         NewInstanceNode newObject = graph.add(new NewInstanceNode(inlineTypeNode.getType(), true));
         newObject.clearEmitMemoryBarrier();
         List<WriteNode> writes = new ArrayList<>();
-        int entryCount = inlineTypeNode.getScalarizedInlineObject().size();
+        int entryCount = inlineTypeNode.getFieldValues().size();
         ResolvedJavaField[] fields = inlineTypeNode.getType().getInstanceFields(true);
         for (int i = 0; i < entryCount; i++) {
 
