@@ -14,7 +14,7 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 
 /**
- * Similar to {@link CommitAllocationNode} but also stores existingOop inputs to avoid unnecessary
+ * Similar to {@link CommitAllocationNode} but also stores oop inputs to avoid unnecessary
  * allocation and includes isNotNull information for nullable scalarized inline objects.
  */
 @NodeInfo(nameTemplate = "AllocOrReuse {i#virtualObjects}", allowedUsageTypes = {Extension,
@@ -24,15 +24,15 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
 
     public static final NodeClass<CommitAllocationOrReuseOopNode> TYPE = NodeClass.create(CommitAllocationOrReuseOopNode.class);
 
-    @OptionalInput NodeInputList<ValueNode> existingOops = new NodeInputList<>(this);
+    @OptionalInput NodeInputList<ValueNode> oops = new NodeInputList<>(this);
     @OptionalInput NodeInputList<ValueNode> isNotNulls = new NodeInputList<>(this);
 
     public CommitAllocationOrReuseOopNode() {
         super(TYPE);
     }
 
-    public List<ValueNode> getExistingOops() {
-        return existingOops;
+    public List<ValueNode> getOops() {
+        return oops;
     }
 
     public List<ValueNode> getIsNotNulls() {
@@ -41,7 +41,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
 
     @Override
     public boolean verifyNode() {
-        assertTrue(virtualObjects.size() == existingOops.size(), "values size doesn't match existingOops size");
+        assertTrue(virtualObjects.size() == oops.size(), "values size doesn't match oops size");
         assertTrue(virtualObjects.size() == isNotNulls.size(), "values size doesn't match isNotNulls size");
         return super.verifyNode();
     }
@@ -57,7 +57,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
              * created.
              */
             tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i),
-                            existingOops.get(i), isNotNulls.get(i));
+                            oops.get(i), isNotNulls.get(i));
             pos += entryCount;
         }
         tool.delete();

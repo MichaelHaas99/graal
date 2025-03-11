@@ -1038,9 +1038,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
                         assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
 
-                        if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex)) == TriState.TRUE) {
+                        if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex)) == TriState.TRUE) {
                             // already buffered (or null) use this instance
-                            allocations[objIndex] = reuseAlloc.getExistingOops().get(objIndex);
+                            allocations[objIndex] = reuseAlloc.getOops().get(objIndex);
                             continue;
                         }
 
@@ -1083,7 +1083,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             }
                             valuePos++;
                         }
-                        allocations[objIndex] = InlineTypeUtil.createAllocationDiamond(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex), writes, false,
+                        allocations[objIndex] = InlineTypeUtil.createAllocationDiamond(commit, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex), writes, false,
                                         newObject,
                                         virtual.type());
                         continue;
@@ -1215,12 +1215,12 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
                                 assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
 
-                                if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getExistingOops().get(objIndex)) != TriState.TRUE) {
+                                if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex)) != TriState.TRUE) {
                                     // only do write if not already buffered (or null), use this
                                     // instance
                                     final int currentObjIndex = objIndex;
                                     lateWrites.computeIfAbsent(newObject,
-                                                    k -> new InlineTypeUtil.InlineTypeInfo(reuseAlloc.getIsNotNulls().get(currentObjIndex), reuseAlloc.getExistingOops().get(currentObjIndex)));
+                                                    k -> new InlineTypeUtil.InlineTypeInfo(reuseAlloc.getIsNotNulls().get(currentObjIndex), reuseAlloc.getOops().get(currentObjIndex)));
                                     InlineTypeUtil.InlineTypeInfo info = lateWrites.get(newObject);
                                     info.getWrites().add(graph.add(write));
                                 }
@@ -1234,7 +1234,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
         for (ValueNode inlineType : lateWrites.keySet()) {
-            InlineTypeUtil.insertLateInitWrites(commit, lateWrites.get(inlineType).getIsNotNull(), lateWrites.get(inlineType).getExistingOop(), lateWrites.get(inlineType).getWrites());
+            InlineTypeUtil.insertLateInitWrites(commit, lateWrites.get(inlineType).getIsNotNull(), lateWrites.get(inlineType).getOop(), lateWrites.get(inlineType).getWrites());
         }
     }
 

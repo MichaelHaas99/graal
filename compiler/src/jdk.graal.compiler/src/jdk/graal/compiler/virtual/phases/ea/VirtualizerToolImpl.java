@@ -117,14 +117,14 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
-    public boolean hasNoExistingOop(VirtualObjectNode virtualObject) {
-        ValueNode oop = getExistingOop(virtualObject);
+    public boolean hasNullOop(VirtualObjectNode virtualObject) {
+        ValueNode oop = getOop(virtualObject);
         return oop == null || oop.isNullConstant();
     }
 
     @Override
-    public ValueNode getExistingOop(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).getExistingOop();
+    public ValueNode getOop(VirtualObjectNode virtualObject) {
+        return state.getObjectState(virtualObject).getOop();
     }
 
     @Override

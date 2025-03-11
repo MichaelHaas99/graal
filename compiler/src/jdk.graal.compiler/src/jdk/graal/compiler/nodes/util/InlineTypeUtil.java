@@ -357,13 +357,13 @@ public class InlineTypeUtil {
     /**
      * Create as {@link LogicNode} indicating if an inline object is already allocated.
      */
-    public static LogicNode createIsAlreadyBufferedCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode existingOop) {
-        assert isNotNull == null && existingOop == null || isNotNull != null && existingOop != null : "both should be either null or not null";
-        if (isNotNull == null && existingOop == null) {
+    public static LogicNode createIsAlreadyBufferedCheck(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
+        assert isNotNull == null && oop == null || isNotNull != null && oop != null : "both should be either null or not null";
+        if (isNotNull == null && oop == null) {
             return graph.addOrUnique(LogicConstantNode.contradiction());
         }
         LogicNode notNull = graph.addOrUnique(IntegerEqualsNode.create(isNotNull, ConstantNode.forInt(1, graph), NodeView.DEFAULT));
-        LogicNode oopIsNull = graph.addOrUnique(IsNullNode.create(existingOop));
+        LogicNode oopIsNull = graph.addOrUnique(IsNullNode.create(oop));
         LogicNode check = graph.addOrUniqueWithInputs(
                         LogicNegationNode.create(LogicNode.and(notNull, oopIsNull, ProfileData.BranchProbabilityData.unknown())));
         return check;
@@ -374,8 +374,8 @@ public class InlineTypeUtil {
      * Determines if it is known at compile time if a scalarized inline object is already buffered.
      * E.g. this can be the case if the inline object is constant null.
      */
-    public static TriState isAlreadyBuffered(StructuredGraph graph, ValueNode isNotNull, ValueNode existingOop) {
-        if (createIsAlreadyBufferedCheck(graph, isNotNull, existingOop).isTautology()) {
+    public static TriState isAlreadyBuffered(StructuredGraph graph, ValueNode isNotNull, ValueNode oop) {
+        if (createIsAlreadyBufferedCheck(graph, isNotNull, oop).isTautology()) {
             return TriState.TRUE;
         }
         return TriState.UNKNOWN;
@@ -384,24 +384,24 @@ public class InlineTypeUtil {
     /**
      *
      * Creates a graph diamond in order to perform the materialization of an inline type. One branch
-     * just reuses the existing oop and the other branch allocates the instance.
+     * just reuses the oop and the other branch allocates the instance.
      *
      *
      * @param addBefore the node before the diamond should be inserted into the graph
      * @param isNotNull node indicating if the inline object is null or not
-     * @param existingOop represents either an inline object or null at runtime
+     * @param oop represents either an inline object or null at runtime
      * @param writes write operations that should be performed on the allocation branch
      * @param addMembar true if a membar should be inserted on the allocation branch
      * @param newInstanceNode does the allocation on the allocation branch
      * @param type the type of the inline object
      * @return the phi node of the diamond representing the inline object
      */
-    public static ValueNode createAllocationDiamond(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
+    public static ValueNode createAllocationDiamond(FixedNode addBefore, ValueNode isNotNull, ValueNode oop, List<WriteNode> writes, boolean addMembar, NewInstanceNode newInstanceNode,
                     ResolvedJavaType type) {
         StructuredGraph graph = addBefore.graph();
 
 
-        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
+        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, oop);
 
         assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
         assert newInstanceNode != null && newInstanceNode.isAlive() : "NewInstanceNode should be alive";
@@ -466,15 +466,15 @@ public class InlineTypeUtil {
         merge.addForwardEnd(falseEnd);
         merge.setNext(addBefore);
         ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.object(TypeReference.create(graph.getAssumptions(), type)), merge,
-                        existingOop, newInstanceNode));
+                        oop, newInstanceNode));
         return phi;
 
     }
 
-    public static void insertLateInitWrites(FixedNode addBefore, ValueNode isNotNull, ValueNode existingOop, List<WriteNode> writes) {
+    public static void insertLateInitWrites(FixedNode addBefore, ValueNode isNotNull, ValueNode oop, List<WriteNode> writes) {
         StructuredGraph graph = addBefore.graph();
 
-        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, existingOop);
+        LogicNode isAlreadyBuffered = createIsAlreadyBufferedCheck(graph, isNotNull, oop);
         assert !isAlreadyBuffered.isTautology() : "should have been checked for tautology before";
 
         if (isAlreadyBuffered.isContradiction()) {
@@ -523,21 +523,21 @@ public class InlineTypeUtil {
 
 
     public static class InlineTypeInfo {
-        public InlineTypeInfo(ValueNode isNotNull, ValueNode existingOop) {
+        public InlineTypeInfo(ValueNode isNotNull, ValueNode oop) {
             this.isNotNull = isNotNull;
-            this.existingOop = existingOop;
+            this.oop = oop;
         }
 
         private ValueNode isNotNull;
-        private ValueNode existingOop;
+        private ValueNode oop;
         private List<WriteNode> writes = new ArrayList<>();
 
         public ValueNode getIsNotNull() {
             return isNotNull;
         }
 
-        public ValueNode getExistingOop() {
-            return existingOop;
+        public ValueNode getOop() {
+            return oop;
         }
 
         public List<WriteNode> getWrites() {

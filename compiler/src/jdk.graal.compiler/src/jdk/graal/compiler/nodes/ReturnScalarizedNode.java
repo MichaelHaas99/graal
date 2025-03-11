@@ -27,7 +27,7 @@ import jdk.vm.ci.meta.Value;
 /**
  * The {@link ReturnScalarizedNode} represents a return of a nullable scalarized inline object. see
  * Compile::return_values in parse.cpp of the C2 compiler. In case the scalarized inline object is
- * not null, either an existing oop is placed into the first register or the tagged hub. In case the
+ * not null, either an non-null oop is placed into the first register or the tagged hub. In case the
  * scalarized inline object is null, a null pointer is placed into the first register.
  */
 @NodeInfo(nameTemplate = "ReturnScalarized")
@@ -94,19 +94,19 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             TypeReference type = StampTool.typeReferenceOrNull(alias);
             assert type != null && type.isExact() : "type should not be null for constant hub node in scalarized return";
 
-            if (!StampTool.isPointerNonNull(alias) || !tool.hasNoExistingOop(virtualObjectNode)) {
+            if (!StampTool.isPointerNonNull(alias) || !tool.hasNullOop(virtualObjectNode)) {
                 // nullable scalarized inline object or non-null scalarized inline object including
                 // oop
-                ValueNode existingOop = tool.getExistingOop((VirtualObjectNode) alias);
+                ValueNode oop = tool.getOop((VirtualObjectNode) alias);
                 ValueNode isNotNull = tool.getIsNotNull((VirtualObjectNode) alias);
-                assert existingOop != null && isNotNull != null : "nullable scalarized object expected existingOop and isNotNull information to be set";
+                assert oop != null && isNotNull != null : "nullable scalarized object expected oop and isNotNull information to be set";
 
                 // get hub
                 ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
                                 tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
                 tool.addNode(hub);
 
-                ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), isNotNull, existingOop, hub);
+                ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), isNotNull, oop, hub);
                 tool.ensureAdded(returnResultDecider);
                 tool.replaceFirstInput(result, returnResultDecider);
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
