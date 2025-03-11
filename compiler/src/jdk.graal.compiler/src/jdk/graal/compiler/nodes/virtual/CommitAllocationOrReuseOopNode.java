@@ -15,7 +15,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 
 /**
  * Similar to {@link CommitAllocationNode} but also stores oop inputs to avoid unnecessary
- * allocation and includes nonNull information for nullable scalarized inline objects.
+ * allocation and includes non-null information for nullable scalarized inline objects.
  */
 @NodeInfo(nameTemplate = "AllocOrReuse {i#virtualObjects}", allowedUsageTypes = {Extension,
                 Memory}, cycles = CYCLES_UNKNOWN, cyclesRationale = "We don't know statically how many, and which, allocations are done.", size = SIZE_UNKNOWN, sizeRationale = "We don't know statically how much code for which allocations has to be generated.")

@@ -698,7 +698,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         // CallDynamicJavaDirectNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra_)
 
         if (nonNull != null) {
-            // produce code for the nonNull information
+            // produce code for the non-null information
 
             // get oopOrHub value which is located in the return register
             Value oopOrHub = result;

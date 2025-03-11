@@ -228,7 +228,7 @@ public class InlineTypeUtil {
      * @param nonNullCheck condition used as branch condition, indicating if the object is not null
      * @param fields the resolved filed
      * @param assumeObjectNonNull true if no diamond should be created
-     * @param includeNonNullPhi true if the nonNull information should be included in the return
+     * @param includeNonNullPhi true if the non-null information should be included in the return
      *            phis at position zero
      * @return The field values of the object
      */

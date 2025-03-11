@@ -41,11 +41,11 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 /**
  * The {@link InlineTypeNode} represents a (nullable) scalarized inline object. It takes an optional
  * object {@link #oop} (in C2 it is called Oop) and the field values {@link #fieldValues} as well as
- * an nonNull information as input. If the object represents a null value then the input
+ * an non-null information as input. If the object represents a null value then the input
  * {@link #oop} will be null at runtime. If the bit 0 of {@link #oop} is set at runtime, no oop
  * exists and the object needs to be reconstructed by the scalarized field values, if needed. If an
  * oop exists it is up to the compiler to either use the oop or the scalarized field values. The
- * nonNull information indicates if the inline object is null or not, and can be used e.g. for null
+ * non-null information indicates if the inline object is null or not, and can be used e.g. for null
  * checks or for the debugInfo (in C2 it is called isInit).
  *
  * An {@link Invoke} is responsible for setting the {@link #nonNull} output correctly based on the
@@ -270,7 +270,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
             // make sure both values are either null or set
             // after an invoke we already have both
-            // a parameter only includes the nonNull information so use the null pointer constant
+            // a parameter only includes the non-null information so use the null pointer constant
             if (oop == null && notNull != null) {
                 oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
             }
