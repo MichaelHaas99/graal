@@ -160,16 +160,16 @@ public class ObjectEqualsSnippets implements Snippets {
                 if (profile != null) {
                     SingleTypeEntry leftEntry = profile.getLeft();
                     SingleTypeEntry rightEntry = profile.getRight();
-                    boolean xAlwaysNull = leftEntry.alwaysNull();
-                    boolean xInlineType = leftEntry.inlineType();
-                    boolean yAlwaysNull = rightEntry.alwaysNull();
-                    boolean yInlineType = rightEntry.inlineType();
+                    boolean xAlwaysNullProfile = leftEntry.alwaysNull();
+                    boolean xInlineTypeProfile = leftEntry.inlineType();
+                    boolean yAlwaysNullProfile = rightEntry.alwaysNull();
+                    boolean yInlineTypeProfile = rightEntry.inlineType();
                     // HotSpotResolvedObjectType test = leftEntry.getValidType();
                     // HotSpotResolvedObjectType test2 = rightEntry.getValidType();
-                    args.add("xAlwaysNull", xAlwaysNull);
-                    args.add("xInlineType", xInlineType);
-                    args.add("yAlwaysNull", yAlwaysNull);
-                    args.add("yInlineType", yInlineType);
+                    args.add("xAlwaysNullProfile", xAlwaysNullProfile);
+                    args.add("xInlineTypeProfile", xInlineTypeProfile);
+                    args.add("yAlwaysNullProfile", yAlwaysNullProfile);
+                    args.add("yInlineTypeProfile", yInlineTypeProfile);
                 }
                 // The access flag read is not done at compile time see
                 // Avoid crash when performing unaligned reads (JDK-8275645)
@@ -223,9 +223,9 @@ public class ObjectEqualsSnippets implements Snippets {
                     @VarargsParameter long[] offsets,
                     @VarargsParameter JavaKind[] kinds,
                     @VarargsParameter LocationIdentity[] identities, @VarargsParameter Stamp[] stamps,
-                    @ConstantParameter boolean xAlwaysNull,
-                    @ConstantParameter boolean xInlineType, @ConstantParameter boolean yAlwaysNull,
-                    @ConstantParameter boolean yInlineType, @ConstantParameter boolean xIsInlineType, @ConstantParameter boolean yIsInlineType) {
+                    @ConstantParameter boolean xAlwaysNullProfile,
+                    @ConstantParameter boolean xInlineTypeProfile, @ConstantParameter boolean yAlwaysNullProfile,
+                    @ConstantParameter boolean yInlineTypeProfile, @ConstantParameter boolean xIsInlineType, @ConstantParameter boolean yIsInlineType) {
 
         Word xPointer = Word.objectToTrackedPointer(x);
         Word yPointer = Word.objectToTrackedPointer(y);
@@ -234,14 +234,14 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xPointer.equal(yPointer))
             return trueValue;
 
-        if (xAlwaysNull) {
+        if (xAlwaysNullProfile) {
             if (xPointer.isNull())
                 return falseValue;
             DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
-        if (yAlwaysNull) {
+        if (yAlwaysNullProfile) {
             if (yPointer.isNull())
                 return falseValue;
             DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
@@ -270,7 +270,7 @@ public class ObjectEqualsSnippets implements Snippets {
 // return falseValue;
 // }
 
-        if (!xInlineType) {
+        if (!xInlineTypeProfile) {
             if (xPointer.isNull())
                 return falseValue;
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
@@ -283,7 +283,7 @@ public class ObjectEqualsSnippets implements Snippets {
             return falseValue;
         }
 
-        if (!yInlineType) {
+        if (!yInlineTypeProfile) {
             if (yPointer.isNull())
                 return falseValue;
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
