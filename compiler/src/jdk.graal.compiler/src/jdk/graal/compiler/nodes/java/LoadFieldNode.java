@@ -221,8 +221,6 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
                         tool.replaceWith(entry);
                     } else {
                         tool.createNullCheck(virtualObjectNode);
-                        // TODO: is fixed value anchor necessary for nullable scalarized inline
-                        // objects?
                         ValueNode replacement = new FixedValueAnchorNode(entry);
                         tool.addNode(replacement);
                         tool.replaceWith(replacement);
