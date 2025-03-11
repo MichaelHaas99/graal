@@ -322,10 +322,10 @@ public class ObjectEqualsSnippets implements Snippets {
 
         trace(trace, "call to library for substitutability check");
 
-        return substitutabilityCheckStubC(SUBSTITUTABILITYCHECK, x, y) ? trueValue : falseValue;
+        return substitutabilityCheckStubC(SUBSTITUTABILITY_CHECK, x, y) ? trueValue : falseValue;
     }
 
-    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITYCHECK = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "substitutabilityCheck", boolean.class, Object.class,
+    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "substitutabilityCheck", boolean.class, Object.class,
                     Object.class);
 
     @Node.NodeIntrinsic(ForeignCallNode.class)

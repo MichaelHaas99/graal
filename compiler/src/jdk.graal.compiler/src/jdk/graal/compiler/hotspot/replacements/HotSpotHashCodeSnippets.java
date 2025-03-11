@@ -100,7 +100,7 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             x = PiNode.piCastNonNull(x, anchorNode);
             if (probability(NOT_LIKELY_PROBABILITY, isInlineType || !hasIdentity(x))) {
-                return valueObjectHashCodeStubC(VALUEOBJECTHASHCODE, x);
+                return valueObjectHashCodeStubC(VALUE_OBJECT_HASH_CODE, x);
             }
         }
 

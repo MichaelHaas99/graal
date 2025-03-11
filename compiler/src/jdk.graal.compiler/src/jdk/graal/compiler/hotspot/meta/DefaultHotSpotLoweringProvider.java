@@ -1276,7 +1276,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             return;
         }
 
-        // need to allocate it or create diamond
+        // need to create diamond
         NewInstanceNode newObject = graph.add(new NewInstanceNode(inlineTypeNode.getType(), true));
         newObject.clearEmitMemoryBarrier();
         List<WriteNode> writes = new ArrayList<>();
