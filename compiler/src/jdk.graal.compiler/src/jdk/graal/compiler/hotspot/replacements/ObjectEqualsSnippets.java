@@ -164,8 +164,6 @@ public class ObjectEqualsSnippets implements Snippets {
                     boolean xInlineTypeProfile = leftEntry.inlineType();
                     boolean yAlwaysNullProfile = rightEntry.alwaysNull();
                     boolean yInlineTypeProfile = rightEntry.inlineType();
-                    // HotSpotResolvedObjectType test = leftEntry.getValidType();
-                    // HotSpotResolvedObjectType test2 = rightEntry.getValidType();
                     args.add("xAlwaysNullProfile", xAlwaysNullProfile);
                     args.add("xInlineTypeProfile", xInlineTypeProfile);
                     args.add("yAlwaysNullProfile", yAlwaysNullProfile);
@@ -211,8 +209,9 @@ public class ObjectEqualsSnippets implements Snippets {
         Word yPointer = Word.objectToTrackedPointer(y);
 
         trace(trace, "apply pointer comparison");
-        if (xPointer.equal(yPointer))
+        if (xPointer.equal(yPointer)) {
             return trueValue;
+        }
 
         return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds, identities, stamps, xIsInlineType, yIsInlineType);
     }
@@ -231,48 +230,30 @@ public class ObjectEqualsSnippets implements Snippets {
         Word yPointer = Word.objectToTrackedPointer(y);
 
         trace(trace, "apply pointer comparison");
-        if (xPointer.equal(yPointer))
+        if (xPointer.equal(yPointer)) {
             return trueValue;
+        }
 
         if (xAlwaysNullProfile) {
-            if (xPointer.isNull())
+            if (xPointer.isNull()) {
                 return falseValue;
+            }
             DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
         if (yAlwaysNullProfile) {
-            if (yPointer.isNull())
+            if (yPointer.isNull()) {
                 return falseValue;
+            }
             DeoptimizeNode.deopt(InvalidateReprofile, NullCheckException);
             return falseValue;
         }
 
-// if (!xProfileHub.isNull() && xProfileHubInline) {
-// if (xPointer.isNull())
-// return falseValue;
-// GuardingNode anchorNode = SnippetAnchorNode.anchor();
-// KlassPointer xKlassPointer = loadHubIntrinsic(PiNode.piCastNonNull(xPointer, anchorNode));
-// if (xKlassPointer.equal(xProfileHub))
-// return falseValue;
-// DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
-// return falseValue;
-// }
-//
-// if (!yProfileHub.isNull() && yProfileHubInline) {
-// if (yPointer.isNull())
-// return falseValue;
-// GuardingNode anchorNode = SnippetAnchorNode.anchor();
-// KlassPointer yKlassPointer = loadHubIntrinsic(PiNode.piCastNonNull(yPointer, anchorNode));
-// if (yKlassPointer.equal(yProfileHub))
-// return falseValue;
-// DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
-// return falseValue;
-// }
-
         if (!xInlineTypeProfile) {
-            if (xPointer.isNull())
+            if (xPointer.isNull()) {
                 return falseValue;
+            }
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             x = PiNode.piCastNonNull(x, anchorNode);
             final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
@@ -284,8 +265,9 @@ public class ObjectEqualsSnippets implements Snippets {
         }
 
         if (!yInlineTypeProfile) {
-            if (yPointer.isNull())
+            if (yPointer.isNull()) {
                 return falseValue;
+            }
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             y = PiNode.piCastNonNull(y, anchorNode);
             final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
@@ -320,8 +302,9 @@ public class ObjectEqualsSnippets implements Snippets {
             return falseValue;
         }
 
-        if (xHub.notEqual(yHub))
+        if (xHub.notEqual(yHub)) {
             return falseValue;
+        }
 
         // inline field comparison
         if (inlineComparison) {
@@ -329,8 +312,10 @@ public class ObjectEqualsSnippets implements Snippets {
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];
-                if (!DelayedRawComparisonNode.load(x, y, offsets[i], kind, identities[i], stamps[i]))
+                if (!DelayedRawComparisonNode.load(x, y, offsets[i], kind, identities[i], stamps[i])) {
                     return falseValue;
+                }
+
             }
             return trueValue;
         }
