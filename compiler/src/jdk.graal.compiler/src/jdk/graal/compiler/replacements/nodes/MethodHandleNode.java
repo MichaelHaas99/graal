@@ -172,7 +172,7 @@ public final class MethodHandleNode extends MacroNode implements Simplifiable {
             GraphUtil.removeFixedWithUnusedInputs(this);
             graph().addBeforeFixed(currentNext, invoke);
 
-            if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STOREINLINETYPEFIELDSTOBUF &&
+            if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF &&
                             !invoke.getTargetMethod().hasScalarizedReturn()) {
                 // remove method handle expansion if resolved target method indicates no scalarized
                 // return

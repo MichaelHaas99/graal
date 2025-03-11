@@ -189,7 +189,7 @@ public class MethodHandlePlugin implements NodePlugin {
         return false;
     }
 
-    public static final HotSpotForeignCallDescriptor STOREINLINETYPEFIELDSTOBUF = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATION,
+    public static final HotSpotForeignCallDescriptor STORE_INLINE_TYPE_FIELDS_TO_BUF = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATION,
                     "storeInlineTypeFieldsToBuf",
                     Object.class,
                     long.class /* oop or hub */);
@@ -197,7 +197,7 @@ public class MethodHandlePlugin implements NodePlugin {
     // see PhaseMacroExpand::expand_mh_intrinsic_return
     private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
 
-        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(STOREINLINETYPEFIELDSTOBUF, invokable.asNode());
+        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(STORE_INLINE_TYPE_FIELDS_TO_BUF, invokable.asNode());
         bufferInlineTypeCall.setBci(bci);
         b.append(bufferInlineTypeCall);
 

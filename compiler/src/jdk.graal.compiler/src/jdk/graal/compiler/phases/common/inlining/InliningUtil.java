@@ -517,7 +517,7 @@ public class InliningUtil extends ValueMergeUtil {
         if (invoke.next() instanceof InlineTypeNode inlineTypeNode && inlineeMethod.hasScalarizedReturn()) {
             inlineTypeNode.removeOnInlining();
         }
-        if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STOREINLINETYPEFIELDSTOBUF) {
+        if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF) {
             foreignCallNode.replaceAtUsages(invoke.asNode());
             assert foreignCallNode.next() instanceof MembarNode : "store inline type fields to buf foreign call should be followed by membar";
             MembarNode membar = (MembarNode) foreignCallNode.next();

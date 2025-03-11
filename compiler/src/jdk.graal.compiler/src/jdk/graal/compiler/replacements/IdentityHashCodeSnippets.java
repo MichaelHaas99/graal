@@ -72,7 +72,7 @@ public abstract class IdentityHashCodeSnippets implements Snippets {
         return computeIdentityHashCode(thisObj);
     }
 
-    public static final HotSpotForeignCallDescriptor VALUEOBJECTHASHCODE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "valueObjectHashCode", int.class,
+    public static final HotSpotForeignCallDescriptor VALUE_OBJECT_HASH_CODE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "valueObjectHashCode", int.class,
                     Object.class);
 
     @Node.NodeIntrinsic(ForeignCallNode.class)

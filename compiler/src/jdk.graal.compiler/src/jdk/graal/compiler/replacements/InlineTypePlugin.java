@@ -358,7 +358,7 @@ public class InlineTypePlugin implements NodePlugin {
                 }
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                ForeignCallNode load = b.add(new ForeignCallNode(LOADUNKNOWNINLINE, array, index));
+                ForeignCallNode load = b.add(new ForeignCallNode(LOAD_UNKNOWN_INLINE, array, index));
                 resultStamp = load.stamp(NodeView.DEFAULT);
                 instanceFlatArray = load;
                 trueBegin.setNext(load);
@@ -492,7 +492,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                ForeignCallNode store = b.add(new ForeignCallNode(STOREUNKNOWNINLINE, array, index, nullCheckedValue));
+                ForeignCallNode store = b.add(new ForeignCallNode(STORE_UNKNOWN_INLINE, array, index, nullCheckedValue));
                 if (hasNoNext(trueBegin))
                     trueBegin.setNext(store);
                 trueEnd = b.add(new EndNode());
@@ -633,11 +633,11 @@ public class InlineTypePlugin implements NodePlugin {
         return begin != null && begin.next() == null;
     }
 
-    public static final HotSpotForeignCallDescriptor LOADUNKNOWNINLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
+    public static final HotSpotForeignCallDescriptor LOAD_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
                     Object.class,
                     int.class);
 
-    public static final HotSpotForeignCallDescriptor STOREUNKNOWNINLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "storeUnknownInline", void.class,
+    public static final HotSpotForeignCallDescriptor STORE_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "storeUnknownInline", void.class,
                     Object.class,
                     int.class, Object.class);
 }
