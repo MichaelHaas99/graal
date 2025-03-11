@@ -6,6 +6,7 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.api.replacements.Snippet.ConstantParameter;
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.extended.DelayedRawComparisonNode;
@@ -68,6 +69,9 @@ public class DelayedRawComparisonSnippets implements Snippets {
             } else {
                 // should not be reachable
                 throw GraalError.shouldNotReachHere("no valid java kind");
+            }
+            if (kind == JavaKind.Object) {
+                args.add("stamp", node.getConstantStamp());
             }
             args.add("x", node.getObject1());
             args.add("y", node.getObject2());
@@ -135,9 +139,10 @@ public class DelayedRawComparisonSnippets implements Snippets {
     }
 
     @Snippet
-    public static boolean delayedRawObjectComparison(Object x, Object y, @ConstantParameter long offset, @ConstantParameter LocationIdentity locationIdentity) {
-        Object xLoad = RawLoadNode.load(x, offset, JavaKind.Object, locationIdentity);
-        Object yLoad = RawLoadNode.load(y, offset, JavaKind.Object, locationIdentity);
+    public static boolean delayedRawObjectComparison(@ConstantParameter Stamp stamp, Object x, Object y, @ConstantParameter long offset,
+                    @ConstantParameter LocationIdentity locationIdentity) {
+        Object xLoad = RawLoadNode.load(stamp, x, offset, JavaKind.Object, locationIdentity);
+        Object yLoad = RawLoadNode.load(stamp, y, offset, JavaKind.Object, locationIdentity);
         return xLoad == yLoad;
     }
 

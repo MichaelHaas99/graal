@@ -5,6 +5,7 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
 
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
@@ -33,14 +34,16 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
     @Input ValueNode offset;
     @Input ValueNode accessKind;
     @Input ValueNode locationIdentity;
+    @Input ValueNode stamp;
 
-    public DelayedRawComparisonNode(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity) {
+    public DelayedRawComparisonNode(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity, ValueNode stamp) {
         super(TYPE, StampFactory.forKind(JavaKind.Boolean));
         this.object1 = object1;
         this.object2 = object2;
         this.offset = offset;
         this.accessKind = accessKind;
         this.locationIdentity = locationIdentity;
+        this.stamp = stamp;
     }
 
     public ValueNode getObject1() {
@@ -70,6 +73,15 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
         return ((HotSpotObjectConstant) accessKind.asJavaConstant()).asObject(JavaKind.class);
     }
 
+    public boolean isStampConstant() {
+        return stamp.isJavaConstant();
+    }
+
+    public Stamp getConstantStamp() {
+        assert isStampConstant() : "stamp must be a constant";
+        return ((HotSpotObjectConstant) stamp.asJavaConstant()).asObject(Stamp.class);
+    }
+
     public LocationIdentity getLocationIdentity() {
         assert locationIdentity.isJavaConstant() : "locationIdentity must be a constant";
         return ((HotSpotObjectConstant) locationIdentity.asJavaConstant()).asObject(FieldLocationIdentity.class);
@@ -84,5 +96,5 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
     }
 
     @NodeIntrinsic
-    public static native boolean load(Object object1, Object object2, long offset, Object kind, Object locationIdentity);
+    public static native boolean load(Object object1, Object object2, long offset, Object kind, Object locationIdentity, Object stamp);
 }

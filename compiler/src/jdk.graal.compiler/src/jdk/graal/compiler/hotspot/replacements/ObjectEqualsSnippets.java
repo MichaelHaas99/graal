@@ -4,11 +4,11 @@ import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideE
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypeMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
+import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
@@ -20,6 +20,7 @@ import jdk.graal.compiler.api.replacements.Snippet.ConstantParameter;
 import jdk.graal.compiler.api.replacements.Snippet.VarargsParameter;
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Graph;
@@ -98,11 +99,12 @@ public class ObjectEqualsSnippets implements Snippets {
                 boolean inlineComparison = true;
                 long[] offsets = new long[0];
                 JavaKind[] kinds = new JavaKind[0];
+                Stamp[] stamps = new Stamp[0];
                 LocationIdentity[] identities = new LocationIdentity[0];
-                if (StampTool.isInlineType(x, tool.getValhallaOptionsProvider())) {
+                if (StampTool.isInlineTypeOrNull(x, tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) x.stamp(NodeView.DEFAULT);
                     type = stamp.type();
-                } else if (StampTool.isInlineType(y, tool.getValhallaOptionsProvider())) {
+                } else if (StampTool.isInlineTypeOrNull(y, tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) y.stamp(NodeView.DEFAULT);
                     type = stamp.type();
                 } else {
@@ -113,15 +115,22 @@ public class ObjectEqualsSnippets implements Snippets {
                     offsets = new long[fields.length];
                     kinds = new JavaKind[fields.length];
                     identities = new LocationIdentity[fields.length];
+                    stamps = new Stamp[fields.length];
 
                     for (int i = 0; i < fields.length; i++) {
                         offsets[i] = fields[i].getOffset();
                         kinds[i] = fields[i].getJavaKind();
-                        if (fields[i].getJavaKind().isPrimitive() || fields[i].getJavaKind().isObject()) {
+                        if (fields[i].getType().equals(type)) {
+                            // don't inline recursive comparisons
+                            inlineComparison = false;
+                            break;
+                        } else if (fields[i].getJavaKind().isPrimitive() || fields[i].getJavaKind().isObject()) {
                             offsets[i] = fields[i].getOffset();
                             kinds[i] = fields[i].getJavaKind();
                             // inline type objects are immutable
                             identities[i] = new FieldLocationIdentity(fields[i], true);
+                            stamps[i] = StampFactory.forDeclaredType(node.graph().getAssumptions(), fields[i].getType(), false).getTrustedStamp();
+
                         } else {
                             inlineComparison = false;
                             break;
@@ -146,6 +155,7 @@ public class ObjectEqualsSnippets implements Snippets {
                 args.addVarargs("offsets", long.class, StampFactory.forKind(JavaKind.Long), offsets);
                 args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                 args.addVarargs("identities", LocationIdentity.class, StampFactory.forKind(JavaKind.Object), identities);
+                args.addVarargs("stamps", Stamp.class, StampFactory.forKind(JavaKind.Object), stamps);
 
                 if (profile != null) {
                     SingleTypeEntry leftEntry = profile.getLeft();
@@ -161,6 +171,13 @@ public class ObjectEqualsSnippets implements Snippets {
                     args.add("yAlwaysNull", yAlwaysNull);
                     args.add("yInlineType", yInlineType);
                 }
+                // The access flag read is not done at compile time see
+                // Avoid crash when performing unaligned reads (JDK-8275645)
+                // Therefore pass it as additional input to avoid a read from a hub at runtime
+                args.add("xIsInlineType", StampTool.isInlineTypeOrNull(x,
+                                tool.getValhallaOptionsProvider()));
+                args.add("yIsInlineType", StampTool.isInlineTypeOrNull(y,
+                                tool.getValhallaOptionsProvider()));
 
                 return args;
             } else {
@@ -189,7 +206,7 @@ public class ObjectEqualsSnippets implements Snippets {
                     @ConstantParameter boolean inlineComparison,
                     @VarargsParameter long[] offsets,
                     @VarargsParameter JavaKind[] kinds,
-                    @VarargsParameter LocationIdentity[] identities) {
+                    @VarargsParameter LocationIdentity[] identities, @VarargsParameter Stamp[] stamps, @ConstantParameter boolean xIsInlineType, @ConstantParameter boolean yIsInlineType) {
         Word xPointer = Word.objectToTrackedPointer(x);
         Word yPointer = Word.objectToTrackedPointer(y);
 
@@ -197,7 +214,7 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xPointer.equal(yPointer))
             return trueValue;
 
-        return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds, identities);
+        return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds, identities, stamps, xIsInlineType, yIsInlineType);
     }
 
     @Snippet
@@ -205,10 +222,10 @@ public class ObjectEqualsSnippets implements Snippets {
                     @ConstantParameter boolean inlineComparison,
                     @VarargsParameter long[] offsets,
                     @VarargsParameter JavaKind[] kinds,
-                    @VarargsParameter LocationIdentity[] identities,
+                    @VarargsParameter LocationIdentity[] identities, @VarargsParameter Stamp[] stamps,
                     @ConstantParameter boolean xAlwaysNull,
                     @ConstantParameter boolean xInlineType, @ConstantParameter boolean yAlwaysNull,
-                    @ConstantParameter boolean yInlineType) {
+                    @ConstantParameter boolean yInlineType, @ConstantParameter boolean xIsInlineType, @ConstantParameter boolean yIsInlineType) {
 
         Word xPointer = Word.objectToTrackedPointer(x);
         Word yPointer = Word.objectToTrackedPointer(y);
@@ -279,14 +296,14 @@ public class ObjectEqualsSnippets implements Snippets {
             return falseValue;
         }
 
-        return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds, identities);
+        return commonPart(x, y, trueValue, falseValue, xPointer, yPointer, trace, inlineComparison, offsets, kinds, identities, stamps, xIsInlineType, yIsInlineType);
     }
 
     private static Object commonPart(Object x, Object y, Object trueValue, Object falseValue, Word xPointer, Word yPointer, boolean trace,
                     boolean inlineComparison,
                     long[] offsets,
                     JavaKind[] kinds,
-                    LocationIdentity[] identities) {
+                    LocationIdentity[] identities, Stamp[] stamps, boolean xIsInlineType, boolean yIsInlineType) {
         trace(trace, "check both operands against null");
         if (xPointer.isNull() || yPointer.isNull())
             return falseValue;
@@ -294,16 +311,15 @@ public class ObjectEqualsSnippets implements Snippets {
         x = PiNode.piCastNonNull(x, anchorNode);
         y = PiNode.piCastNonNull(y, anchorNode);
 
-        final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
-        final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
-
-        trace(trace, "check both operands for inline type bit");
-        if (xMark.and(yMark).and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG)))
-            return falseValue;
-
         trace(trace, "apply type comparison");
         KlassPointer xHub = loadHub(x);
         KlassPointer yHub = loadHub(y);
+
+        trace(trace, "check both operands for inline type bit");
+        if (!xIsInlineType && hasIdentity(x) || !yIsInlineType && hasIdentity(y)) {
+            return falseValue;
+        }
+
         if (xHub.notEqual(yHub))
             return falseValue;
 
@@ -313,7 +329,7 @@ public class ObjectEqualsSnippets implements Snippets {
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];
-                if (!DelayedRawComparisonNode.load(x, y, offsets[i], kind, identities[i]))
+                if (!DelayedRawComparisonNode.load(x, y, offsets[i], kind, identities[i], stamps[i]))
                     return falseValue;
             }
             return trueValue;

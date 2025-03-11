@@ -72,6 +72,10 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
         this(object, offset, accessKind, locationIdentity, false, MemoryOrderMode.PLAIN);
     }
 
+    public RawLoadNode(Stamp stamp, ValueNode object, ValueNode offset, JavaKind accessKind, LocationIdentity locationIdentity) {
+        super(TYPE, stamp, object, offset, accessKind, locationIdentity, false, MemoryOrderMode.PLAIN);
+    }
+
     public RawLoadNode(ValueNode object, ValueNode offset, JavaKind accessKind, LocationIdentity locationIdentity, MemoryOrderMode memoryOrder) {
         this(object, offset, accessKind, locationIdentity, false, memoryOrder);
     }
@@ -212,6 +216,9 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
 
     @NodeIntrinsic
     public static native Object load(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native Object load(@ConstantNodeParameter Stamp stamp, Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     @NodeIntrinsic
     public static native boolean loadBoolean(Object object, long offset, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
