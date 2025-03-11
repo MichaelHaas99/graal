@@ -243,7 +243,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.TriState;
 
 /**
  * HotSpot implementation of {@link LoweringProvider}.
@@ -1271,7 +1270,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (graph.getGuardsStage().allowsFloatingGuards()) {
             return;
         }
-        if (InlineTypeUtil.isAlreadyBuffered(graph, inlineTypeNode.getIsNotNull(), inlineTypeNode.getOop()) == TriState.TRUE) {
+        if (InlineTypeUtil.isAllocatedOrNull(graph, inlineTypeNode.getIsNotNull(), inlineTypeNode.getOop())) {
             inlineTypeNode.replaceAtUsages(inlineTypeNode.getOop());
             graph.removeFixed(inlineTypeNode);
             return;

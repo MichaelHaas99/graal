@@ -185,7 +185,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.TriState;
 
 /**
  * VM-independent lowerings for standard Java nodes. VM-specific methods are abstract and must be
@@ -1038,8 +1037,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
                         assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
 
-                        if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex)) == TriState.TRUE) {
-                            // already buffered (or null) use this instance
+                        if (InlineTypeUtil.isAllocatedOrNull(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex))) {
+                            // already allocated or null use this instance
                             allocations[objIndex] = reuseAlloc.getOops().get(objIndex);
                             continue;
                         }
@@ -1215,9 +1214,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                             if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getIsNotNulls().get(objIndex) != null) {
                                 assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
 
-                                if (InlineTypeUtil.isAlreadyBuffered(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex)) != TriState.TRUE) {
-                                    // only do write if not already buffered (or null), use this
-                                    // instance
+                                if (!InlineTypeUtil.isAllocatedOrNull(graph, reuseAlloc.getIsNotNulls().get(objIndex), reuseAlloc.getOops().get(objIndex))) {
+                                    // only do write if not already allocated (or null)
                                     final int currentObjIndex = objIndex;
                                     lateWrites.computeIfAbsent(newObject,
                                                     k -> new InlineTypeUtil.InlineTypeInfo(reuseAlloc.getIsNotNulls().get(currentObjIndex), reuseAlloc.getOops().get(currentObjIndex)));
