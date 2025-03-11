@@ -59,6 +59,7 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
+import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
@@ -172,11 +173,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
 
-            // insert a null check in case the virtual object is nullable and no proxy
-            // is in between
+
             ObjectState obj = getObjectState(state, unproxiedObject);
             if (obj != null) {
                 assert !obj.isVirtual() : object;
+                // insert a null check in case the virtual object is nullable and no proxy
+                // is in between
                 if (!StampTool.isPointerNonNull(object)) {
                     ValueNode nonNull = obj.getNonNull();
                     assert nonNull != null : "is not null info should be present";
@@ -184,6 +186,9 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                         LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
                         effects.ensureFloatingAdded(check);
                         effects.addFixedNodeBefore(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false), load);
+                        FixedWithNextNode replacement = new FixedValueAnchorNode(cachedValue);
+                        effects.addFixedNodeBefore(replacement, load);
+                        cachedValue = replacement;
                     }
                 }
             }
