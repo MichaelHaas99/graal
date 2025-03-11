@@ -1014,17 +1014,17 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      */
     public State[] initRegState(AllocatableValue[] currentArguments, int currentStackSizeArguments, int expectedStackSizeArguments, int spInc) {
         RegisterArray registers = getTarget().arch.getAvailableValueRegisters();
-        int currentArgsOnStack = currentStackSizeArguments / getTarget().wordSize;
-        int expectedArgsOnStack = expectedStackSizeArguments / getTarget().wordSize;
+        int wordSize = getTarget().wordSize;
+        int registerSize = registers.size();
+        int currentArgsOnStack = currentStackSizeArguments / wordSize;
         State[] state;
         if (spInc == 0) {
-            // no additional stack slots
-            // include RA and padding 16 byte
-            state = new State[registers.size() + currentArgsOnStack + 2];
+            // include all registers, the current args and RA
+            state = new State[registerSize + currentArgsOnStack + 1];
         } else {
-            // include all registers, the current args and the increased stack space and RA and
-            // padding 16 byte
-            state = new State[registers.size() + currentArgsOnStack + expectedArgsOnStack + 3];
+            // include all registers, the current args, the increased stack space (old RA +
+            // expected args + padding if necessary) and RA
+            state = new State[registerSize + currentArgsOnStack + 1 + spInc / wordSize];
         }
 
         // initialize the state, set all locations to writeable
