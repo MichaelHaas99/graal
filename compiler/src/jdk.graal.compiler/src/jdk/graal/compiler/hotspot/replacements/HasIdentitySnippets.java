@@ -8,6 +8,8 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.kl
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markWordLockMaskInPlace;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.unlockedValue;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
 import jdk.graal.compiler.api.replacements.Snippet;
@@ -30,7 +32,7 @@ public class HasIdentitySnippets implements Snippets {
         @SuppressWarnings("this-escape")
         public Templates(OptionValues options, Providers providers) {
             super(options, providers);
-            boolean useMarkWord = true;
+            boolean useMarkWord = false;
             if (useMarkWord) {
                 hasIdentitySnippet = snippet(providers, HasIdentitySnippets.class, "hasIdentityFromMarkWord");
             } else {
@@ -56,8 +58,11 @@ public class HasIdentitySnippets implements Snippets {
 
         // check mark word for inline type
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        return !mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG));
-
+        final Word lockBits = mark.and(Word.unsigned(markWordLockMaskInPlace(INJECTED_VMCONFIG)));
+        if (lockBits.equal(Word.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
+            return !mark.and(inlineTypePattern(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG));
+        }
+        return hasIdentityFromKlass(object);
     }
 
     @Snippet
