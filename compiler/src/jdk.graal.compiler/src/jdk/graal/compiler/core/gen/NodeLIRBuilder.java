@@ -672,7 +672,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode isNotNull, JavaType[] types) {
+    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull, JavaType[] types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
         Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
@@ -697,8 +697,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         // assign the read multi value nodes a result see
         // CallDynamicJavaDirectNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra_)
 
-        if (isNotNull != null) {
-            // produce code for the isNotNull information
+        if (nonNull != null) {
+            // produce code for the nonNull information
 
             // get oopOrHub value which is located in the return register
             Value oopOrHub = result;
@@ -710,11 +710,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             LIRKind kind = (LIRKind) result.getValueKind();
             Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
 
-            Variable isNotNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), oopOrHub, nullValue, Condition.EQ, false, intZero, intOne);
-            setResult(isNotNull, isNotNullVariable);
+            Variable nonNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), oopOrHub, nullValue, Condition.EQ, false, intZero, intOne);
+            setResult(nonNull, nonNullVariable);
         }
 
-        assert isLegal(result) : "expected a legal Value for isNotNull";
+        assert isLegal(result) : "expected a legal Value for nonNull";
         // if the klass pointer is returned we need to zero out the return register
         // e.g. see if (return_value_is_used()) { in ad_x86.cpp
 

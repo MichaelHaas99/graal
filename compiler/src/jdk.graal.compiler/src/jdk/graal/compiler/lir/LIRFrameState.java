@@ -95,8 +95,8 @@ public class LIRFrameState {
 
                 // Also process oopOrHub if exists. Produced for a framestate of an InvokeNode
                 // which has a nullable scalarized inline object as return.
-                if (obj.getIsNotNull() != null) {
-                    processValues(inst, obj.getIsNotNull(), proc);
+                if (obj.getNonNull() != null) {
+                    processValues(inst, obj.getNonNull(), proc);
                 }
             }
         }
@@ -120,8 +120,8 @@ public class LIRFrameState {
 
                 // Also visit oopOrHub if exists. Produced for a framestate of an InvokeNode which
                 // has a nullable scalarized inline object as return.
-                if (obj.getIsNotNull() != null) {
-                    visitValues(inst, obj.getIsNotNull(), proc);
+                if (obj.getNonNull() != null) {
+                    visitValues(inst, obj.getNonNull(), proc);
                 }
             }
         }

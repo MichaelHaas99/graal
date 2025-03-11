@@ -56,7 +56,7 @@ public class ObjectState {
     private boolean ensureVirtualized;
 
     private ValueNode oop;
-    private ValueNode isNotNull;
+    private ValueNode nonNull;
 
     private EscapeObjectState cachedState;
 
@@ -73,10 +73,10 @@ public class ObjectState {
         }
     }
 
-    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oop, ValueNode isNotNull) {
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull) {
         this(entries, locks, ensureVirtualized);
         this.oop = oop;
-        this.isNotNull = isNotNull;
+        this.nonNull = nonNull;
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
@@ -86,13 +86,13 @@ public class ObjectState {
         this.ensureVirtualized = ensureVirtualized;
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode isNotNull) {
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
         this.oop = oop;
-        this.isNotNull = isNotNull;
+        this.nonNull = nonNull;
     }
 
     public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
@@ -109,7 +109,7 @@ public class ObjectState {
         cachedState = other.cachedState;
         ensureVirtualized = other.ensureVirtualized;
         oop = other.oop;
-        isNotNull = other.isNotNull;
+        nonNull = other.nonNull;
     }
 
     public ObjectState cloneState() {
@@ -172,7 +172,7 @@ public class ObjectState {
                         newEntries[i] = null;
                     }
                 }
-                cachedState = new VirtualObjectState(virtual, newEntries, isNotNull);
+                cachedState = new VirtualObjectState(virtual, newEntries, nonNull);
             } else {
                 cachedState = new MaterializedObjectState(virtual, materializedValue);
             }
@@ -246,12 +246,12 @@ public class ObjectState {
         return oop;
     }
 
-    public ValueNode getIsNotNull() {
-        return isNotNull;
+    public ValueNode getNonNull() {
+        return nonNull;
     }
 
-    public ValueNode setIsNotNull(ValueNode isNotNull) {
-        return this.isNotNull = isNotNull;
+    public ValueNode setNonNull(ValueNode nonNull) {
+        return this.nonNull = nonNull;
     }
 
     public boolean hasLocks() {

@@ -404,11 +404,11 @@ public final class FrameStateBuilder implements SideEffectsState {
             if (param == null) {
                 if (method.isScalarizedParameter(i) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
                     JavaType[] parameterTypes = method.getScalarizedParameterNullFree(i);
-                    ParameterNode isNotNull = null;
+                    ParameterNode nonNull = null;
                     if (!method.isParameterNullFree(i)) {
-                        isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
+                        nonNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterNonNullType(i), false)));
 // ForeignCallNode foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
-// ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), isNotNull, ConstantNode.forBoolean(true,
+// ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), nonNull, ConstantNode.forBoolean(true,
 // graph)));
 // newStartPosition.setNext(foreign);
 // newStartPosition = foreign;
@@ -437,7 +437,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                     }
 
                     InlineTypeNode inlineTypeNode = graph.addOrUniqueWithInputs(InlineTypeNode.createWithoutOop(
-                                    method.getSignature().getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()), scalarizedValues, isNotNull));
+                                    method.getSignature().getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()), scalarizedValues, nonNull));
                     newStartPosition.setNext(inlineTypeNode);
                     newStartPosition = inlineTypeNode;
                     param = inlineTypeNode;
@@ -561,9 +561,9 @@ public final class FrameStateBuilder implements SideEffectsState {
             if (param == null) {
                 if (method.isScalarizedParameter(i) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
                     JavaType[] parameterTypes = method.getScalarizedParameterNullFree(i);
-                    ParameterNode isNotNull = null;
+                    ParameterNode nonNull = null;
                     if (!method.isParameterNullFree(i)) {
-                        isNotNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterIsNotNullType(i), false)));
+                        nonNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterNonNullType(i), false)));
                     }
                     ParameterNode[] scalarizedValues = new ParameterNode[parameterTypes.length];
                     for (int j = 0; j < parameterTypes.length; j++) {
@@ -580,7 +580,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                         ValueNode entry = scalarizedValues[j];
                         newEntries[j] = entry;
                     }
-                    virtualStates.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, isNotNull)));
+                    virtualStates.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, nonNull)));
 
                     param = virtual;
                 } else {

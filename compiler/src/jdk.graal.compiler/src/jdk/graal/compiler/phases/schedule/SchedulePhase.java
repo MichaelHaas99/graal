@@ -449,8 +449,8 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
                     // cycle now
                     cycleDetected |= virtualObjectState.values().stream().anyMatch(flood::isMarked);
                     flood.addAll(virtualObjectState.values());
-                    cycleDetected |= flood.isMarked(virtualObjectState.getIsNotNull());
-                    flood.add(virtualObjectState.getIsNotNull());
+                    cycleDetected |= flood.isMarked(virtualObjectState.getNonNull());
+                    flood.add(virtualObjectState.getNonNull());
 
                 } else if (n instanceof InvokeWithExceptionNode invokeWithExceptionNode) {
                     if (seenInvokeWithException == null) {

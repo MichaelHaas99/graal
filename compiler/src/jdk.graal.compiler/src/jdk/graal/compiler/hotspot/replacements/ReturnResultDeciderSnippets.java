@@ -31,7 +31,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
             StructuredGraph graph = node.graph();
             args = new SnippetTemplate.Arguments(returnResultSnippet, graph.getGuardsStage(), tool.getLoweringStage());
 
-            args.add("isNotNull", node.getIsNotNull());
+            args.add("nonNull", node.getNonNull());
             args.add("oop", node.getOop());
             args.add("hub", node.getHub());
             template(tool, node, args).instantiate(tool.getMetaAccess(), node, DEFAULT_REPLACER, args);
@@ -40,7 +40,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
     }
 
     @Snippet
-    public static Word returnResultSnippet(int isNotNull, Object oop, KlassPointer hub) {
+    public static Word returnResultSnippet(int nonNull, Object oop, KlassPointer hub) {
         // @formatter:off
         /*
          * if(scalarized inline object is not null){
@@ -51,7 +51,7 @@ public class ReturnResultDeciderSnippets implements Snippets {
          * }
          */
         // @formatter:on
-        if (probability(LIKELY_PROBABILITY, isNotNull == 1)) {
+        if (probability(LIKELY_PROBABILITY, nonNull == 1)) {
             Word wordOop = Word.objectToTrackedPointer(oop);
             Word wordHub = hub.asWord();
             Word wordTaggedHub = wordHub.or(1);

@@ -273,7 +273,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable {
                 // null
                 LogicNode result;
                 if (fold.isTrue()) {
-                    result = new IntegerEqualsNode(tool.getIsNotNull((VirtualObjectNode) alias), ConstantNode.forInt(1));
+                    result = new IntegerEqualsNode(tool.getNonNull((VirtualObjectNode) alias), ConstantNode.forInt(1));
                     tool.addNode(result);
                 } else {
                     result = LogicConstantNode.forBoolean(false, graph());

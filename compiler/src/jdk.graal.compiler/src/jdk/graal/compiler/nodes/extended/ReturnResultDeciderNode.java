@@ -13,8 +13,8 @@ import jdk.vm.ci.meta.JavaKind;
 
 /**
  * The {@code ReturnResultDeciderNode} selects, based on its inputs, the node that will be returned
- * by the {@link jdk.graal.compiler.nodes.ReturnScalarizedNode}. If {@link #isNotNull} indicates
- * that the result is null, a null pointer will be returned. In case the result is non-null the node
+ * by the {@link jdk.graal.compiler.nodes.ReturnScalarizedNode}. If {@link #nonNull} indicates that
+ * the result is null, a null pointer will be returned. In case the result is non-null the node
  * either returns the tagged hub created from {@link #hub} or the {@link #oop} if it does not
  * represent a null pointer.
  * 
@@ -23,19 +23,19 @@ import jdk.vm.ci.meta.JavaKind;
 public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowerable {
 
     public static final NodeClass<ReturnResultDeciderNode> TYPE = NodeClass.create(ReturnResultDeciderNode.class);
-    @Input ValueNode isNotNull;
+    @Input ValueNode nonNull;
     @Input ValueNode oop;
     @Input ValueNode hub;
 
-    public ReturnResultDeciderNode(JavaKind resultKind, ValueNode isNotNull, ValueNode oop, ValueNode hub) {
+    public ReturnResultDeciderNode(JavaKind resultKind, ValueNode nonNull, ValueNode oop, ValueNode hub) {
         super(TYPE, StampFactory.forKind(resultKind));
-        this.isNotNull = isNotNull;
+        this.nonNull = nonNull;
         this.oop = oop;
         this.hub = hub;
     }
 
-    public ValueNode getIsNotNull() {
-        return isNotNull;
+    public ValueNode getNonNull() {
+        return nonNull;
     }
 
     public ValueNode getOop() {

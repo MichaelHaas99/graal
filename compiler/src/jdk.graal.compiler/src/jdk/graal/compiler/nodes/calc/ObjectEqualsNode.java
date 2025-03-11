@@ -211,7 +211,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             } else {
                 assert !virtual.hasIdentity() : "only inline objects can be virtual and nullable, they have no identity";
                 // virtual is nullable, only equal if virtual is also null
-                LogicNode result = new IntegerEqualsNode(tool.getIsNotNull(virtual), ConstantNode.forInt(0));
+                LogicNode result = new IntegerEqualsNode(tool.getNonNull(virtual), ConstantNode.forInt(0));
                 tool.addNode(result);
                 return result;
             }
@@ -249,30 +249,30 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                     // node indicating the result of field comparison
                     LogicNode fieldComparison = LogicConstantNode.tautology(graph);
 
-                    // node indicating the result of isNotNull comparison
-                    LogicNode isNotNullComparison = LogicConstantNode.tautology();
+                    // node indicating the result of nonNull comparison
+                    LogicNode nonNullComparison = LogicConstantNode.tautology();
 
                     // make sure nullable scalarized inline objects are handled correctly
-                    ValueNode xIsNotNull = tool.getIsNotNull(xVirtual);
-                    ValueNode yIsNotNull = tool.getIsNotNull(yVirtual);
+                    ValueNode xNonNull = tool.getNonNull(xVirtual);
+                    ValueNode yNonNull = tool.getNonNull(yVirtual);
 
                     LogicNode orWithFieldComparison = LogicConstantNode.contradiction();
                     if (!StampTool.isPointerNonNull(xVirtual) && !StampTool.isPointerNonNull(yVirtual)) {
-                        assert xIsNotNull != null && yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
-                        isNotNullComparison = new IntegerEqualsNode(xIsNotNull, yIsNotNull);
+                        assert xNonNull != null && yNonNull != null : "nullable scalarized object expected nonNull information to be set";
+                        nonNullComparison = new IntegerEqualsNode(xNonNull, yNonNull);
 
                         // need to make field comparison true, in case both are null
-                        orWithFieldComparison = new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(0));
+                        orWithFieldComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(0));
                     } else if (StampTool.isPointerNonNull(xVirtual) && StampTool.isPointerNonNull(yVirtual)) {
                         // nothing to do both are non-null
                     } else if (!StampTool.isPointerNonNull(xVirtual)) {
                         // x may be null, y is not therefore x needs to be non-null
-                        assert xIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
-                        isNotNullComparison = new IntegerEqualsNode(xIsNotNull, ConstantNode.forInt(1));
+                        assert xNonNull != null : "nullable scalarized object expected nonNull information to be set";
+                        nonNullComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(1));
                     } else {
                         // y may be null, x is not therefore y needs to be non-null
-                        assert yIsNotNull != null : "nullable scalarized object expected isNotNull information to be set";
-                        isNotNullComparison = new IntegerEqualsNode(yIsNotNull, ConstantNode.forInt(1));
+                        assert yNonNull != null : "nullable scalarized object expected nonNull information to be set";
+                        nonNullComparison = new IntegerEqualsNode(yNonNull, ConstantNode.forInt(1));
                     }
 
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
@@ -350,7 +350,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             return null;
 
                     }
-                    return LogicNode.andWithoutGraphAdd(isNotNullComparison, LogicNode.orWithoutGraphAdd(orWithFieldComparison, fieldComparison, ProfileData.BranchProbabilityData.unknown()),
+                    return LogicNode.andWithoutGraphAdd(nonNullComparison, LogicNode.orWithoutGraphAdd(orWithFieldComparison, fieldComparison, ProfileData.BranchProbabilityData.unknown()),
                                     ProfileData.BranchProbabilityData.unknown());
                 }
             } else {

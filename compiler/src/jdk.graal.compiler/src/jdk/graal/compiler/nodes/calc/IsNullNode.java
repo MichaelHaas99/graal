@@ -181,8 +181,8 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
         if (fold != TriState.UNKNOWN) {
             tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
         } else if (alias instanceof VirtualObjectNode && !StampTool.isPointerNonNull(alias)) {
-            // replace the null check with a check of the isNotNull information
-            LogicNode check = IntegerEqualsNode.create(tool.getIsNotNull((VirtualObjectNode) alias),
+            // replace the null check with a check of the nonNull information
+            LogicNode check = IntegerEqualsNode.create(tool.getNonNull((VirtualObjectNode) alias),
                             ConstantNode.forInt(0, graph()), NodeView.DEFAULT);
             tool.ensureAdded(check);
             tool.replaceWithValue(check);

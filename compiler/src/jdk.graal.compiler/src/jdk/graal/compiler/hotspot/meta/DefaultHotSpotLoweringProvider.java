@@ -1270,7 +1270,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (graph.getGuardsStage().allowsFloatingGuards()) {
             return;
         }
-        if (InlineTypeUtil.isAllocatedOrNull(graph, inlineTypeNode.getIsNotNull(), inlineTypeNode.getOop())) {
+        if (InlineTypeUtil.isAllocatedOrNull(graph, inlineTypeNode.getNonNull(), inlineTypeNode.getOop())) {
             inlineTypeNode.replaceAtUsages(inlineTypeNode.getOop());
             graph.removeFixed(inlineTypeNode);
             return;
@@ -1301,7 +1301,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             }
         }
 
-        ValueNode replacement = InlineTypeUtil.createAllocationDiamond(inlineTypeNode, inlineTypeNode.getIsNotNull(), inlineTypeNode.getOop(), writes, true, newObject,
+        ValueNode replacement = InlineTypeUtil.createAllocationDiamond(inlineTypeNode, inlineTypeNode.getNonNull(), inlineTypeNode.getOop(), writes, true, newObject,
                         inlineTypeNode.getType());
         FixedValueAnchorNode anchor = graph.add(new FixedValueAnchorNode(replacement));
         graph.addBeforeFixed(inlineTypeNode, anchor);

@@ -161,22 +161,22 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
         JavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
         int oopIndex = 0;
         ReadMultiValueNode oop = null;
-        int isNotNullIndex = types.length;
-        ReadMultiValueNode isNotNull = null;
+        int nonNullIndex = types.length;
+        ReadMultiValueNode nonNull = null;
 
         List<ReadMultiValueNode> readMultiValue = new ArrayList<>(types.length - 1);
         for (Node usage : asNode().usages()) {
             if (usage instanceof ReadMultiValueNode readMultiValueNode) {
                 if (readMultiValueNode.getIndex() == oopIndex) {
                     oop = readMultiValueNode;
-                } else if (readMultiValueNode.getIndex() == isNotNullIndex) {
-                    isNotNull = readMultiValueNode;
+                } else if (readMultiValueNode.getIndex() == nonNullIndex) {
+                    nonNull = readMultiValueNode;
                 } else {
                     readMultiValue.add(readMultiValueNode);
                 }
             }
         }
 
-        gen.emitInvokeWithScalarizedReturn(this, oop, readMultiValue.toArray(new ReadMultiValueNode[readMultiValue.size()]), isNotNull, types);
+        gen.emitInvokeWithScalarizedReturn(this, oop, readMultiValue.toArray(new ReadMultiValueNode[readMultiValue.size()]), nonNull, types);
     }
 }
