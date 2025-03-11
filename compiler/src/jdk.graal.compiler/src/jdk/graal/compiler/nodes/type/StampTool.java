@@ -319,6 +319,28 @@ public class StampTool {
         return false;
     }
 
+    public static boolean isInlineTypeOrNull(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return isInlineTypeOrNull(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
+    }
+
+    /**
+     * Checks whether this {@link Stamp} represents a {@linkplain Stamp#hasValues() legal} pointer
+     * stamp whose values are known to be inline types or null
+     *
+     * @param stamp the stamp to check
+     * @param valhallaOptionsProvider options specific for valhalla
+     * @return true if this stamp represents a legal object stamp whose values are known to be
+     *         inline types or null
+     */
+    public static boolean isInlineTypeOrNull(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+            return false;
+        if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
+            return abstractObjectStamp.isInlineTypeOrNull();
+        }
+        return false;
+    }
+
     public static boolean canBeInlineTypeArray(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
         return canBeInlineTypeArray(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
     }
