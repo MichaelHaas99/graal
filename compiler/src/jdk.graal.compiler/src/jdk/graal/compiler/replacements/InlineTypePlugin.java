@@ -167,7 +167,7 @@ public class InlineTypePlugin implements NodePlugin {
         }
 
         // create InlineTypeNode
-        return b.append(InlineTypeNode.createNullFreeWithoutOop(fieldType, loads));
+        return b.append(InlineTypeNode.createNonNullWithoutOop(fieldType, loads));
     }
 
     /**
@@ -422,7 +422,7 @@ public class InlineTypePlugin implements NodePlugin {
             loads[i] = b.add(load);
 
         }
-        InlineTypeNode inlineTypeNode = b.append(InlineTypeNode.createNullFreeWithoutOop(componentType, loads));
+        InlineTypeNode inlineTypeNode = b.append(InlineTypeNode.createNonNullWithoutOop(componentType, loads));
 
         // return first node in control flow
         if (hasNoNext(begin)) {

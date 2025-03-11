@@ -99,7 +99,7 @@ public class InlineTypeUtil {
                 int scalarizedParametersLen = targetMethod.getScalarizedParameter(i, true).length;
                 InlineTypeNode inlineTypeNode;
                 if (targetMethod.isParameterNullFree(i, true)) {
-                    inlineTypeNode = InlineTypeNode.createNullFreeWithoutOop(getParameterType(targetMethod, i, true),
+                    inlineTypeNode = InlineTypeNode.createNonNullWithoutOop(getParameterType(targetMethod, i, true),
                                     arguments.subList(currentIndex, scalarizedParametersLen).toArray(new ValueNode[parameterLength]));
                 } else {
                     inlineTypeNode = InlineTypeNode.createWithoutOop(getParameterType(targetMethod, i, true),
