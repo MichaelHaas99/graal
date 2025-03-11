@@ -126,12 +126,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
 
 
-    public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oopOrHub, ValueNode nonNull) {
-        return new InlineTypeNode(type, oopOrHub, new ValueNode[type.getInstanceFields(true).length], nonNull);
+    public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oop, ValueNode nonNull) {
+        return new InlineTypeNode(type, oop, new ValueNode[type.getInstanceFields(true).length], nonNull);
     }
 
-    public static InlineTypeNode createNonNull(ResolvedJavaType type, ValueNode oopOrHub, ValueNode[] fieldValues) {
-        return new InlineTypeNode(type, oopOrHub, fieldValues, null);
+    public static InlineTypeNode createNonNull(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues) {
+        return new InlineTypeNode(type, oop, fieldValues, null);
     }
 
     public static InlineTypeNode createNonNullWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues) {
@@ -149,18 +149,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ReadMultiValueNode oop = b.add(new ReadMultiValueNode(returnType, b.getAssumptions(), invoke.asNode(), 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
-        ReadMultiValueNode[] projs = new ReadMultiValueNode[fields.length];
+        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            projs[i] = b.add(new ReadMultiValueNode(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
+            fieldValues[i] = b.add(new ReadMultiValueNode(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
 
         }
 
         ReadMultiValueNode nonNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, projs, nonNull));
-// b.append(new ForeignCallNode(LOG_OBJECT, oopOrHub, ConstantNode.forBoolean(true,
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull));
+// b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
         return newInstance;

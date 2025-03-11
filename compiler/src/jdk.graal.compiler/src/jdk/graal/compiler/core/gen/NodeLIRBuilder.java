@@ -700,8 +700,8 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         if (nonNull != null) {
             // produce code for the non-null information
 
-            // get oopOrHub value which is located in the return register
-            Value oopOrHub = result;
+            // get oopOrTaggedHub value which is located in the return register
+            Value oopOrTaggedHub = result;
 
             ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
                             JavaConstant.forInt(1));
@@ -710,7 +710,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             LIRKind kind = (LIRKind) result.getValueKind();
             Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
 
-            Variable nonNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), oopOrHub, nullValue, Condition.EQ, false, intZero, intOne);
+            Variable nonNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), oopOrTaggedHub, nullValue, Condition.EQ, false, intZero, intOne);
             setResult(nonNull, nonNullVariable);
         }
 
