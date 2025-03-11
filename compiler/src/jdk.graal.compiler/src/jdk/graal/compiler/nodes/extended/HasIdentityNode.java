@@ -8,10 +8,12 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo(cycles = CYCLES_8, size = SIZE_8)
@@ -38,6 +40,13 @@ public class HasIdentityNode extends FixedWithNextNode implements Lowerable, Can
     public Node canonical(CanonicalizerTool tool) {
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
+        }
+
+        if (!StampTool.canBeInlineType(value, tool.getValhallaOptionsProvider())) {
+            return LogicConstantNode.tautology();
+        }
+        if (StampTool.isInlineType(value, tool.getValhallaOptionsProvider())) {
+            return LogicConstantNode.contradiction();
         }
         return this;
     }
