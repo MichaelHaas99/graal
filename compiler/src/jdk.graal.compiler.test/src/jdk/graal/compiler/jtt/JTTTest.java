@@ -148,11 +148,12 @@ public class JTTTest extends GraalCompilerTest {
         Result expect = executeExpected(method, receiver, args);
 
         testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
-// if (args.length > 0) {
-// this.argsToBind = args;
-// testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
-// this.argsToBind = null;
-// }
+        // TODO: adapt for valhalla calling convention
+        if (args.length > 0 && !method.hasScalarizedParameters()) {
+            this.argsToBind = args;
+            testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
+            this.argsToBind = null;
+        }
     }
 
     /**
