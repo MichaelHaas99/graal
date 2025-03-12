@@ -5,7 +5,7 @@
 - clone https://github.com/MichaelHaas99/valhalla
 - switch to the branch `mh/GR-57655`
 - build the JDK with the command `sh configure --with-jtreg=/path/to/jtreg; make jdk-image`
-    - jtreg with version 7.3.1+1 as well as a boot JDK with version not lower than 23 is needed.
+  - jtreg with version 7.5.1+1 as well as a boot JDK with version not lower than 23 is needed.
 
 ## Building a Valhalla JDK with the graal compiler included
 
@@ -27,7 +27,16 @@
       `make TEST="compiler/valhalla/inlinetypes runtime/valhalla/inlinetypes valhalla/valuetypes" JDK_UNDER_TEST=$GRAALJDK test`
     - to print error messages use the option `JTREG="OPTIONS=-Djdk.graal.CompilationFailureAction=Print"`
 
-## Execute test cases from the graal repo
+## Frequently used Hotspot JVM options
+
+- `EnableValhalla` enable valhalla
+- `UseFieldFlattening` enable flattening of value class fields
+- `UseArrayFlattening` enable flattening of value class array elements
+- `InlineTypePassFieldsAsArgs` enable calling convention
+- `InlineTypeReturnedAsFields` enable return convention
+- `UseACmpProfile` use profiling information for the acmp bytecode
+
+## How to execute some valhalla specific test cases from the graal repo
 
 - `mx unittest jdk.graal.compiler.jtt.bytecode.BC_ifacmpeq`
 - `mx unittest jdk.graal.compiler.jtt.bytecode.BC_monitorenter03`
@@ -41,34 +50,26 @@
 Graal support for the new semantics introduced in JEP 401
 
 - if_acmp (substitutability check for inline types)
-- monitorenter (not allowed for inline types)
-- adaption of hashCode plugin in Graal
+- monitorenter (not allowed for value objects)
+- adaption of hashCode plugin in Graal (hash code of value objects is produced by the hash code of their fields)
 - PEA supports substitutability checks and avoids materialization of operands if possible
+
+Optimizations for JEP 401
+
 - access to new acmp profiling data over JVMCI (profiling data not yet optimal)
 - usage of acmp profiling data
-- inlining of equality comparison instead of slow call to Java library
-
-optimizations for JEP 401
-
+- inlining of substitutability check instead of slow call to Java library, avoided for recursive checks
 - access and store operations on null-restricted flat fields
 - access and store operations on null-restricted flat arrays
-
-### Working on
-
-- refactoring of bytecode parser changes into a node plugin
-- flattened inline type fields
-  - empty inline types can be optimized, not yet considered. maybe cause problem if flat?
-  - getfields on flattened fields can be delayed to avoid creation of unused nodes
-- flat arrays
-  - use profiling data for flat arrays
-  - if inline type is not known at compile time do a runtime call (deoptimization at the moment)
-  - API for flat arrays in JVMCI
-  - `System.arraycopy` snippets works incorrectly, throws ClassCastException because doesn't expect a fat array
-
-- Nullable flattened inline types cause problems in the JVM
-  - can't test my implementation (also not yet implemented in C1 and C2)
-  - wait for changes on the valhalla repo
+- Valhalla calling convention
+  - pass the field values of a value object instead of a reference
+- Valhalla return convention
+  - return the field values of a value object instead of a reference if enough registers are available
 
 ### Future work/ideas:
 
-- Scalarization of inline types which are function arguments or return values
+- support for the new intrinsics introduced with Valhalla
+- produce code for an allocation for a non-inlined method handle with a known scalarized return instead of a foreign
+  call
+- use profiling data for flat arrays
+- support for nullable (atomic) flat fields and arrays
