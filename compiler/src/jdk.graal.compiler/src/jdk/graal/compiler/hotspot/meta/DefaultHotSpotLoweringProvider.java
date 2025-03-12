@@ -191,6 +191,7 @@ import jdk.graal.compiler.nodes.java.DynamicNewInstanceWithExceptionNode;
 import jdk.graal.compiler.nodes.java.InstanceOfDynamicNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.LoadExceptionObjectNode;
+import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
 import jdk.graal.compiler.nodes.java.MonitorExitNode;
@@ -202,6 +203,10 @@ import jdk.graal.compiler.nodes.java.NewInstanceWithExceptionNode;
 import jdk.graal.compiler.nodes.java.NewMultiArrayNode;
 import jdk.graal.compiler.nodes.java.NewMultiArrayWithExceptionNode;
 import jdk.graal.compiler.nodes.java.RegisterFinalizerNode;
+import jdk.graal.compiler.nodes.java.StoreFieldNode;
+import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
+import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
+import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.java.ValidateNewInstanceClassNode;
 import jdk.graal.compiler.nodes.memory.FloatingReadNode;
 import jdk.graal.compiler.nodes.memory.ReadNode;
@@ -228,6 +233,7 @@ import jdk.graal.compiler.replacements.nodes.CStringConstant;
 import jdk.graal.compiler.replacements.nodes.LogNode;
 import jdk.graal.compiler.serviceprovider.GraalServices;
 import jdk.graal.compiler.serviceprovider.LibGraalService;
+import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -642,6 +648,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerReturnResultDecider((ReturnResultDeciderNode) n, tool);
         } else if (n instanceof HasIdentityNode) {
             lowerHasIdentity((HasIdentityNode) n, tool);
+        } else if (n instanceof StoreFlatFieldNode) {
+            lowerStoreFlatFieldNode((StoreFlatFieldNode) n, tool);
+        } else if (n instanceof StoreFlatIndexedNode) {
+            lowerStoreFlatIndexedNode((StoreFlatIndexedNode) n, tool);
         } else {
             return false;
         }
@@ -849,6 +859,77 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             return;
         }
         hasIdentitySnippets.lower(node, tool);
+    }
+
+    protected void lowerStoreFlatFieldNode(StoreFlatFieldNode storeFlatField, LoweringTool tool) {
+        List<StoreFieldNode> nodes = storeFlatField.getWriteOperations();
+        StructuredGraph graph = storeFlatField.graph();
+        for (int i = 0; i < nodes.size(); i++) {
+
+            StoreFieldNode storeField = nodes.get(i);
+            ResolvedJavaField field = storeField.field();
+            ValueNode object = storeField.object();
+            assert StampTool.isPointerNonNull(object) : "store to null-restricted flat field should include null check";
+
+            ValueNode value = implicitStoreConvert(graph, getStorageKind(storeField.field()), storeField.value());
+
+            AddressNode address = createFieldAddress(graph, object, field);
+            BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
+            WriteNode memoryWrite = new WriteNode(address, overrideFieldLocationIdentity(storeFlatField.getLocationIdentity()), value, barrierType, storeField.getMemoryOrder());
+
+            memoryWrite = graph.add(memoryWrite);
+
+            if (i != nodes.size() - 1) {
+                // assign invalid framestate because writes don't exist in bytecode
+                memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                graph.addBeforeFixed(storeFlatField, memoryWrite);
+            } else {
+                // only last write operation gets a vaild framestate
+                memoryWrite.setStateAfter(storeFlatField.stateAfter());
+                graph.replaceFixed(storeFlatField, memoryWrite);
+            }
+
+        }
+    }
+
+    @Override
+    public void lowerLoadIndexedNode(LoadIndexedNode loadIndexed, LoweringTool tool) {
+        int arrayBaseOffset = metaAccess.getArrayBaseOffset(loadIndexed.elementKind()) + (loadIndexed.isFlatAccess() ? loadIndexed.getAdditionalOffset() : 0);
+        lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
+    }
+
+    public void lowerStoreFlatIndexedNode(StoreFlatIndexedNode storeFlatIndexed, LoweringTool tool) {
+        List<StoreIndexedNode> nodes = storeFlatIndexed.getWriteOperations();
+        StructuredGraph graph = storeFlatIndexed.graph();
+        ValueNode array = storeFlatIndexed.array();
+        assert StampTool.isPointerNonNull(array) : "store to flat array should include null check on array";
+        ValueNode positiveIndex = storeFlatIndexed.index();
+        GuardingNode boundsCheck = storeFlatIndexed.getBoundsCheck();
+        LocationIdentity locationIdentity = storeFlatIndexed.getKilledLocationIdentity();
+        for (int i = 0; i < nodes.size(); i++) {
+
+            StoreIndexedNode storeIndexed = nodes.get(i);
+            JavaKind storageKind = storeIndexed.elementKind();
+            ValueNode value = storeIndexed.value();
+
+            int arrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Object) + storeIndexed.getAdditionalOffset();
+
+            BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
+            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexed.getShift());
+            WriteNode memoryWrite = graph.add(new WriteNode(address, locationIdentity, implicitStoreConvert(graph, storageKind, value),
+                            barrierType, MemoryOrderMode.PLAIN));
+            memoryWrite.setGuard(boundsCheck);
+
+            if (i != nodes.size() - 1) {
+                memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                graph.addBeforeFixed(storeFlatIndexed, memoryWrite);
+            } else {
+                memoryWrite.setStateAfter(storeFlatIndexed.stateAfter());
+                graph.replaceFixed(storeFlatIndexed, memoryWrite);
+            }
+
+        }
+
     }
 
     private void lowerKlassLayoutHelperNode(KlassLayoutHelperNode n, LoweringTool tool) {
