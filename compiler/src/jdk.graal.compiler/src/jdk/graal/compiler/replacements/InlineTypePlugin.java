@@ -332,7 +332,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
                 b.push(elementKind,
-                                genLoadFlatFieldFromArray(b, array, index, boundsCheck, resolvedType, shift, null));
+                                genLoadFlatElement(b, array, index, boundsCheck, resolvedType, shift, null));
                 return true;
             }
 
@@ -350,7 +350,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // produce code that loads the flat inline type
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
 
-                instanceFlatArray = genLoadFlatFieldFromArray(b, array, index, boundsCheck, resolvedType,
+                instanceFlatArray = genLoadFlatElement(b, array, index, boundsCheck, resolvedType,
                                 shift, trueBegin);
                 resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
                 if (hasNoNext(trueBegin)) {
@@ -391,34 +391,32 @@ public class InlineTypePlugin implements NodePlugin {
 
     /**
      * Similar to {@link #genLoadFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField)}, but
-     * loads the flat field from a flat array.
+     * loads a flat element from an array.
      */
-    private FixedWithNextNode genLoadFlatFieldFromArray(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift,
+    private FixedWithNextNode genLoadFlatElement(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift,
                     BeginNode begin) {
         HotSpotResolvedObjectType componentType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
 
-        ResolvedJavaField[] innerFields = componentType.getInstanceFields(true);
-        LoadIndexedNode[] loads = new LoadIndexedNode[innerFields.length];
+        ResolvedJavaField[] fields = componentType.getInstanceFields(true);
+        LoadIndexedNode[] loads = new LoadIndexedNode[fields.length];
 
-        for (int i = 0; i < innerFields.length; i++) {
-            ResolvedJavaField innerField = innerFields[i];
-            assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
-
-            // returned fields include a header offset of their holder
-            int off = innerField.getOffset() - componentType.firstFieldOffset();
+        for (int i = 0; i < fields.length; i++) {
+            ResolvedJavaField field = fields[i];
+            assert !field.isFlat() : "the iteration over nested fields is handled by the loop itself";
 
             LoadIndexedNode load;
-            if (innerField.getJavaKind() == JavaKind.Object) {
-                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forDeclaredType(b.getAssumptions(), innerField.getType(), false).getTrustedStamp(), array, index, boundsCheck,
-                                innerField.getJavaKind());
+            if (field.getJavaKind() == JavaKind.Object) {
+                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), array, index, boundsCheck,
+                                field.getJavaKind());
             } else {
-                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(innerField.getJavaKind()), array, index, boundsCheck, innerField.getJavaKind());
+                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(field.getJavaKind()), array, index, boundsCheck, field.getJavaKind());
             }
 
-            // holder has no header so remove the header offset
+            // returned fields include a header offset of their holder, remove it
+            int off = field.getOffset() - componentType.firstFieldOffset();
             load.setAdditionalOffset(off);
             load.setShift(shift);
-            load.setLocation(innerField.changeOffset(off).setOuterDeclaringClass(componentType));
+            load.setLocation(field.changeOffset(off).setOuterDeclaringClass(componentType));
             loads[i] = b.add(load);
 
         }
@@ -454,7 +452,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // we store the value in a flat array we need to do a null check before loading the
                 // fields
                 ValueNode nullCheckedValue = genNullCheck(b, value);
-                genStoreFlatFieldToArray(b, array, index, boundsCheck, storeCheck, resolvedType,
+                genStoreFlatElement(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 nullCheckedValue, shift);
                 return true;
             }
@@ -477,9 +475,9 @@ public class InlineTypePlugin implements NodePlugin {
             ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
             if (isInlineTypeArray) {
 
-                // produce code that stores the flat inline type
+                // produce code that stores the flat element
                 int shift = resolvedType.convertToFlatArray().getLog2ComponentSize();
-                ValueNode firstFixedNode = genStoreFlatFieldToArray(b, array, index, boundsCheck, storeCheck, resolvedType,
+                ValueNode firstFixedNode = genStoreFlatElement(b, array, index, boundsCheck, storeCheck, resolvedType,
                                 nullCheckedValue, shift);
                 trueEnd = b.add(new EndNode());
                 if (hasNoNext(trueBegin)) {
@@ -493,8 +491,9 @@ public class InlineTypePlugin implements NodePlugin {
             } else {
                 // we don't know the type at compile time, produce a runtime call
                 ForeignCallNode store = b.add(new ForeignCallNode(STORE_UNKNOWN_INLINE, array, index, nullCheckedValue));
-                if (hasNoNext(trueBegin))
+                if (hasNoNext(trueBegin)) {
                     trueBegin.setNext(store);
+                }
                 trueEnd = b.add(new EndNode());
             }
 
@@ -516,12 +515,12 @@ public class InlineTypePlugin implements NodePlugin {
      *
      * Similar to
      * {@link #genStoreFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField, ValueNode)}, but
-     * stores the object as an element into a flat array.
+     * stores the object as a flat element into an array.
      */
-    private ValueNode genStoreFlatFieldToArray(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
+    private ValueNode genStoreFlatElement(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
                     ValueNode value, int shift) {
         HotSpotResolvedObjectType elementType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
-        ResolvedJavaField[] innerFields = elementType.getInstanceFields(true);
+        ResolvedJavaField[] fields = elementType.getInstanceFields(true);
 
         List<ValueNode> readOperations = new ArrayList<>();
         List<StoreFlatIndexedNode.StoreIndexedInfo> writeOperations = new ArrayList<>();
@@ -529,21 +528,22 @@ public class InlineTypePlugin implements NodePlugin {
         // empty inline type will have no fields
         ValueNode returnValue = null;
 
-        for (int i = 0; i < innerFields.length; i++) {
-            ResolvedJavaField innerField = innerFields[i];
-            assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
+        for (int i = 0; i < fields.length; i++) {
+            ResolvedJavaField field = fields[i];
+            assert !field.isFlat() : "the iteration over nested fields is handled by the loop itself";
 
-            // returned fields include a header offset of their holder
-            int off = innerField.getOffset() - elementType.firstFieldOffset();
 
-            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
-            readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
-            if (i == 0)
+            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, field));
+            readOperations.add(b.maskSubWordValue(load, field.getJavaKind()));
+
+            if (i == 0) {
                 returnValue = load;
+            }
 
-            // new holder has a header
-            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(i, innerField.getJavaKind(), off, shift));
+            // returned fields include a header offset of their holder, remove it
+            int off = field.getOffset() - elementType.firstFieldOffset();
+            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(i, field.getJavaKind(), off, shift));
 
         }
 
@@ -574,8 +574,9 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value, BeginNode begin) {
-        if (storeCheck != null)
+        if (storeCheck != null) {
             return storeCheck;
+        }
 
         LogicNode condition;
         TypeReference arrayType = StampTool.typeReferenceOrNull(array);
