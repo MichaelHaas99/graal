@@ -33,6 +33,7 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
+import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.WriteNode;
 import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
@@ -82,7 +83,7 @@ public class InlineTypeUtil {
     }
 
     public static void scalarizeInvokeArgs(Invoke invoke) {
-        handleDevirtualizationOnCallTarget(invoke.callTarget(), invoke.getTargetMethod(), invoke.getTargetMethod(), true);
+        handleDevirtualizationOnCallTarget((MethodCallTargetNode) invoke.callTarget(), invoke.getTargetMethod(), invoke.getTargetMethod(), true);
     }
 
     public static void boxScalarizedArgs(Invoke invoke) {
@@ -138,12 +139,17 @@ public class InlineTypeUtil {
      * @param newMethod the method after devirtiualization
      * @param nothingScalarizedYet determines if no arguments of the old method were scalarized yet
      */
-    public static void handleDevirtualizationOnCallTarget(CallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
+    public static void handleDevirtualizationOnCallTarget(MethodCallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
         int parameterLength = oldMethod.getSignature().getParameterCount(!oldMethod.isStatic());
         if (nothingScalarizedYet) {
             if (callTargetNode.arguments().size() != parameterLength)
                 throw new GraalError("Expected actual argument size to be equal to signature parameter size" + callTargetNode.toString() + "\n" + callTargetNode.arguments() + "\n");
         }
+
+        if (callTargetNode.getScalarizedArguments().isEmpty()) {
+            callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
+        }
+        List<ValueNode> arguments = callTargetNode.getScalarizedArguments();
         boolean[] scalarizeParameters = new boolean[parameterLength];
         int argumentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {
@@ -152,23 +158,23 @@ public class InlineTypeUtil {
         ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
         for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
             if (scalarizeParameters[signatureIndex]) {
-                ValueNode[] scalarized = createScalarizationCFGForInvokeArg(callTargetNode, callTargetNode.arguments().get(argumentIndex), newMethod, signatureIndex);
+                ValueNode[] scalarized = createScalarizationCFGForInvokeArg(callTargetNode, arguments.get(argumentIndex), newMethod, signatureIndex);
                 scalarizedArgs.addAll(List.of(scalarized));
                 argumentIndex++;
             } else {
                 if (oldMethod.isScalarizedParameter(signatureIndex, true) && !nothingScalarizedYet) {
                     int length = oldMethod.getScalarizedParameter(signatureIndex, true).length;
-                    scalarizedArgs.addAll(callTargetNode.arguments().subList(argumentIndex, argumentIndex + length));
+                    scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
                     argumentIndex += length;
                 } else {
-                    scalarizedArgs.add(callTargetNode.arguments().get(argumentIndex));
+                    scalarizedArgs.add(arguments.get(argumentIndex));
                     argumentIndex++;
                 }
             }
 
         }
-        callTargetNode.arguments().clear();
-        callTargetNode.arguments().addAll(scalarizedArgs);
+        arguments.clear();
+        arguments.addAll(scalarizedArgs);
     }
 
     /**
@@ -178,7 +184,7 @@ public class InlineTypeUtil {
      * @param method the old method before devirtualization
      *
      */
-    public static void scalarizeInvokeArgs(CallTargetNode callTargetNode, ResolvedJavaMethod method) {
+    public static void scalarizeInvokeArgs(MethodCallTargetNode callTargetNode, ResolvedJavaMethod method) {
         handleDevirtualizationOnCallTarget(callTargetNode, method, method, true);
     }
 
