@@ -49,7 +49,6 @@ import jdk.graal.compiler.phases.common.inlining.walker.CallsiteHolderExplorable
 import jdk.graal.compiler.phases.common.inlining.walker.InliningData;
 import jdk.graal.compiler.phases.graph.FixedNodeRelativeFrequencyCache;
 import jdk.graal.compiler.phases.tiers.HighTierContext;
-import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
@@ -200,16 +199,10 @@ public class InlineableGraph implements Inlineable {
         StructuredGraph newGraph = new StructuredGraph.Builder(caller.getOptions(), debug, caller.allowAssumptions()).method(method).trackNodeSourcePosition(trackNodeSourcePosition).profileProvider(
                         caller.getProfileProvider()).speculationLog(caller.getSpeculationLog()).build();
 
-        if (invoke.callTarget() instanceof ResolvedMethodHandleCallTargetNode) {
-            // parameters of method handles are expected to be non-scalarized. The JVM will jump to
-            // the correct method entry point, which is responsible for scalarization, in case the
-            // handle does not get inlined.
-            newGraph.dontScalarizeParameters();
-        } else {
-            // use the signature of the previous invoke node in case we speculate on receiver types
-            // e.g. maybe the receiver is expected to be scalarized on the inlinee method
-            newGraph.setScalarizeParameters(invoke.callTarget().targetMethod());
-        }
+        // for methods that maybe inlined it can be expected that the arguments are provided
+        // non-scalarized.
+
+        newGraph.dontScalarizeParameters();
         try (DebugContext.Scope s = debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();

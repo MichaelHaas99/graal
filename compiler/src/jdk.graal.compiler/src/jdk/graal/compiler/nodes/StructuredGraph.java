@@ -69,7 +69,6 @@ import jdk.graal.compiler.nodes.spi.TrackedUnsafeAccess;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
-import jdk.graal.compiler.phases.common.inlining.info.MultiTypeGuardInlineInfo;
 import jdk.graal.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.code.BytecodeFrame;
@@ -575,23 +574,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     private boolean[] scalarizeParameters = null;
-
-    /**
-     * During inlining we want to avoid mismatches of parameters. E.g. considering
-     * {@link MultiTypeGuardInlineInfo} it can occur that the original method does not have a
-     * scalarized receiver, but the inlinee method does. Therefore scalarization of a parameter
-     * should be only allowed if the parameter was also scalarized in the original method.
-     * 
-     * @param method the original method
-     */
-    public void setScalarizeParameters(ResolvedJavaMethod method) {
-        boolean[] result = new boolean[method.getSignature().getParameterCount(!method.isStatic())];
-        for (int i = 0; i < result.length; i++) {
-            // only scalarize if the previous method also has a scalarized parameter
-            result[i] = method.isScalarizedParameter(i, true);
-        }
-        scalarizeParameters = result;
-    }
 
     /**
      * Disallow scalarization of inline type parameters e.g. for method handles, parameters stay

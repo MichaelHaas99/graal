@@ -45,6 +45,7 @@ import jdk.graal.compiler.phases.common.DisableOverflownCountedLoopsPhase;
 import jdk.graal.compiler.phases.common.DominatorBasedGlobalValueNumberingPhase;
 import jdk.graal.compiler.phases.common.HighTierLoweringPhase;
 import jdk.graal.compiler.phases.common.IterativeConditionalEliminationPhase;
+import jdk.graal.compiler.phases.common.ValhallaCallingConventionPhase;
 import jdk.graal.compiler.phases.common.inlining.InliningPhase;
 import jdk.graal.compiler.phases.common.inlining.policy.GreedyInliningPolicy;
 import jdk.graal.compiler.phases.tiers.HighTierContext;
@@ -71,6 +72,8 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new InliningPhase(new GreedyInliningPolicy(null), canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
         }
+
+        appendPhase(new ValhallaCallingConventionPhase());
 
         appendPhase(new DisableOverflownCountedLoopsPhase());
 
