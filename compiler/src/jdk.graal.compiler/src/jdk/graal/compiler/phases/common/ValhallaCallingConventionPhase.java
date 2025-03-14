@@ -50,11 +50,14 @@ public class ValhallaCallingConventionPhase extends BasePhase<CoreProviders> {
     @SuppressWarnings("try")
     @Override
     protected void run(StructuredGraph graph, CoreProviders context) {
-        for (MethodCallTargetNode n : graph.getNodes(MethodCallTargetNode.TYPE)) {
-            try (DebugCloseable scope = n.graph().withNodeSourcePosition(n)) {
-                n.replaceArguments();
+        if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
+            for (MethodCallTargetNode n : graph.getNodes(MethodCallTargetNode.TYPE)) {
+                try (DebugCloseable scope = n.graph().withNodeSourcePosition(n)) {
+                    n.replaceArguments();
+                }
             }
         }
+
     }
 
     @Override
