@@ -3059,7 +3059,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         frameState.clearStack();
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
-            if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn()) {
+            if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn() && graph.scalarizeReturn()) {
                 ReturnScalarizedNode.createAndAppend(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
             } else {
                 append(new ReturnNode(realReturnVal));
