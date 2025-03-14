@@ -118,6 +118,13 @@ public class InlineTypePlugin implements NodePlugin {
             return true;
 
         }
+        if (!field.getDeclaringClass().isIdentity()) {
+            // do null-check here to avoid it in PEA
+            object = genNullCheck(b, object);
+            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
+            b.push(field.getJavaKind(), load);
+            return true;
+        }
         return false;
     }
 
@@ -261,6 +268,8 @@ public class InlineTypePlugin implements NodePlugin {
     private void genStoreFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
 
         // make a null check for all load operations
+        value = genNullCheck(b, value);
+        // make a null check for all store operations
         object = genNullCheck(b, object);
 
         HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();

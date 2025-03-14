@@ -41,13 +41,10 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
-import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
-import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
-import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
@@ -57,7 +54,6 @@ import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
-import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
@@ -77,8 +73,6 @@ import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -177,19 +171,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             ObjectState obj = getObjectState(state, unproxiedObject);
             if (obj != null) {
                 assert !obj.isVirtual() : object;
-                // insert a null check in case the virtual object is nullable and no proxy
-                // is in between
-                if (!StampTool.isPointerNonNull(object)) {
-                    ValueNode nonNull = obj.getNonNull();
-                    assert nonNull != null : "is non-null information should be present";
-                    if (nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0) {
-                        LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
-                        effects.ensureFloatingAdded(check);
-                        effects.addFixedNodeBefore(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false), load);
-                        FixedWithNextNode replacement = new FixedValueAnchorNode(cachedValue);
-                        effects.addFixedNodeBefore(replacement, load);
-                        cachedValue = replacement;
-                    }
+
+                assert StampTool.isPointerNonNull(object) : "null-check should be done before PEA";
+                if (StampTool.isInlineType(object.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+                    FixedWithNextNode replacement = new FixedValueAnchorNode(cachedValue);
+                    effects.addFixedNodeBefore(replacement, load);
+                    cachedValue = replacement;
                 }
             }
             // perform the read elimination
