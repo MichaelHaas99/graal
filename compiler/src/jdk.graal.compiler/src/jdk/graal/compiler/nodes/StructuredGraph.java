@@ -577,7 +577,8 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
     /**
      * Disallow scalarization of inline type parameters e.g. for method handles, parameters stay
-     * boxed although we the handle is resolved to {@link ResolvedMethodHandleCallTargetNode}.
+     * boxed although the handle is resolved to {@link ResolvedMethodHandleCallTargetNode}. Also an
+     * inlinee graph should expect its parameters as non-scalarized.
      */
     public void dontScalarizeParameters() {
         boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
@@ -603,6 +604,20 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
             }
         }
         return false;
+    }
+
+    private boolean scalarizeReturn = true;
+
+    public void dontScalarizeReturn() {
+        scalarizeReturn = false;
+    }
+
+    /**
+     *
+     * Disallow scalarization of a possible inline type return. An inlinee graph does not need this.
+     */
+    public boolean scalarizeReturn() {
+        return scalarizeReturn;
     }
 
     /**

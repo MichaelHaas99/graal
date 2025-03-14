@@ -203,6 +203,7 @@ public class InlineableGraph implements Inlineable {
         // non-scalarized.
 
         newGraph.dontScalarizeParameters();
+        newGraph.dontScalarizeReturn();
         try (DebugContext.Scope s = debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();
