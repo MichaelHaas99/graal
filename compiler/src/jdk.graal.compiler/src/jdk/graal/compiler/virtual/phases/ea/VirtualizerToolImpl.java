@@ -34,14 +34,11 @@ import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
-import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.UnpackEndianHalfNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
@@ -54,8 +51,6 @@ import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 
@@ -130,18 +125,6 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     @Override
     public ValueNode getNonNull(VirtualObjectNode virtualObject) {
         return state.getObjectState(virtualObject).getNonNull();
-    }
-
-    @Override
-    public void createNullCheck(VirtualObjectNode virtualObject) {
-        if (StampTool.isPointerNonNull(virtualObject)) {
-            return;
-        }
-        ValueNode nonNull = state.getObjectState(virtualObject).getNonNull();
-        assert nonNull != null : "nullable scalarized inline object expect non-null information to be set";
-        LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
-        ensureAdded(check);
-        addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false));
     }
 
     @Override

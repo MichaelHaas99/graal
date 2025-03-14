@@ -111,8 +111,6 @@ public interface VirtualizerTool extends CoreProviders {
 
     ValueNode getNonNull(VirtualObjectNode virtualObject);
 
-    void createNullCheck(VirtualObjectNode virtualObject);
-
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 
     MonitorIdNode removeLock(VirtualObjectNode virtualObject);
