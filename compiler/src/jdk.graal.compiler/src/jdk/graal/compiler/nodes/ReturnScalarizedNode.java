@@ -21,6 +21,7 @@ import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 
@@ -62,6 +63,31 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         returnNode.fieldValues.clear();
         returnNode.fieldValues.addAll(List.of(phis));
         return returnNode;
+    }
+
+    /**
+     * Replaces an oop return with a scalrized return. Not used at the moment.
+     */
+
+    public static void replaceReturn(ReturnNode oldReturn) {
+        StructuredGraph graph = oldReturn.graph();
+        ValueNode result = oldReturn.result();
+        ResolvedJavaMethod method = graph.method();
+        ResolvedJavaType type = method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass());
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
+
+        LogicNode nonNull = graph.addOrUnique(new LogicNegationNode(graph.addOrUnique(new IsNullNode(result))));
+
+        // PEA will replace oop with tagged hub if it is virtual
+        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
+        FixedWithNextNode previous = (FixedWithNextNode) oldReturn.predecessor();
+        previous.setNext(returnNode);
+        oldReturn.replaceAtUsages(returnNode);
+        oldReturn.safeDelete();
+
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, nonNull, fields);
+        returnNode.fieldValues.clear();
+        returnNode.fieldValues.addAll(List.of(phis));
     }
 
     @Override
