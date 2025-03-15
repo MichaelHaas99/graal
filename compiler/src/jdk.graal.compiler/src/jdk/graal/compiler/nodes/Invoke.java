@@ -24,16 +24,23 @@
  */
 package jdk.graal.compiler.nodes;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
+import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, DeoptimizingNode.DeoptDuring, FixedNodeInterface, Invokable {
+public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, DeoptimizingNode.DeoptDuring, FixedNodeInterface, Invokable, LIRLowerable {
 
     String CYCLES_UNKNOWN_RATIONALE = "Cannot estimate the runtime cost of a call; it's a blackhole.";
     String SIZE_UNKNOWN_RATIONALE = "Can only dynamically decide how much code is generated based on the type of a call (special, static, virtual, interface).";
@@ -109,9 +116,14 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
         return state.getMethod();
     }
 
+    default boolean hasScalarizedReturn() {
+        ResolvedJavaMethod targetMethod = getTargetMethod();
+        return targetMethod != null && targetMethod.hasScalarizedReturn();
+    }
+
     @Override
     default void computeStateDuring(FrameState stateAfter) {
-        FrameState newStateDuring = stateAfter.duplicateModifiedDuringCall(bci(), asNode().getStackKind());
+        FrameState newStateDuring = stateAfter.duplicateModifiedDuringCall(bci(), asNode().getStackKind(), hasScalarizedReturn());
         setStateDuring(newStateDuring);
     }
 
@@ -138,4 +150,33 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
     boolean isInOOMETry();
 
     void setInOOMETry(boolean isInOOMETry);
+
+    @Override
+    default void generate(NodeLIRBuilderTool gen) {
+        if (!gen.getLIRGeneratorTool().getValhallaOptionsProvider().returnConventionEnabled() || !callTarget().targetMethod().hasScalarizedReturn()) {
+            gen.emitInvoke(this);
+            return;
+        }
+
+        JavaType[] types = this.callTarget().targetMethod().getScalarizedReturn();
+        int oopIndex = 0;
+        ReadMultiValueNode oop = null;
+        int nonNullIndex = types.length;
+        ReadMultiValueNode nonNull = null;
+
+        List<ReadMultiValueNode> readMultiValue = new ArrayList<>(types.length - 1);
+        for (Node usage : asNode().usages()) {
+            if (usage instanceof ReadMultiValueNode readMultiValueNode) {
+                if (readMultiValueNode.getIndex() == oopIndex) {
+                    oop = readMultiValueNode;
+                } else if (readMultiValueNode.getIndex() == nonNullIndex) {
+                    nonNull = readMultiValueNode;
+                } else {
+                    readMultiValue.add(readMultiValueNode);
+                }
+            }
+        }
+
+        gen.emitInvokeWithScalarizedReturn(this, oop, readMultiValue.toArray(new ReadMultiValueNode[readMultiValue.size()]), nonNull, types);
+    }
 }

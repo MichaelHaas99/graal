@@ -72,7 +72,7 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
     }
 
     public static ValueNode create(GraalHotSpotVMConfig config, ValueNode klass, ConstantReflectionProvider constantReflection) {
-        return canonical(null, klass, constantReflection, config.klassLayoutHelperNeutralValue);
+        return canonical(null, klass, constantReflection, config.klassLayoutHelperNeutralValue, config.valhallaEnabled);
     }
 
     public static boolean intrinsify(GraphBuilderContext b, @InjectedNodeParameter GraalHotSpotVMConfig config, ValueNode klass) {
@@ -110,28 +110,35 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         } else {
-            return canonical(this, klass, tool.getConstantReflection(), klassLayoutHelperNeutralValue);
+            return canonical(this, klass, tool.getConstantReflection(), klassLayoutHelperNeutralValue, tool.getValhallaOptionsProvider().valhallaEnabled());
         }
     }
 
-    private static ValueNode canonical(KlassLayoutHelperNode klassLayoutHelperNode, ValueNode klass, ConstantReflectionProvider constantReflection, int klassLayoutHelperNeutralValue) {
+    private static ValueNode canonical(KlassLayoutHelperNode klassLayoutHelperNode, ValueNode klass, ConstantReflectionProvider constantReflection, int klassLayoutHelperNeutralValue,
+                    boolean valhallaEnabled) {
         KlassLayoutHelperNode self = klassLayoutHelperNode;
         if (klass.isConstant() && !klass.asConstant().isDefaultForKind()) {
             HotSpotResolvedObjectType javaType = (HotSpotResolvedObjectType) constantReflection.asJavaType(klass.asConstant());
             return ConstantNode.forInt(javaType.layoutHelper());
         }
-        if (klass instanceof LoadHubNode) {
-            LoadHubNode hub = (LoadHubNode) klass;
-            Stamp hubStamp = hub.getValue().stamp(NodeView.DEFAULT);
-            if (hubStamp instanceof ObjectStamp) {
-                ObjectStamp ostamp = (ObjectStamp) hubStamp;
-                HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) ostamp.type();
-                if (type != null && type.isArray() && !type.getComponentType().isPrimitive()) {
-                    // The layout for all object arrays is the same.
-                    return ConstantNode.forInt(type.layoutHelper());
+
+        // valhalla introduces object arrays with different layouts e.g. flat and null-restricted
+        // arrays
+        if (!valhallaEnabled) {
+            if (klass instanceof LoadHubNode) {
+                LoadHubNode hub = (LoadHubNode) klass;
+                Stamp hubStamp = hub.getValue().stamp(NodeView.DEFAULT);
+                if (hubStamp instanceof ObjectStamp) {
+                    ObjectStamp ostamp = (ObjectStamp) hubStamp;
+                    HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) ostamp.type();
+                    if (type != null && type.isArray() && !type.getComponentType().isPrimitive()) {
+                        // The layout for all object arrays is the same.
+                        return ConstantNode.forInt(type.layoutHelper());
+                    }
                 }
             }
         }
+
         if (self == null) {
             self = new KlassLayoutHelperNode(klass, klassLayoutHelperNeutralValue);
         }

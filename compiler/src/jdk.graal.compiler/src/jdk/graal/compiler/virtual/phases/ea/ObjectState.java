@@ -55,6 +55,9 @@ public class ObjectState {
     private LockState locks;
     private boolean ensureVirtualized;
 
+    private ValueNode oop;
+    private ValueNode nonNull;
+
     private EscapeObjectState cachedState;
 
     /**
@@ -70,11 +73,26 @@ public class ObjectState {
         }
     }
 
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull) {
+        this(entries, locks, ensureVirtualized);
+        this.oop = oop;
+        this.nonNull = nonNull;
+    }
+
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
+    }
+
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull) {
+        assert checkIllegalValues(entries);
+        this.entries = entries;
+        this.locks = locks;
+        this.ensureVirtualized = ensureVirtualized;
+        this.oop = oop;
+        this.nonNull = nonNull;
     }
 
     public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
@@ -90,6 +108,8 @@ public class ObjectState {
         locks = other.locks;
         cachedState = other.cachedState;
         ensureVirtualized = other.ensureVirtualized;
+        oop = other.oop;
+        nonNull = other.nonNull;
     }
 
     public ObjectState cloneState() {
@@ -152,7 +172,7 @@ public class ObjectState {
                         newEntries[i] = null;
                     }
                 }
-                cachedState = new VirtualObjectState(virtual, newEntries);
+                cachedState = new VirtualObjectState(virtual, newEntries, nonNull);
             } else {
                 cachedState = new MaterializedObjectState(virtual, materializedValue);
             }
@@ -220,6 +240,18 @@ public class ObjectState {
 
     public LockState getLocks() {
         return locks;
+    }
+
+    public ValueNode getOop() {
+        return oop;
+    }
+
+    public ValueNode getNonNull() {
+        return nonNull;
+    }
+
+    public ValueNode setNonNull(ValueNode nonNull) {
+        return this.nonNull = nonNull;
     }
 
     public boolean hasLocks() {

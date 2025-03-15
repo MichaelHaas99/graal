@@ -36,15 +36,14 @@ import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
-import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.spi.ArrayLengthProvider;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
@@ -75,10 +74,9 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
      * If yes, then the exact type is returned, otherwise it returns null.
      */
     static ResolvedJavaType getConcreteType(Stamp forStamp) {
-        if (!(forStamp instanceof ObjectStamp)) {
+        if (!(forStamp instanceof ObjectStamp objectStamp)) {
             return null;
         }
-        ObjectStamp objectStamp = (ObjectStamp) forStamp;
         if (objectStamp.type() == null) {
             return null;
         } else if (objectStamp.isExactType()) {
@@ -102,8 +100,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
         ValueNode original = getObject();
         ValueNode originalAlias = tool.getAlias(original);
         NodeSourcePosition sourcePosition = original.getNodeSourcePosition();
-        if (originalAlias instanceof VirtualObjectNode) {
-            VirtualObjectNode originalVirtual = (VirtualObjectNode) originalAlias;
+        if (originalAlias instanceof VirtualObjectNode originalVirtual) {
             if (originalVirtual.type().isCloneableWithAllocation()) {
                 ValueNode[] newEntryState = new ValueNode[originalVirtual.entryCount()];
                 for (int i = 0; i < newEntryState.length; i++) {
@@ -111,7 +108,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                 }
                 VirtualObjectNode newVirtual = originalVirtual.duplicate();
                 /* n.b. duplicate will replicate the source position so pass null */
-                tool.createVirtualObject(newVirtual, newEntryState, Collections.<MonitorIdNode> emptyList(), null, false);
+                tool.createVirtualObject(newVirtual, newEntryState, Collections.emptyList(), null, false);
                 tool.replaceWithVirtual(newVirtual);
             }
         } else {
@@ -120,7 +117,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                 return;
             }
             if (!type.isArray()) {
-                VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, true);
+                VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, type.isIdentity());
                 ResolvedJavaField[] fields = newVirtual.getFields();
 
                 ValueNode[] state = new ValueNode[fields.length];
@@ -129,9 +126,17 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                     state[i] = load;
                     tool.addNode(load);
                 }
-                tool.createVirtualObject(newVirtual, state, Collections.<MonitorIdNode> emptyList(), sourcePosition, false);
+                tool.createVirtualObject(newVirtual, state, Collections.emptyList(), sourcePosition, false);
                 tool.replaceWithVirtual(newVirtual);
             } else {
+                /*
+                 * PEA does not know about null-restricted and flat arrays yet. Therefore avoid
+                 * virtualization of the cloned array. TODO make PEA also support null-restricted
+                 * and flat arrays.
+                 */
+                if (StampTool.canBeInlineTypeArray(getObject(), tool.getValhallaOptionsProvider())) {
+                    return;
+                }
                 ValueNode length = findLength(FindLengthMode.SEARCH_ONLY, tool.getConstantReflection());
                 if (length == null) {
                     return;
@@ -152,7 +157,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                         tool.addNode(load);
                     }
                     VirtualObjectNode virtualObject = new VirtualArrayNode(componentType, constantLength);
-                    tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), sourcePosition, false);
+                    tool.createVirtualObject(virtualObject, state, Collections.emptyList(), sourcePosition, false);
                     tool.replaceWithVirtual(virtualObject);
                 }
             }

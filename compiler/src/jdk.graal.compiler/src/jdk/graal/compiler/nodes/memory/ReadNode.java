@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.nodes.memory;
 
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
@@ -69,6 +70,7 @@ import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.ConstantFoldUtil;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.vm.ci.meta.Constant;
@@ -278,7 +280,12 @@ public class ReadNode extends FloatableAccessNode
                 }
             }
         }
-        if (locationIdentity instanceof CanonicalizableLocation) {
+        /*
+         * Regular, null-restricted and flat arrays have different class objects. Avoid folding.
+         * TODO check if the array cannot be null-restricted or flat, and if so allow folding.
+         */
+        if (locationIdentity instanceof CanonicalizableLocation && !StampTool.canBeInlineTypeArray(object, tool.getValhallaOptionsProvider()) &&
+                        !locationIdentity.equals(KLASS_LAYOUT_HELPER_LOCATION)) {
             CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
             ValueNode result = canonicalize.canonicalizeRead(read, object, offset, view, tool);
             assert result != null;

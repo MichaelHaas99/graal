@@ -198,6 +198,12 @@ public class InlineableGraph implements Inlineable {
         DebugContext debug = caller.getDebug();
         StructuredGraph newGraph = new StructuredGraph.Builder(caller.getOptions(), debug, caller.allowAssumptions()).method(method).trackNodeSourcePosition(trackNodeSourcePosition).profileProvider(
                         caller.getProfileProvider()).speculationLog(caller.getSpeculationLog()).build();
+
+        // for methods that maybe inlined it can be expected that the arguments are provided
+        // non-scalarized.
+
+        newGraph.dontScalarizeParameters();
+        newGraph.dontScalarizeReturn();
         try (DebugContext.Scope s = debug.scope("InlineGraph", newGraph)) {
             if (!caller.isUnsafeAccessTrackingEnabled()) {
                 newGraph.disableUnsafeAccessTracking();

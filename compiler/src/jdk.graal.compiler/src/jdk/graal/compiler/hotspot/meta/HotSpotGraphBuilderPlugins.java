@@ -129,6 +129,7 @@ import jdk.graal.compiler.nodes.calc.SubNode;
 import jdk.graal.compiler.nodes.calc.UnsignedRightShiftNode;
 import jdk.graal.compiler.nodes.calc.XorNode;
 import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
+import jdk.graal.compiler.nodes.extended.ClassIsArrayNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.JavaReadNode;
 import jdk.graal.compiler.nodes.extended.JavaWriteNode;
@@ -165,6 +166,7 @@ import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.tiers.CompilerConfiguration;
 import jdk.graal.compiler.replacements.InlineDuringParsingPlugin;
+import jdk.graal.compiler.replacements.InlineTypePlugin;
 import jdk.graal.compiler.replacements.IntrinsicGraphBuilder;
 import jdk.graal.compiler.replacements.InvocationPluginHelper;
 import jdk.graal.compiler.replacements.MethodHandlePlugin;
@@ -232,6 +234,9 @@ public class HotSpotGraphBuilderPlugins {
         InvocationPlugins invocationPlugins = new HotSpotInvocationPlugins(graalRuntime, config, compilerConfiguration, options, target);
 
         Plugins plugins = new Plugins(invocationPlugins);
+        if (config.valhallaEnabled) {
+            plugins.appendNodePlugin(new InlineTypePlugin());
+        }
         plugins.appendNodePlugin(new HotSpotExceptionDispatchPlugin(config, wordTypes.getWordKind()));
         StandardGraphBuilderPlugins.registerConstantFieldLoadPlugin(plugins);
         if (!inImageRuntimeCode()) {

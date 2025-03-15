@@ -28,6 +28,7 @@ import java.util.AbstractList;
 import java.util.Objects;
 import java.util.RandomAccess;
 
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -74,6 +75,76 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
     @Override
     protected final AbstractPointerStamp copyWith(boolean newNonNull, boolean newAlwaysNull) {
         return copyWith(type, exactType, newNonNull, newAlwaysNull, alwaysArray);
+    }
+
+    public boolean canBeInlineType() {
+        // empty type or array or null can't be inline types
+        if (isEmpty() || isAlwaysArray() || alwaysNull()) {
+            return false;
+        }
+
+        if (!isExactType()) {
+            // merge which resulted in object class as superclass
+            if (type() == null) {
+                return true;
+            }
+
+        }
+        // abstract class also needs to specify value keyword, interface does not have identity
+        return !type().isIdentity();
+    }
+
+    public boolean isInlineType() {
+        return nonNull() && isExactType() && !type().isIdentity();
+    }
+
+    public boolean isInlineTypeOrNull() {
+        return isExactType() && !type().isIdentity();
+    }
+
+    public boolean canBeInlineTypeArray() {
+        // empty type, null, no array can't be inline type arrays
+        if (isEmpty() || alwaysNull()) {
+            return false;
+        }
+
+        if (!isAlwaysArray()) {
+            if (type() == null && !exactType) {
+                // Object is the base class of all arrays
+                return true;
+            }
+            // can't be an array
+            return false;
+        }
+
+        if (type() == null || type().getComponentType() == null) {
+            return true;
+        }
+
+        ResolvedJavaType componentType = type().getComponentType();
+
+        // multidimensional array and array of primitives can't be inline type arrays
+        if (componentType.isArray() || componentType.isPrimitive()) {
+            return false;
+        }
+
+        if (!isExactType()) {
+            // merge which resulted in object class as superclass for array elements
+            if (componentType.isJavaLangObject()) {
+                return true;
+            }
+
+        }
+        return !componentType.isIdentity();
+    }
+
+    public boolean isInlineTypeArray() {
+        if (type() == null || type().getComponentType() == null) {
+            return false;
+        }
+
+        ResolvedJavaType componentType = type().getComponentType();
+        return isAlwaysArray() && nonNull() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
     }
 
     @Override
@@ -139,11 +210,12 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         } else {
             // Append "[]" for arrays, but only if it's not included in the type.
             boolean forceArrayNotation = alwaysArray && !(type != null && type.isArray());
+            boolean flatArray = type != null && type.isArray() && type instanceof HotSpotResolvedObjectType objectType && objectType.isFlatArray();
             str.append(nonNull() ? "!" : "").//
                             append(exactType ? "#" : "").//
                             append(' ').//
                             append(type == null ? "java.lang.Object" : type.toJavaName()).//
-                            append(forceArrayNotation ? "[]" : "").//
+                            append(forceArrayNotation ? (flatArray ? "[]flat" : "[]") : "").//
                             append(alwaysNull() ? " NULL" : "");
         }
     }

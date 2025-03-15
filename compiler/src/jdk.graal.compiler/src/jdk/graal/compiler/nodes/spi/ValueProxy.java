@@ -33,4 +33,8 @@ import jdk.graal.compiler.nodes.extended.GuardingNode;
  */
 public interface ValueProxy extends LimitedValueProxy {
     GuardingNode getGuard();
+
+    default boolean stopUnproxify() {
+        return false;
+    }
 }

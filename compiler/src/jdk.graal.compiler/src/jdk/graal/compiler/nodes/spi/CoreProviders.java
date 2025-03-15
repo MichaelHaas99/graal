@@ -62,4 +62,6 @@ public interface CoreProviders {
     SnippetReflectionProvider getSnippetReflection();
 
     IdentityHashCodeProvider getIdentityHashCodeProvider();
+
+    ValhallaOptionsProvider getValhallaOptionsProvider();
 }

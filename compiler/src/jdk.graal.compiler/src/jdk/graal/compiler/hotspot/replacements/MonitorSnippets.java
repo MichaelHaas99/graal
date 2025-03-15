@@ -90,13 +90,16 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.VERY_FAST_PATH_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
+import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 import static jdk.graal.compiler.nodes.extended.MembarNode.memoryBarrier;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static jdk.graal.compiler.replacements.nodes.CStringConstant.cstring;
-import static org.graalvm.word.LocationIdentity.any;
 import static jdk.graal.compiler.word.Word.nullPointer;
 import static jdk.graal.compiler.word.Word.unsigned;
 import static jdk.graal.compiler.word.Word.zero;
+import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
+import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.List;
 import java.util.Objects;
@@ -127,15 +130,19 @@ import jdk.graal.compiler.hotspot.word.KlassPointer;
 import jdk.graal.compiler.lir.SyncPort;
 import jdk.graal.compiler.nodes.CallTargetNode.InvokeKind;
 import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ReturnNode;
+import jdk.graal.compiler.nodes.SnippetAnchorNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.debug.DynamicCounterNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
+import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
@@ -224,7 +231,9 @@ public class MonitorSnippets implements Snippets {
      * CAS operation.
      */
     @Snippet
-    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter int lockDepth, @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
+    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter boolean canBeInlineType, @ConstantParameter boolean isInlineType,
+                    @ConstantParameter int lockDepth,
+                    @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
                     @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
         HotSpotReplacementsUtil.verifyOop(object);
 
@@ -238,6 +247,17 @@ public class MonitorSnippets implements Snippets {
         trace(trace, "             mark: 0x%016lx\n", mark);
 
         incCounter();
+
+
+        if (canBeInlineType) {
+
+            // check if object has no identity
+            GuardingNode anchorNode = SnippetAnchorNode.anchor();
+            object = PiNode.piCastNonNull(object, anchorNode);
+            if (probability(NOT_FREQUENT_PROBABILITY, isInlineType || !hasIdentity(object))) {
+                DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+            }
+        }
 
         if (diagnoseSyncOnValueBasedClasses(INJECTED_VMCONFIG)) {
             int flags = shouldUseKlassMiscFlags() ? hub.readByte(klassMiscFlagsOffset(INJECTED_VMCONFIG), KLASS_MISC_FLAGS_LOCATION)
@@ -891,6 +911,8 @@ public class MonitorSnippets implements Snippets {
             Arguments args = new Arguments(monitorenter, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("object", monitorenterNode.object());
             args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
+            args.add("canBeInlineType", StampTool.canBeInlineType(monitorenterNode.object(), tool.getValhallaOptionsProvider()));
+            args.add("isInlineType", StampTool.isInlineType(monitorenterNode.object(), tool.getValhallaOptionsProvider()));
             args.add("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
             args.add("threadRegister", registers.getThreadRegister());
             args.add("stackPointerRegister", registers.getStackPointerRegister());

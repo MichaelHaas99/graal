@@ -40,6 +40,8 @@ import static jdk.graal.compiler.nodes.Invoke.SIZE_UNKNOWN_RATIONALE;
 
 import java.util.Map;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
@@ -49,11 +51,7 @@ import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.memory.AbstractMemoryCheckpoint;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.spi.LIRLowerable;
-import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.code.BytecodeFrame;
 
 /**
@@ -65,7 +63,7 @@ import jdk.vm.ci.code.BytecodeFrame;
           cycles = CYCLES_UNKNOWN, cyclesRationale = CYCLES_UNKNOWN_RATIONALE,
           size   = SIZE_UNKNOWN,   sizeRationale   = SIZE_UNKNOWN_RATIONALE)
 // @formatter:on
-public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, SingleMemoryKill, UncheckedInterfaceProvider {
+public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, SingleMemoryKill, UncheckedInterfaceProvider {
     public static final NodeClass<InvokeNode> TYPE = NodeClass.create(InvokeNode.class);
 
     @OptionalInput ValueNode classInit;
@@ -147,10 +145,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         return identity;
     }
 
-    @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.emitInvoke(this);
-    }
 
     @Override
     public String toString(Verbosity verbosity) {

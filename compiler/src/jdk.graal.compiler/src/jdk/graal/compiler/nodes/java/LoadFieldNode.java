@@ -27,6 +27,8 @@ package jdk.graal.compiler.nodes.java;
 import static jdk.graal.compiler.graph.iterators.NodePredicates.isNotA;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.memory.MemoryOrderMode;
 import jdk.graal.compiler.core.common.spi.ConstantFieldProvider;
 import jdk.graal.compiler.core.common.type.Stamp;
@@ -36,8 +38,6 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
@@ -46,6 +46,7 @@ import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -55,9 +56,9 @@ import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.ConstantFoldUtil;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -175,7 +176,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
                         tool.getMetaAccess(), tool.getOptions(), forObject, field, getNodeSourcePosition());
     }
 
-    private static ConstantNode asConstant(ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
+    public static ConstantNode asConstant(ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
                     MetaAccessProvider metaAccess, OptionValues options, ValueNode forObject, ResolvedJavaField field, NodeSourcePosition position) {
         if (field.isStatic()) {
             return ConstantFoldUtil.tryConstantFold(constantFields, constantReflection, metaAccess, field, null, options, position);
@@ -211,12 +212,19 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
+        if (alias instanceof VirtualObjectNode virtualObjectNode) {
             int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(field());
             if (fieldIndex != -1) {
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
-                    tool.replaceWith(entry);
+                    assert StampTool.isPointerNonNull(virtualObjectNode) : "null-check should be done before PEA";
+                    if (!virtualObjectNode.hasIdentity()) {
+                        ValueNode replacement = new FixedValueAnchorNode(entry);
+                        tool.addNode(replacement);
+                        tool.replaceWith(replacement);
+                    } else {
+                        tool.replaceWith(entry);
+                    }
                 } else {
                     assert stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Int && (entry.stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Long || entry.getStackKind() == JavaKind.Double ||
                                     entry.getStackKind() == JavaKind.Illegal) : "Can only allow different stack kind two slot marker writes on one stot fields.";

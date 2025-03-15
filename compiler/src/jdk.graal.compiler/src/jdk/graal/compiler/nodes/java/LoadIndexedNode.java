@@ -35,13 +35,12 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.LogicNode;
+import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.CompareNode;
@@ -54,7 +53,9 @@ import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-
+import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -62,6 +63,7 @@ import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -71,6 +73,38 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable, Canonicalizable, Simplifiable, MemoryAccess {
 
     public static final NodeClass<LoadIndexedNode> TYPE = NodeClass.create(LoadIndexedNode.class);
+
+    private int additionalOffset = -1;
+
+    public int getAdditionalOffset() {
+        return Math.max(additionalOffset, 0);
+    }
+
+    public void setAdditionalOffset(int additionalOffset) {
+        this.additionalOffset = additionalOffset;
+    }
+
+    public boolean isFlatAccess() {
+        return additionalOffset >= 0;
+    }
+
+    private int shift = -1;
+
+    public int getShift() {
+        return shift;
+    }
+
+    public void setShift(int shift) {
+        this.shift = shift;
+    }
+
+    public void setLocation(ResolvedJavaField field) {
+        this.location = NamedLocationIdentity.getFlatArrayLocation(field);
+        this.field = field;
+    }
+
+    private ResolvedJavaField field;
+
 
     /**
      * Creates a new LoadIndexedNode.
@@ -92,7 +126,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         return new LoadIndexedNode(assumptions, array, index, boundsCheck, elementKind);
     }
 
-    protected LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
+    public LoadIndexedNode(NodeClass<? extends LoadIndexedNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
         super(c, stamp, array, index, boundsCheck, elementKind);
     }
 
@@ -118,6 +152,8 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
 
     @Override
     public boolean inferStamp() {
+        if (isFlatAccess())
+            return false;
         return updateStamp(stamp.improveWith(createStamp(graph().getAssumptions(), array(), elementKind())));
     }
 
@@ -151,6 +187,10 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         }
         ValueNode constant = tryConstantFold(array(), index(), tool.getMetaAccess(), tool.getConstantReflection());
         if (constant != null) {
+            if (array.asJavaConstant() instanceof HotSpotObjectConstant arrayConstant && arrayConstant.getType().isFlatArray()) {
+                constant = LoadFieldNode.asConstant(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), constant, field,
+                                getNodeSourcePosition());
+            }
             return constant;
         }
         if (tool.allUsagesAvailable() && hasNoUsages() && getBoundsCheck() != null) {

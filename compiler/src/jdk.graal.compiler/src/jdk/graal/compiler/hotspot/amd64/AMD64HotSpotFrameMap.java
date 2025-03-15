@@ -81,6 +81,54 @@ import jdk.vm.ci.code.StackSlot;
  *    %sp--&gt;  +--------------------------------+---------------------------
  *
  * </pre>
+ *
+ * In case the stack had to be extended in an entry point due to scalarization of inline objects the
+ * frame map looks as follows
+ *
+ * <pre>
+ *   Base       Contents
+ *
+ *            :                                :
+ *   caller   | incoming overflow argument n   |
+ *   frame    :     ...                        :
+ *            | incoming overflow argument 0   |
+ *   ---------+--------------------------------+
+ *            | return address                 |
+ *            +--------------------------------+                             -----
+ *            :                                :  -----                        ^
+ *            | incoming overflow argument n   |    ^                          |
+ *            :     ...                        :    | positive                 |
+ *            | incoming overflow argument 0   |    | offsets                  |
+ *   ---------+--------------------------------+---------------------          |
+ *   current  | return address                 |    |            ^             |
+ *   frame    +--------------------------------+    |            |             |
+ *            | preserved rbp                  |    |            |             |
+ *            | iff preserveFramePointer       |    |            |             |
+ *            +--------------------------------+    |            |    -----    |
+ *            | preserved rbp                  |    |            |      ^      |
+ *            | iff not preserveFramePointer   |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            | stack increment                |    |            |      |      |
+ *            | iff stackRepair                |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            | deopt rescue slot              |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            |                                |    |            |      |      |
+ *            : callee save area               :    |            |      |      |
+ *            |                                |    |            |      |      |
+ *            +--------------------------------+    |            |      |      |
+ *            | spill slot 0                   |    | negative   |      |      |
+ *            :     ...                        :    v offsets    |      |      |
+ *            | spill slot n                   |  -----        total  frame  stack
+ *            +--------------------------------+               frame  size    inc
+ *            | alignment padding              |               size     |      |
+ *            +--------------------------------+  -----          |      |      |
+ *            | outgoing overflow argument n   |    ^            |      |      |
+ *            :     ...                        :    | positive   |      |      |
+ *            | outgoing overflow argument 0   |    | offsets    v      v      v
+ *    %sp--&gt;  +--------------------------------+---------------------------
+ *
+ * </pre>
  */
 public class AMD64HotSpotFrameMap extends AMD64FrameMap {
     /**
@@ -92,6 +140,11 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
      * The deoptimization rescue slot.
      */
     private StackSlot deoptimizationRescueSlot;
+
+    /**
+     * The stack increment used for stack repair.
+     */
+    private StackSlot stackIncrement;
 
     @SuppressWarnings("this-escape")
     public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer) {
@@ -105,6 +158,25 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
             assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
         }
         deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+    }
+
+    @SuppressWarnings("this-escape")
+    public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer, boolean stackRepair) {
+        super(codeCache, registerConfig, referenceMapFactory, preserveFramePointer);
+        // HotSpot is picky about the frame layout in the presence of nmethod entry barriers, so
+        // always allocate the space for rbp and the deoptimization rescue slot. If we don't
+        // allocate rbp the rbp spill slot will never be written.
+        if (!preserveFramePointer()) {
+            assert spillSize == initialSpillSize : "RBP spill slot must be the first allocated stack slots";
+            rbpSpillSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+            assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
+        }
+        if (stackRepair) {
+            // stack increment needs to be located directly under rbp
+            stackIncrement = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+        }
+        deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+
     }
 
     @Override
@@ -123,6 +195,11 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
     public StackSlot getDeoptimizationRescueSlot() {
         assert deoptimizationRescueSlot != null;
         return deoptimizationRescueSlot;
+    }
+
+    public StackSlot getStackIncrement() {
+        assert stackIncrement != null;
+        return stackIncrement;
     }
 
     @Override

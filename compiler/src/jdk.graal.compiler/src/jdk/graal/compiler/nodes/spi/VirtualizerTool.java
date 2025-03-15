@@ -30,12 +30,11 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeSourcePosition;
-import jdk.graal.compiler.nodes.java.MonitorIdNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.WithExceptionNode;
+import jdk.graal.compiler.nodes.java.MonitorIdNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
-
 import jdk.vm.ci.meta.JavaKind;
 
 /**
@@ -68,6 +67,15 @@ public interface VirtualizerTool extends CoreProviders {
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized);
 
     /**
+     * same as {@link #createVirtualObject} but with the possibility to specify an already existing
+     * oop
+     */
+    void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oop,
+                    ValueNode nonNull);
+
+    VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from);
+
+    /**
      * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still
      * virtual, the materialized value of the given value is aliased with a virtual object that was
      * materialized, the replacement if the give value was replaced, otherwise the given value.
@@ -96,6 +104,12 @@ public interface VirtualizerTool extends CoreProviders {
     }
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
+
+    boolean hasNullOop(VirtualObjectNode virtualObject);
+
+    ValueNode getOop(VirtualObjectNode virtualObject);
+
+    ValueNode getNonNull(VirtualObjectNode virtualObject);
 
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 

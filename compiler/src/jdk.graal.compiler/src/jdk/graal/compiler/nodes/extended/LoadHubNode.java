@@ -102,7 +102,11 @@ public final class LoadHubNode extends FloatingNode implements Lowerable, Canoni
 
     public static ValueNode findSynonym(ValueNode curValue, Stamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
         TypeReference type = StampTool.typeReferenceOrNull(curValue);
-        if (type != null && type.isExact()) {
+        /*
+         * Regular, null-restricted and flat arrays have different class objects. Avoid folding.
+         * TODO check if the array cannot be null-restricted or flat, and if so allow folding.
+         */
+        if (type != null && type.isExact() && (!type.getType().isArray() || curValue.isConstant())) {
             return ConstantNode.forConstant(stamp, constantReflection.asObjectHub(type.getType()), metaAccess);
         }
         return null;

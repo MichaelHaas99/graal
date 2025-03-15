@@ -371,8 +371,9 @@ public class HotSpotReplacementsUtil {
 
     public static final LocationIdentity PROTOTYPE_MARK_WORD_LOCATION = NamedLocationIdentity.mutable("PrototypeMarkWord");
 
-    public static final LocationIdentity KLASS_ACCESS_FLAGS_LOCATION = NamedLocationIdentity.immutable("Klass::_access_flags");
+    public static final LocationIdentity KLASS_ACCESS_FLAGS_LOCATION = NamedLocationIdentity.immutable("Klass::");
     public static final LocationIdentity KLASS_MISC_FLAGS_LOCATION = NamedLocationIdentity.immutable("Klass::_misc_flags");
+    public static final LocationIdentity KLASS_KIND_LOCATION = NamedLocationIdentity.immutable("Klass::_kind");
 
     @Fold
     public static boolean shouldUseKlassMiscFlags() {
@@ -390,8 +391,43 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static int klassProtoTypeHeaderOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassProtoTypeHeaderOffset;
+    }
+
+    @Fold
+    public static int klassKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassKind;
+    }
+
+    @Fold
+    public static int flatArrayKlassKind(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.klassFlatArrayKlassKind;
+    }
+
+    @Fold
+    public static long flatArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.flatArrayPattern;
+    }
+
+    @Fold
+    public static long nullFreeArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.nullFreeArrayPattern;
+    }
+
+    @Fold
+    public static long nullFreeArrayMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.nullFreeArrayMaskInPlace;
+    }
+
+    @Fold
     public static int jvmAccHasFinalizer(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.jvmAccHasFinalizer;
+    }
+
+    @Fold
+    public static int jvmAccIsIdentityClass(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.jvmAccIsIdentityClass;
     }
 
     public static final LocationIdentity KLASS_LAYOUT_HELPER_LOCATION = new HotSpotOptimizingLocationIdentity("Klass::_layout_helper") {
@@ -574,6 +610,16 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int unusedMark(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.unusedMark;
+    }
+
+    @Fold
+    public static int inlineTypeMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.inlineTypeMaskInPlace;
+    }
+
+    @Fold
+    public static int inlineTypePattern(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.inlineTypePattern;
     }
 
     @Fold
@@ -1064,6 +1110,16 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int layoutHelperLog2ElementSizeMask(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.layoutHelperLog2ElementSizeMask;
+    }
+
+    @Fold
+    public static int layoutHelperNullFreeShift(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.layoutHelperNullFreeShift;
+    }
+
+    @Fold
+    public static int layoutHelperNullFreeMask(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.layoutHelperNullFreeMask;
     }
 
     @NodeIntrinsic(ForeignCallNode.class)

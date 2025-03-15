@@ -32,6 +32,7 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.CompressionNode;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
@@ -41,8 +42,10 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
+import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.NarrowOopStamp;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.TriState;
 
@@ -169,5 +172,20 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
             }
         }
         return TriState.UNKNOWN;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(getValue());
+        TriState fold = tryFold(alias.stamp(NodeView.DEFAULT));
+        if (fold != TriState.UNKNOWN) {
+            tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
+        } else if (alias instanceof VirtualObjectNode && !StampTool.isPointerNonNull(alias)) {
+            // replace the null check with a check of the non-null information
+            LogicNode check = IntegerEqualsNode.create(tool.getNonNull((VirtualObjectNode) alias),
+                            ConstantNode.forInt(0, graph()), NodeView.DEFAULT);
+            tool.ensureAdded(check);
+            tool.replaceWithValue(check);
+        }
     }
 }

@@ -38,9 +38,14 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.un
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.useLightweightLocking;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.useObjectMonitorTable;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
+import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 
 import jdk.graal.compiler.lir.SyncPort;
+import jdk.graal.compiler.nodes.PiNode;
+import jdk.graal.compiler.nodes.SnippetAnchorNode;
+import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.replacements.IdentityHashCodeSnippets;
 import jdk.graal.compiler.word.Word;
 
@@ -86,5 +91,19 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
             }
         }
         return identityHashCode(IDENTITY_HASHCODE, x);
+    }
+
+    @Override
+    protected int computeValhallaIdentityHashCode(Object x, boolean canBeInlineType, boolean isInlineType) {
+        // check if object has no identity
+        if (canBeInlineType) {
+            GuardingNode anchorNode = SnippetAnchorNode.anchor();
+            x = PiNode.piCastNonNull(x, anchorNode);
+            if (probability(NOT_LIKELY_PROBABILITY, isInlineType || !hasIdentity(x))) {
+                return valueObjectHashCodeStubC(VALUE_OBJECT_HASH_CODE, x);
+            }
+        }
+
+        return computeIdentityHashCode(x);
     }
 }

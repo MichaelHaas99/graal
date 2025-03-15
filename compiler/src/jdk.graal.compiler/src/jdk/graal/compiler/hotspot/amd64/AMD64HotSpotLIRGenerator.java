@@ -295,7 +295,27 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             append(new AMD64RestoreRegistersOp(saveOnEntry.getSlots(), saveOnEntry));
         }
         Register thread = getProviders().getRegisters().getThreadRegister();
-        append(new AMD64HotSpotReturnOp(operand, getStub() != null, thread, pollOnReturnScratchRegister, config, getResult().requiresReservedStackAccessCheck()));
+        append(new AMD64HotSpotReturnOp(operand, new AllocatableValue[0], getStub() != null, thread, pollOnReturnScratchRegister, config, getResult().requiresReservedStackAccessCheck()));
+    }
+
+    @Override
+    public void emitScalarizedReturn(JavaKind oopOrTaggedHubKind, Value oopOrTaggedHub, JavaKind[] fieldKinds, Value[] fieldValues) {
+        assert oopOrTaggedHub != null : "return with scalarized values expected oop or hub value";
+        AllocatableValue operand = resultOperandFor(oopOrTaggedHubKind, oopOrTaggedHub.getValueKind());
+        emitMove(operand, oopOrTaggedHub);
+        AllocatableValue[] fieldOperands = resultOperandsFor(fieldKinds, fieldValues);
+        for (int i = 0; i < fieldKinds.length; i++) {
+            emitMove(fieldOperands[i], fieldValues[i]);
+        }
+        if (pollOnReturnScratchRegister == null) {
+            pollOnReturnScratchRegister = findPollOnReturnScratchRegister();
+        }
+        AMD64SaveRegistersOp saveOnEntry = (AMD64SaveRegistersOp) getResult().getSaveOnEntry();
+        if (saveOnEntry != null) {
+            append(new AMD64RestoreRegistersOp(saveOnEntry.getSlots(), saveOnEntry));
+        }
+        Register thread = getProviders().getRegisters().getThreadRegister();
+        append(new AMD64HotSpotReturnOp(operand, fieldOperands, getStub() != null, thread, pollOnReturnScratchRegister, config, getResult().requiresReservedStackAccessCheck()));
     }
 
     @Override

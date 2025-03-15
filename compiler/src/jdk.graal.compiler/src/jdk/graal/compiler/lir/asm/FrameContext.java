@@ -41,6 +41,20 @@ public interface FrameContext {
     void enter(CompilationResultBuilder crb);
 
     /**
+     * Same as {@link FrameContext#enter(CompilationResultBuilder)} but additionally allows to set a
+     * {@code stackIncrement} which will be stored directly under the rbp and will be used on method
+     * leave to repair the stack. Entry points other than the verified entry point need to emit a
+     * dummy frame because the nmethod entry barrier is expected to be at the same offset for all
+     * entry points.
+     *
+     * @param stackIncrement the stack increment that should be stored under the rbp
+     * @param emitEntryBarrier true if the nmethod entry barrier should be emitted
+     */
+    default void enter(CompilationResultBuilder crb, int stackIncrement, boolean emitEntryBarrier) {
+        throw new UnsupportedOperationException("method enter with stack increment not implemented yet");
+    }
+
+    /**
      * Emits code to be executed just prior to returning from a method. This may include:
      * <ul>
      * <li>restoring callee-saved registers</li>
@@ -50,6 +64,18 @@ public interface FrameContext {
      * </ul>
      */
     void leave(CompilationResultBuilder crb);
+
+    /**
+     * Same as {@link FrameContext#leave(CompilationResultBuilder)} but with an additional parameter
+     * to control if code for stack repair should be emitted. E.g. For the dummy frames needed for
+     * the nmethod entry barrier the stack increment is known to be zero so no stack repair code
+     * needs to be emitted.
+     *
+     * @param allowStackRepair indicates if stack repair is allowed when leaving a method
+     */
+    default void leave(CompilationResultBuilder crb, boolean allowStackRepair) {
+        throw new UnsupportedOperationException("method leave with stack repair control not implemented yet");
+    }
 
     /**
      * Allows the frame context to track the point at which a return has been generated. This

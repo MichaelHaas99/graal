@@ -60,6 +60,7 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeMap;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.graph.iterators.NodeIterable;
+import jdk.graal.compiler.lir.ConstantValue;
 import jdk.graal.compiler.lir.FullInfopointOp;
 import jdk.graal.compiler.lir.LIRFrameState;
 import jdk.graal.compiler.lir.LIRInstruction;
@@ -110,6 +111,7 @@ import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.OpaqueLogicNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -125,8 +127,10 @@ import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
@@ -664,6 +668,89 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         if (x instanceof InvokeWithExceptionNode) {
             gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
+        }
+    }
+
+    @Override
+    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull, JavaType[] types) {
+        FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
+        Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
+        LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
+
+        CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),
+                        callTarget.signature(), gen);
+        frameMapBuilder.callsMethod(invokeCc);
+
+        Value[] parameters = visitInvokeArguments(invokeCc, callTarget.arguments());
+
+        LabelRef exceptionEdge = null;
+        if (x instanceof InvokeWithExceptionNode) {
+            exceptionEdge = getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge());
+            exceptionEdge.getTargetBlock().setIndirectBranchTarget();
+        }
+        LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
+
+        Value result = invokeCc.getReturn();
+        // TODO: actually wrong to say the scalarized return values are temps
+        emitInvoke(callTarget, parameters, callState, result, results);
+
+        // assign the read multi value nodes a result see
+        // CallDynamicJavaDirectNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra_)
+
+        if (nonNull != null) {
+            // produce code for the non-null information
+
+            // get oopOrTaggedHub value which is located in the return register
+            Value oopOrTaggedHub = result;
+
+            ConstantValue intOne = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                            JavaConstant.forInt(1));
+            ConstantValue intZero = new ConstantValue(getLIRGeneratorTool().getValueKind(JavaKind.Int),
+                            JavaConstant.forInt(0));
+            LIRKind kind = (LIRKind) result.getValueKind();
+            Value nullValue = gen.emitConstant(kind, JavaConstant.NULL_POINTER);
+
+            Variable nonNullVariable = gen.emitConditionalMove(kind.getPlatformKind(), oopOrTaggedHub, nullValue, Condition.EQ, false, intZero, intOne);
+            setResult(nonNull, nonNullVariable);
+        }
+
+        assert isLegal(result) : "expected a legal Value for nonNull";
+        // if the klass pointer is returned we need to zero out the return register
+        // e.g. see if (return_value_is_used()) { in ad_x86.cpp
+
+        ValueKind<?> kind = result.getValueKind();
+        Variable scratch = gen.emitMove(result);
+        Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
+        ConstantValue intOne = new ConstantValue(kind,
+                        JavaConstant.forLong(1));
+
+        // returnRegister = (returnRegister contains klassPointer)? null : returnRegister
+        Variable temp = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
+        setResult(x.asNode(), temp);
+
+        if (oop != null) {
+            assert isLegal(results[oop.getIndex()]) : "expected legal Value for oop";
+            setResult(oop, operand(x.asNode()));
+        }
+
+        for (int i = 0; i < fieldValues.length; i++) {
+            assert isLegal(results[fieldValues[i].getIndex()]) : "expected legal Value for scalarized inline type";
+            setResult(fieldValues[i], gen.emitMove(results[fieldValues[i].getIndex()]));
+        }
+
+        if (x instanceof InvokeWithExceptionNode) {
+            gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
+        }
+
+    }
+
+    protected void emitInvoke(LoweredCallTargetNode callTarget, Value[] parameters, LIRFrameState callState, Value result, Value[] temps) {
+        if (callTarget instanceof DirectCallTargetNode) {
+            emitDirectCall((DirectCallTargetNode) callTarget, result, parameters, temps, callState);
+        } else if (callTarget instanceof IndirectCallTargetNode) {
+            emitIndirectCall((IndirectCallTargetNode) callTarget, result, parameters, temps, callState);
+        } else {
+            throw GraalError.shouldNotReachHereUnexpectedValue(callTarget); // ExcludeFromJacocoGeneratedReport
         }
     }
 

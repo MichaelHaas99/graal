@@ -95,9 +95,12 @@ import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.calc.CompareNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
+import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
@@ -106,9 +109,11 @@ import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.phases.common.inlining.info.InlineInfo;
 import jdk.graal.compiler.phases.common.util.EconomicSetNodeEventListener;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup;
@@ -305,6 +310,7 @@ public class InliningUtil extends ValueMergeUtil {
         MethodCallTargetNode oldCallTarget = (MethodCallTargetNode) invoke.callTarget();
         MethodCallTargetNode newCallTarget = graph.add(new MethodCallTargetNode(invokeKind, targetMethod, oldCallTarget.arguments().toArray(ValueNode.EMPTY_ARRAY), oldCallTarget.returnStamp(),
                         oldCallTarget.getTypeProfile()));
+        InlineTypeUtil.handleDevirtualizationOnCallTarget(newCallTarget, oldCallTarget.targetMethod(), targetMethod, false);
         invoke.asNode().replaceFirstInput(oldCallTarget, newCallTarget);
     }
 
@@ -506,6 +512,17 @@ public class InliningUtil extends ValueMergeUtil {
             if (methodHandle.targetMethod().equals(macroInvokable.getTargetMethod()) && getDepth(invoke.stateAfter()) == getDepth(macroInvokable.stateAfter())) {
                 macroInvokable.addMethodHandleInfo(methodHandle);
             }
+        }
+
+        if (invoke.next() instanceof InlineTypeNode inlineTypeNode && inlineeMethod.hasScalarizedReturn()) {
+            inlineTypeNode.removeOnInlining();
+        }
+        if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF) {
+            foreignCallNode.replaceAtUsages(invoke.asNode());
+            assert foreignCallNode.next() instanceof MembarNode : "store inline type fields to buf foreign call should be followed by membar";
+            MembarNode membar = (MembarNode) foreignCallNode.next();
+            graph.removeFixed(membar);
+            graph.removeFixed(foreignCallNode);
         }
 
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph, returnAction, mark);
@@ -881,7 +898,7 @@ public class InliningUtil extends ValueMergeUtil {
             FrameState frameState = (FrameState) duplicates.get(original);
             if (frameState != null && frameState.isAlive()) {
                 if (outerFrameState == null) {
-                    outerFrameState = stateAtReturn.duplicateModifiedDuringCall(invoke.bci(), invokeReturnKind);
+                    outerFrameState = stateAtReturn.duplicateModifiedDuringCall(invoke.bci(), invokeReturnKind, invoke.hasScalarizedReturn());
                 }
                 processFrameState(frameState, invoke, replacements, inlineGraph.method(), stateAtExceptionEdge, outerFrameState, alwaysDuplicateStateAfter, invoke.callTarget().targetMethod(),
                                 invoke.callTarget().arguments());

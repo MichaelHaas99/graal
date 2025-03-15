@@ -25,6 +25,7 @@
 package jdk.graal.compiler.nodes;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -69,6 +70,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.Assumption;
@@ -559,6 +561,63 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
     public StartNode start() {
         return start;
+    }
+
+    private FixedWithNextNode updatedStart;
+
+    public FixedWithNextNode updatedStart() {
+        return updatedStart;
+    }
+
+    public void setUpdatedStart(FixedWithNextNode updatedStart) {
+        this.updatedStart = updatedStart;
+    }
+
+    private boolean[] scalarizeParameters = null;
+
+    /**
+     * Disallow scalarization of inline type parameters e.g. for method handles, parameters stay
+     * boxed although the handle is resolved to {@link ResolvedMethodHandleCallTargetNode}. Also an
+     * inlinee graph should expect its parameters as non-scalarized.
+     */
+    public void dontScalarizeParameters() {
+        boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
+        Arrays.fill(result, false);
+        scalarizeParameters = result;
+    }
+
+    public boolean[] getScalarizeParameters() {
+        if (scalarizeParameters == null) {
+            // set all to true
+            boolean[] result = new boolean[this.method().getSignature().getParameterCount(!method().isStatic())];
+            Arrays.fill(result, true);
+            scalarizeParameters = result;
+        }
+        return scalarizeParameters;
+    }
+
+    public boolean hasScalarizedParameters() {
+        boolean[] parameters = getScalarizeParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameters[i] && method().isScalarizedParameter(i, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean scalarizeReturn = true;
+
+    public void dontScalarizeReturn() {
+        scalarizeReturn = false;
+    }
+
+    /**
+     *
+     * Disallow scalarization of a possible inline type return. An inlinee graph does not need this.
+     */
+    public boolean scalarizeReturn() {
+        return scalarizeReturn;
     }
 
     /**

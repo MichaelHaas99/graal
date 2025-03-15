@@ -32,13 +32,12 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -82,13 +81,15 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
          */
         if (!tool.getMetaAccess().lookupJavaType(Reference.class).isAssignableFrom(instanceClass) &&
                         tool.getMetaAccessExtensionProvider().canVirtualize(instanceClass)) {
-            VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(), true);
+
+            VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(),
+                            instanceClass.isIdentity());
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
                 state[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), graph());
             }
-            tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), getNodeSourcePosition(), false);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false);
             tool.replaceWithVirtual(virtualObject);
         }
     }

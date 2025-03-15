@@ -38,6 +38,7 @@ import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.HashMap;
 import java.util.List;
 
 import org.graalvm.word.LocationIdentity;
@@ -68,6 +69,7 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GetObjectAddressNode;
 import jdk.graal.compiler.nodes.IfNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
@@ -105,6 +107,7 @@ import jdk.graal.compiler.nodes.extended.ClassIsArrayNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.extended.JavaReadNode;
 import jdk.graal.compiler.nodes.extended.JavaWriteNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
@@ -155,8 +158,10 @@ import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.Replacements;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
+import jdk.graal.compiler.nodes.virtual.CommitAllocationOrReuseOopNode;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -528,6 +533,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public AddressNode createArrayAddress(StructuredGraph graph, ValueNode array, int arrayBaseOffset, JavaKind elementKind, ValueNode index) {
+        return createArrayAddress(graph, array, arrayBaseOffset, elementKind, index, -1);
+    }
+
+    public AddressNode createArrayAddress(StructuredGraph graph, ValueNode array, int arrayBaseOffset, JavaKind elementKind, ValueNode index, int shiftCount) {
         ValueNode wordIndex;
         if (target.wordSize > 4) {
             wordIndex = graph.unique(new SignExtendNode(index, target.wordSize * 8));
@@ -535,8 +544,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             assert target.wordSize == 4 : "unsupported word size";
             wordIndex = index;
         }
-        int shift = CodeUtil.log2(metaAccess.getArrayIndexScale(elementKind));
-        ValueNode scaledIndex = graph.unique(new LeftShiftNode(wordIndex, ConstantNode.forInt(shift, graph)));
+        ValueNode shift = shiftCount != -1 ? ConstantNode.forInt(shiftCount, graph) : ConstantNode.forInt(CodeUtil.log2(metaAccess.getArrayIndexScale(elementKind)), graph);
+        ValueNode scaledIndex = graph.unique(new LeftShiftNode(wordIndex, shift));
         ValueNode offset = graph.unique(new AddNode(scaledIndex, ConstantNode.forIntegerKind(target.wordJavaKind, arrayBaseOffset, graph)));
         return graph.unique(new OffsetAddressNode(array, offset));
     }
@@ -564,9 +573,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             index = graph.addOrUniqueWithInputs(proxyIndex(loadIndexed, index, array, tool));
         }
         ValueNode positiveIndex = createPositiveIndex(graph, index, boundsCheck);
-        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind, positiveIndex);
+        AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, elementKind,
+                        positiveIndex, loadIndexed.getShift());
 
-        LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(elementKind);
+        LocationIdentity arrayLocation = loadIndexed.getLocationIdentity();
         ReadNode memoryRead = graph.add(new ReadNode(address, arrayLocation, loadStamp, barrierSet.readBarrierType(arrayLocation, address, loadStamp), MemoryOrderMode.PLAIN));
         memoryRead.setGuard(boundsCheck);
         ValueNode readValue = implicitLoadConvert(graph, elementKind, memoryRead);
@@ -574,6 +584,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         loadIndexed.replaceAtUsages(readValue);
         graph.replaceFixed(loadIndexed, memoryRead);
     }
+
 
     public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool) {
         int arrayBaseOffset = metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
@@ -628,6 +639,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (condition != null) {
             tool.createGuard(storeIndexed, condition, DeoptimizationReason.ArrayStoreException, DeoptimizationAction.InvalidateReprofile);
         }
+
+        // create a guard for store operations into null free arrays
+        genNullFreeArrayCheck(storeIndexed, array, tool);
+
         memoryWrite.setStateAfter(storeIndexed.stateAfter());
         graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
     }
@@ -938,12 +953,68 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         computeAllocationEmissionOrder(commit, emissionOrder);
 
         List<AbstractNewObjectNode> recursiveLowerings = new ArrayList<>();
+        List<AbstractNewObjectNode> recursiveInlineTypeLowerings = new ArrayList<>();
         ValueNode[] allocations = new ValueNode[virtualObjects.size()];
         BitSet omittedValues = new BitSet();
         for (int objIndex : emissionOrder) {
             VirtualObjectNode virtual = virtualObjects.get(objIndex);
             try (DebugCloseable nsp = graph.withNodeSourcePosition(virtual)) {
                 int entryCount = virtual.entryCount();
+
+                if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getNonNulls().get(objIndex) != null) {
+                        assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
+
+                        if (InlineTypeUtil.isAllocatedOrNull(graph, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex))) {
+                            // already allocated or null use this instance
+                            allocations[objIndex] = reuseAlloc.getOops().get(objIndex);
+                            continue;
+                        }
+
+                        NewInstanceNode newObject = graph.add(new NewInstanceNode(virtual.type(), true));
+                        recursiveInlineTypeLowerings.add(newObject);
+                        int valuePos = valuePositions[objIndex];
+                        List<WriteNode> writes = new ArrayList<>();
+                        for (int i = 0; i < entryCount; i++) {
+                            ValueNode value = commit.getValues().get(valuePos);
+                            if (value instanceof VirtualObjectNode) {
+                                value = allocations[commit.getVirtualObjects().indexOf(value)];
+                            }
+
+                            if (value == null) {
+                                omittedValues.set(valuePos);
+                            } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
+                                // Constant.illegal is always the defaultForKind, so it is skipped
+                                JavaKind valueKind = value.getStackKind();
+                                JavaKind storageKind = virtual.entryKind(tool.getMetaAccessExtensionProvider(), i);
+
+                                // Truffle requires some leniency in terms of what can be put where:
+                                assert valueKind.getStackKind() == storageKind.getStackKind() ||
+                                        (valueKind == JavaKind.Long || valueKind == JavaKind.Double || (valueKind == JavaKind.Int && virtual instanceof VirtualArrayNode) ||
+                                                (valueKind == JavaKind.Float && virtual instanceof VirtualArrayNode)) : Assertions.errorMessageContext("valueKind", valueKind,
+                                        "virtual",
+                                        virtual);
+                                AddressNode address = null;
+                                BarrierType barrierType = null;
+                                ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
+                                long offset = fieldOffset(field);
+                                if (offset >= 0) {
+                                    address = createOffsetAddress(graph, newObject, offset);
+                                    barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
+                                }
+                                if (address != null) {
+                                    WriteNode write = new WriteNode(address, LocationIdentity.init(), arrayImplicitStoreConvert(graph, storageKind, value, commit, virtual, valuePos), barrierType,
+                                            MemoryOrderMode.PLAIN);
+                                    writes.add(graph.add(write));
+                                }
+                            }
+                            valuePos++;
+                        }
+                        allocations[objIndex] = InlineTypeUtil.createAllocationDiamond(commit, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex), writes, false,
+                                        newObject,
+                                        virtual.type());
+                        continue;
+
+                }
                 AbstractNewObjectNode newObject = createUninitializedObject(virtual, graph);
 
                 recursiveLowerings.add(newObject);
@@ -994,11 +1065,16 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
 
+
         writeOmittedValues(commit, graph, allocations, omittedValues);
         finishAllocatedObjects(tool, commit, commit, allocations);
         graph.removeFixed(commit);
 
         for (AbstractNewObjectNode recursiveLowering : recursiveLowerings) {
+            recursiveLowering.lower(tool);
+        }
+
+        for (AbstractNewObjectNode recursiveLowering : recursiveInlineTypeLowerings) {
             recursiveLowering.lower(tool);
         }
     }
@@ -1024,8 +1100,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return new NewArrayNode(virtual.componentType(), length, true);
     }
 
+
     @SuppressWarnings("try")
     public void writeOmittedValues(CommitAllocationNode commit, StructuredGraph graph, ValueNode[] allocations, BitSet omittedValues) {
+
+        HashMap<ValueNode, InlineTypeUtil.InlineTypeInfo> lateWrites = new HashMap<>();
         int valuePos = 0;
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
             VirtualObjectNode virtual = commit.getVirtualObjects().get(objIndex);
@@ -1058,13 +1137,29 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                         }
                         if (address != null) {
                             barrierType = barrierSet.postAllocationInitBarrier(barrierType);
-                            WriteNode write = graph.add(
-                                            new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, JavaKind.Object, allocValue), barrierType, MemoryOrderMode.PLAIN));
-                            graph.addBeforeFixed(commit, write);
+                            WriteNode write = new WriteNode(address, LocationIdentity.init(), implicitStoreConvert(graph, JavaKind.Object, allocValue), barrierType, MemoryOrderMode.PLAIN);
+                            if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getNonNulls().get(objIndex) != null) {
+                                assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
+
+                                if (!InlineTypeUtil.isAllocatedOrNull(graph, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex))) {
+                                    // only do write if not already allocated (or null)
+                                    final int currentObjIndex = objIndex;
+                                    lateWrites.computeIfAbsent(newObject,
+                                                    k -> new InlineTypeUtil.InlineTypeInfo(reuseAlloc.getNonNulls().get(currentObjIndex), reuseAlloc.getOops().get(currentObjIndex)));
+                                    InlineTypeUtil.InlineTypeInfo info = lateWrites.get(newObject);
+                                    info.getWrites().add(graph.add(write));
+                                }
+                            } else {
+                                graph.addBeforeFixed(commit, graph.add(write));
+                            }
+
                         }
                     }
                 }
             }
+        }
+        for (ValueNode inlineType : lateWrites.keySet()) {
+            InlineTypeUtil.insertLateInitWrites(commit, lateWrites.get(inlineType).getNonNull(), lateWrites.get(inlineType).getOop(), lateWrites.get(inlineType).getWrites());
         }
     }
 
@@ -1089,11 +1184,14 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 int entryCount = virtual.entryCount();
 
                 boolean allValuesAvailable = true;
+                // TODO: is this a bug?
+                int valuePosBefore = valuePos;
                 for (int i = 0; i < entryCount; i++) {
                     ValueNode value = commit.getValues().get(valuePos);
                     if (value instanceof VirtualObjectNode) {
                         if (!complete[commit.getVirtualObjects().indexOf(value)]) {
                             allValuesAvailable = false;
+                            valuePos = valuePosBefore + entryCount;
                             break;
                         }
                     }
@@ -1347,6 +1445,28 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             return null;
         }
         return tool.createGuard(n, graph.addOrUniqueWithInputs(boundsCheck), BoundsCheckException, InvalidateReprofile);
+    }
+
+    protected void genNullFreeArrayCheck(StoreIndexedNode n, ValueNode array, LoweringTool tool) {
+        if (!StampTool.isPointerNonNull(n.value()) && StampTool.canBeInlineTypeArray(array, tool.getValhallaOptionsProvider())) {
+            StructuredGraph graph = n.graph();
+
+            LogicNode storeIsNull = graph.addOrUnique(IsNullNode.create(n.value()));
+            IsNullFreeArrayNode arrayIsNullFree = graph.addOrUnique(new IsNullFreeArrayNode(array));
+            graph.addBeforeFixed(n, arrayIsNullFree);
+
+            LogicNode arrayIsNullFreeCondition = graph.addOrUnique(new IntegerEqualsNode(arrayIsNullFree, ConstantNode.forInt(1, graph)));
+
+            // deoptimize if array is null-free and the store value is null
+            LogicNode negatedCondition = graph.addOrUnique(LogicNode.and(storeIsNull, arrayIsNullFreeCondition, BranchProbabilityData.unknown()));
+
+            LogicNode condition = graph.addOrUnique(LogicNegationNode.create(negatedCondition));
+            if (condition.isTautology()) {
+                return;
+            }
+            tool.createGuard(n, condition, NullCheckException, InvalidateReprofile);
+
+        }
     }
 
     private ValueNode readOrCreateArrayLength(AccessIndexedNode n, ValueNode array, LoweringTool tool, StructuredGraph graph) {

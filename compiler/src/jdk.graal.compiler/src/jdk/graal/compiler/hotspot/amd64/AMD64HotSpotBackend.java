@@ -24,12 +24,22 @@
  */
 package jdk.graal.compiler.hotspot.amd64;
 
+import static jdk.graal.compiler.asm.Assembler.guaranteeDifferentRegisters;
+import static jdk.graal.compiler.core.common.GraalOptions.AssemblyGCBarriersSlowPathOnly;
+import static jdk.graal.compiler.core.common.GraalOptions.VerifyAssemblyGCBarriers;
 import static jdk.graal.compiler.core.common.GraalOptions.ZapStackOnMethodEntry;
 import static jdk.vm.ci.amd64.AMD64.r10;
+import static jdk.vm.ci.amd64.AMD64.r11;
+import static jdk.vm.ci.amd64.AMD64.r13;
+import static jdk.vm.ci.amd64.AMD64.r14;
 import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbp;
 import static jdk.vm.ci.amd64.AMD64.rsp;
+import static jdk.vm.ci.amd64.AMD64.xmm8;
+import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
+
+import java.util.Arrays;
 
 import jdk.graal.compiler.asm.BranchTargetOutOfBoundsException;
 import jdk.graal.compiler.asm.Label;
@@ -40,19 +50,25 @@ import jdk.graal.compiler.asm.amd64.AMD64BaseAssembler;
 import jdk.graal.compiler.asm.amd64.AMD64MacroAssembler;
 import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.amd64.AMD64NodeMatchRules;
+import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
+import jdk.graal.compiler.core.common.memory.BarrierType;
 import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
 import jdk.graal.compiler.core.gen.LIRGenerationProvider;
+import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
 import jdk.graal.compiler.hotspot.HotSpotDataBuilder;
+import jdk.graal.compiler.hotspot.HotSpotGraalRuntime;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import jdk.graal.compiler.hotspot.HotSpotHostBackend;
 import jdk.graal.compiler.hotspot.HotSpotLIRGenerationResult;
 import jdk.graal.compiler.hotspot.HotSpotMarkId;
+import jdk.graal.compiler.hotspot.amd64.g1.AMD64HotSpotG1BarrierSetLIRTool;
+import jdk.graal.compiler.hotspot.amd64.z.AMD64HotSpotZBarrierSetLIRGenerator;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
@@ -74,14 +90,21 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * HotSpot AMD64 specific backend.
@@ -96,6 +119,19 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     protected FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig, Stub stub) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         AMD64FrameMap frameMap = new AMD64HotSpotFrameMap(getCodeCache(), registerConfigNonNull, this, config.preserveFramePointer(stub != null));
+        return new AMD64HotSpotFrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
+    }
+
+    @Override
+    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
+        return new HotSpotLIRGenerationResult(compilationId, lir, newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method()),
+                        registerAllocationConfig,
+                        makeCallingConvention(graph, (Stub) stub), (Stub) stub, config.requiresReservedStackCheck(graph.getMethods()));
+    }
+
+    protected FrameMapBuilder newFrameMapBuilderWithStackRepair(RegisterConfig registerConfig, Stub stub, ResolvedJavaMethod rootMethod) {
+        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
+        AMD64FrameMap frameMap = new AMD64HotSpotFrameMap(getCodeCache(), registerConfigNonNull, this, config.preserveFramePointer(stub != null), needStackRepair(rootMethod));
         return new AMD64HotSpotFrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
@@ -182,6 +218,61 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             }
         }
 
+        @Override
+        public void enter(CompilationResultBuilder crb, int stackIncrement, boolean emitEntryBarrier) {
+            AMD64FrameMap frameMap = (AMD64FrameMap) crb.frameMap;
+            int frameSize = frameMap.frameSize();
+            AMD64HotSpotMacroAssembler asm = (AMD64HotSpotMacroAssembler) crb.asm;
+
+            int verifiedEntryPointOffset = asm.position();
+            if (!isStub) {
+                emitStackOverflowCheck(crb);
+                // assert asm.position() - verifiedEntryPointOffset >=
+                // PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE;
+            }
+            if (frameMap.preserveFramePointer()) {
+                // Stack-walking friendly instructions
+                asm.push(rbp);
+                asm.movq(rbp, rsp);
+            }
+            if (!isStub && asm.position() == verifiedEntryPointOffset) {
+                asm.subqWide(rsp, frameSize);
+                assert asm.position() - verifiedEntryPointOffset >= PATCHED_VERIFIED_ENTRY_POINT_INSTRUCTION_SIZE : asm.position() + "-" + verifiedEntryPointOffset;
+            } else {
+                asm.decrementq(rsp, frameSize);
+            }
+
+            assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
+
+            ResolvedJavaMethod[] methods = crb.compilationResult.getMethods();
+            if (methods != null && needStackRepair(methods[0])) {
+                // method needs stack repair
+                // stack increment doesn't include RBP so add it, RA and padding already included
+                AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                                frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
+            }
+
+            if (emitEntryBarrier) {
+                if (!isStub && config.nmethodEntryBarrier != 0) {
+                    emitNmethodEntryBarrier(crb, asm);
+                } else {
+                    crb.recordMark(HotSpotMarkId.FRAME_COMPLETE);
+                }
+            }
+
+            if (entryPointDecorator != null) {
+                entryPointDecorator.emitEntryPoint(crb, false);
+            }
+
+            if (ZapStackOnMethodEntry.getValue(crb.getOptions())) {
+                final int intSize = 4;
+                for (int i = 0; i < frameSize / intSize; ++i) {
+                    asm.movl(new AMD64Address(rsp, i * intSize), 0xC1C1C1C1);
+                }
+            }
+        }
+
         private void emitNmethodEntryBarrier(CompilationResultBuilder crb, AMD64HotSpotMacroAssembler asm) {
             GraalError.guarantee(HotSpotMarkId.ENTRY_BARRIER_PATCH.isAvailable(), "must be available");
             ForeignCallLinkage callTarget = getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.NMETHOD_ENTRY_BARRIER);
@@ -230,15 +321,33 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         @Override
         public void leave(CompilationResultBuilder crb) {
+            leave(crb, true);
+
+        }
+
+        @Override
+        public void leave(CompilationResultBuilder crb, boolean allowStackRepair) {
             AMD64HotSpotFrameMap frameMap = (AMD64HotSpotFrameMap) crb.frameMap;
             AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            if (frameMap.preserveFramePointer()) {
-                asm.movq(rsp, rbp);
-                asm.pop(rbp);
+            ResolvedJavaMethod[] methods = crb.compilationResult.getMethods();
+            if (methods != null && needStackRepair(methods[0]) && allowStackRepair && crb.compilationResult.getEntryBCI() == -1) {
+                // needs stack repair
+
+                if (frameMap.preserveFramePointer()) {
+                    // restore the rbp
+                    asm.movq(rbp, new AMD64Address(rsp, frameMap.frameSize()));
+                }
+                // add the stack increment to the rsp, located directly under the rbp
+                asm.addq(rsp, new AMD64Address(rsp, frameMap.offsetForStackSlot(frameMap.getStackIncrement())));
             } else {
-                asm.incrementq(rsp, frameMap.frameSize());
+                if (frameMap.preserveFramePointer()) {
+                    asm.movq(rsp, rbp);
+                    asm.pop(rbp);
+                } else {
+                    asm.incrementq(rsp, frameMap.frameSize());
+                }
             }
         }
 
@@ -327,19 +436,696 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     }
 
     /**
-     * Emits the code prior to the verified entry point.
-     *
-     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     * Extends the stack if necessary and unpacks all inline type args. See
+     * {@code MacroAssembler::unpack_inline_args}
+     * 
+     * @return the stack increment
      */
-    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
+    public int unpackInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, boolean receiverOnly) {
+
+
+        // VIEP: nothing scalarized yet
+        // VIEP_RO: everything except receiver already scalarized
+        JavaType[] currentParameterTypes = receiverOnly ? rootMethod.getScalarizedParameters(false)
+                        : rootMethod.getSignature().toParameterTypes(rootMethod.isStatic() ? null : rootMethod.getDeclaringClass());
+        CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
+
+        // VEP: the parameters that are expected
+        JavaType[] expectedParameterTypes = rootMethod.getScalarizedParameters(true);
+        CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
+
+        int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
+        AllocatableValue[] currentArguments = currentCC.getArguments();
+        int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
+        AllocatableValue[] expectedArguments = expectedCC.getArguments();
+
+        int spInc = 0;
+        if (expectedStackSizeArguments > currentStackSizeArguments) {
+            spInc = extendStackForInlineArgs(rootMethod, crb, asm, regConfig);
+        }
+
+        shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
+                        expectedStackSizeArguments,
+                        spInc);
+        return spInc;
+    }
+
+
+    /**
+     * Unpacks all inline type args and solves circular dependencies.
+     */
+    public void shuffleInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, boolean receiverOnly, JavaType[] currentParameterTypes,
+                    AllocatableValue[] currentArguments, int currentStackSizeArguments, AllocatableValue[] expectedArguments, int expectedStackSizeArguments, int spInc) {
+
+        State[] state = initRegState(currentArguments, currentStackSizeArguments, expectedStackSizeArguments, spInc);
+
+        // Emit code for unpacking inline type arguments
+        // We try multiple times and eventually start spilling to resolve (circular) dependencies
+        int currentArgsPassedLength = currentArguments.length;
+        int expectedArgsPassedLength = expectedArguments.length;
+        boolean done = (expectedArgsPassedLength == 0);
+        for (int i = 0; i < 2 * expectedArgsPassedLength && !done; i++) {
+            done = true;
+            boolean spill = (i > expectedArgsPassedLength);
+            // iterate over arguments in reverse
+            int step = -1;
+            int fromIndex = currentArgsPassedLength - 1;
+            int toIndex = expectedArgsPassedLength - 1;
+            int signatureLength = rootMethod.getSignature().getParameterCount(!rootMethod.isStatic());
+            int signatureIndex = signatureLength - 1;
+            int signatureIndexEnd = -1;
+
+            for (; signatureIndex != signatureIndexEnd; signatureIndex += step) {
+                assert 0 <= signatureIndex && signatureIndex < signatureLength : "index out of bounds";
+                if (spill) {
+                    spill = shuffleInlineArgsSpill(asm, state, currentArguments, currentParameterTypes, fromIndex);
+                }
+                JavaKind kind;
+                if (!rootMethod.isStatic()) {
+                    if (signatureIndex == 0) {
+                        kind = JavaKind.Object;
+                    } else {
+                        kind = rootMethod.getSignature().getParameterKind(signatureIndex - 1);
+                    }
+                } else {
+                    kind = rootMethod.getSignature().getParameterKind(signatureIndex);
+                }
+                boolean isScalarized = rootMethod.isScalarizedParameter(signatureIndex, true);
+
+                if (isScalarized && (!receiverOnly || signatureIndex == 0)) {
+                    // parameter which is not scalarized yet
+                    AllocatableValue fromArgument = currentArguments[fromIndex];
+
+                    done &= unpackInlineHelper(rootMethod, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
+
+                    toIndex -= rootMethod.getScalarizedParameter(signatureIndex, true).length;
+                    fromIndex--;
+                    if (fromIndex == -1 && signatureIndex != 0) {
+                        assert receiverOnly : "sanity";
+                        fromIndex = 0;
+                    }
+                } else if (isScalarized && receiverOnly) {
+                    // for receiverOnly all parameters (not including receiver) already scalarized,
+                    // just move them
+                    JavaType[] types = rootMethod.getScalarizedParameter(signatureIndex, true);
+                    for (int j = 0; j < types.length; j++) {
+                        AllocatableValue fromArgument = currentArguments[fromIndex];
+                        AllocatableValue toArgument = expectedArguments[toIndex];
+                        done &= moveHelper(asm, fromArgument, toArgument, types[types.length - j - 1].getJavaKind(), state);
+
+                        toIndex += step;
+                        fromIndex += step;
+                    }
+                } else {
+                    // parameter which is not scalarized
+                    AllocatableValue fromArgument = currentArguments[fromIndex];
+                    AllocatableValue toArgument = expectedArguments[toIndex];
+                    done &= moveHelper(asm, fromArgument, toArgument, kind, state);
+
+                    toIndex += step;
+                    fromIndex += step;
+                }
+
+            }
+        }
+
+    }
+
+    public boolean unpackInlineHelper(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, int signatureIndex, AllocatableValue fromValue,
+                    AllocatableValue[] toValues,
+                    int toIndex,
+                    State[] state) {
+
+        assert rootMethod.isScalarizedParameter(signatureIndex, true);
+        assert !ValueUtil.isIllegal(fromValue) : "source must be valid";
+        boolean progress = false;
+        final Label labelIsNull = new Label();
+        final Label labelNonNull = new Label();
+        // Don't use r14 as tmp because it's used for spilling spillRegFor
+
+        Register tmp1 = r10;
+        Register tmp2 = r13;
+        Register fromReg = Register.None;
+
+        int fromValueIndex = argumentToStateIndex(fromValue);
+
+        JavaType[] types = rootMethod.getScalarizedParameter(signatureIndex, true);
+
+        ResolvedJavaField[] fields = rootMethod.getScalarizedParameterFields(signatureIndex, true);
+        boolean done = true;
+        boolean markDone = true;
+        AllocatableValue toValue = null;
+
+        // receiver is non-null
+        boolean nullCheck = !rootMethod.isParameterNullFree(signatureIndex, true);
+
+        for (int i = 0; i < types.length; i++) {
+            JavaKind kind = types[types.length - i - 1].getJavaKind();
+            toValue = toValues[toIndex - i];
+            assert !ValueUtil.isIllegal(toValue) : "destination must be valid";
+            int toValueIndex = argumentToStateIndex(toValue);
+            if (state[toValueIndex] == State.READ_ONLY) {
+                if (toValueIndex != argumentToStateIndex(fromValue)) {
+                    markDone = false;
+                }
+                done = false;
+                continue;
+            } else if (state[toValueIndex] == State.WRITTEN) {
+                continue;
+            }
+            assert state[toValueIndex] == State.WRITEABLE : "must be writable";
+            state[toValueIndex] = State.WRITTEN;
+            progress = true;
+
+            if (fromReg.equals(Register.None)) {
+                if (ValueUtil.isRegister(fromValue)) {
+                    fromReg = ValueUtil.asRegister(fromValue);
+                } else {
+                    AMD64Address fromAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) fromValue));
+                    asm.movq(tmp1, fromAddress);
+                    fromReg = tmp1;
+                }
+                if (nullCheck) {
+                    // Nullable inline type argument, emit null check
+                    asm.testq(fromReg, fromReg);
+                    asm.jcc(ConditionFlag.Zero, labelIsNull);
+                }
+            }
+            if (i == types.length - 1 && nullCheck) {
+                if (ValueUtil.isStackSlot(toValue)) {
+                    AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
+                    asm.movq(address, 1);
+                } else {
+                    asm.movq(ValueUtil.asRegister(toValue), 1);
+                }
+                continue;
+            }
+
+            AMD64Address fromAddress = new AMD64Address(fromReg, fields[fields.length - i - 1].getOffset());
+            if (!isXMMRegister(toValue)) {
+                Register dst = ValueUtil.isStackSlot(toValue) ? tmp2 : ValueUtil.asRegister(toValue);
+                if (kind == JavaKind.Object) {
+                    loadHeapOop(crb, asm, dst, fromAddress, fields[fields.length - i - 1]);
+                } else {
+                    boolean isSigned = kind != JavaKind.Char && kind != JavaKind.Boolean;
+                    loadSizedValue(asm, dst, fromAddress, kind.getByteCount(), isSigned);
+                }
+                if (ValueUtil.isStackSlot(toValue)) {
+                    AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
+                    asm.movq(address, dst);
+                }
+            } else if (kind == JavaKind.Double) {
+                asm.movdbl(ValueUtil.asRegister(toValue), fromAddress);
+            } else {
+                assert kind == JavaKind.Float : "must be float";
+                asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
+            }
+
+        }
+        if (progress && nullCheck) {
+            if (done) {
+                asm.jmp(labelNonNull);
+                asm.bind(labelIsNull);
+                // Set NonNull field to zero to signal that the argument is null.
+                // Also set all oop fields to zero to make the GC happy.
+                for (int i = 0; i < types.length; i++) {
+                    JavaKind kind = types[types.length - i - 1].getJavaKind();
+                    if (i == types.length - 1 && nullCheck || kind == JavaKind.Object) {
+                        toValue = toValues[toIndex - i];
+                        if (ValueUtil.isStackSlot(toValue)) {
+                            AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
+                            asm.movq(address, 0);
+                        } else {
+                            asm.xorq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(toValue));
+                        }
+                    }
+                }
+                asm.bind(labelNonNull);
+            } else {
+                asm.bind(labelIsNull);
+            }
+        }
+
+        if (markDone && state[fromValueIndex] != State.WRITTEN) {
+            // This is okay because no one else will write to that slot
+            state[fromValueIndex] = State.WRITEABLE;
+        }
+        return done;
+
+    }
+
+    /**
+     * When executing an entry point, the stack pointer points to the return address. The raw offset
+     * of a stack slot for arguments does not include the space for the return address. It needs to
+     * be included to indicate the correct position.
+     * 
+     * @return correct offset of the stack slot during entry point execution
+     */
+    public int stackSlotToOffset(StackSlot stackSlot) {
+        // add RA to raw offset
+        return stackSlot.getRawOffset() + getTarget().wordSize;
+    }
+
+    private void loadHeapOop(CompilationResultBuilder crb, AMD64MacroAssembler asm, Register dst, AMD64Address fromAddress, ResolvedJavaField field) {
+
+        AMD64HotSpotMacroAssembler hasm = (AMD64HotSpotMacroAssembler) asm;
+        hasm.loadObject(dst, fromAddress);
+
+        if (config.gc == HotSpotGraalRuntime.HotSpotGC.Z) {
+            ForeignCallLinkage zCallTarget = this.getForeignCalls().lookupForeignCall(HotSpotHostForeignCallsProvider.Z_LOAD_BARRIER);
+            emitZBarrier(crb, asm, dst, zCallTarget, fromAddress, false);
+        } else if (config.gc == HotSpotGraalRuntime.HotSpotGC.G1) {
+            BarrierType barrierType = this.getProviders().getPlatformConfigurationProvider().getBarrierSet().fieldReadBarrierType(field,
+                            this.getProviders().getMetaAccessExtensionProvider().getStorageKind(field.getType()));
+            if (barrierType == BarrierType.REFERENCE_GET) {
+                emitG1Barrier(crb, asm, dst, fromAddress, false);
+            }
+        }
+        // others don't have read barriers
+    }
+
+    public void emitG1Barrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register expectedObject, AMD64Address address, boolean nonNull) {
+        AMD64HotSpotG1BarrierSetLIRTool tool = new AMD64HotSpotG1BarrierSetLIRTool(config, getProviders());
+
+        // save temp registers
+        Register temp = r10;
+        Register temp2 = r11;
+        Register temp3 = r13;
+        masm.push(temp);
+        masm.push(temp2);
+        masm.push(temp3);
+
+
+        ForeignCallLinkage callTarget = getForeignCalls().lookupForeignCall(tool.preWriteBarrierDescriptor());
+
+        AMD64Address storeAddress = address;
+
+        Register thread = getProviders().getRegisters().getThreadRegister();
+        Register tmp = temp;
+        Register previousValue = expectedObject.equals(Value.ILLEGAL) ? temp2 : expectedObject;
+
+        guaranteeDifferentRegisters(thread, tmp, previousValue);
+
+        Label done = new Label();
+        Label runtime = new Label();
+
+        AMD64Address markingActive = new AMD64Address(thread, tool.satbQueueMarkingActiveOffset());
+
+        // Is marking active?
+        masm.cmpb(markingActive, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, done);
+
+        // Do we need to load the previous value?
+        if (expectedObject.equals(Value.ILLEGAL)) {
+            tool.loadObject(masm, previousValue, storeAddress);
+        } else {
+            // previousValue contains the value
+        }
+
+        if (!nonNull) {
+            // Is the previous value null?
+            masm.testq(previousValue, previousValue);
+            masm.jcc(AMD64Assembler.ConditionFlag.Equal, done);
+        }
+
+        if (VerifyAssemblyGCBarriers.getValue(crb.getOptions())) {
+            tool.verifyOop(masm, previousValue, tmp, temp3, false, true);
+        }
+
+        if (AssemblyGCBarriersSlowPathOnly.getValue(crb.getOptions())) {
+            masm.jmp(runtime);
+        } else {
+            AMD64Address satbQueueIndex = new AMD64Address(thread, tool.satbQueueIndexOffset());
+            // tmp := *index_adr
+            // tmp == 0?
+            // If yes, goto runtime
+            masm.movq(tmp, satbQueueIndex);
+            masm.cmpq(tmp, 0);
+            masm.jcc(AMD64Assembler.ConditionFlag.Equal, runtime);
+
+            // tmp := tmp - wordSize
+            // *index_adr := tmp
+            // tmp := tmp + *buffer_adr
+            masm.subq(tmp, 8);
+            masm.movptr(satbQueueIndex, tmp);
+            AMD64Address satbQueueBuffer = new AMD64Address(thread, tool.satbQueueBufferOffset());
+            masm.addq(tmp, satbQueueBuffer);
+
+            // Record the previous value
+            masm.movptr(new AMD64Address(tmp, 0), previousValue);
+        }
+        masm.bind(done);
+
+        masm.pop(temp3);
+        masm.pop(temp2);
+        masm.pop(temp);
+
+        // Out of line slow path
+        crb.getLIR().addSlowPath(null, () -> {
+            masm.bind(runtime);
+            CallingConvention cc = callTarget.getOutgoingCallingConvention();
+            AllocatableValue arg0 = cc.getArgument(0);
+            if (arg0 instanceof StackSlot) {
+                // AMD64Address slot0 = (AMD64Address) crb.asAddress(arg0);
+
+                AMD64Address slot0 = new AMD64Address(rsp, -getTarget().wordSize * 2);
+                masm.movq(slot0, previousValue);
+            } else {
+                GraalError.shouldNotReachHere("must be StackSlot: " + arg0);
+            }
+            AMD64Call.directCall(crb, masm, tool.getCallTarget(callTarget), null, false, null);
+            masm.jmp(done);
+        });
+    }
+
+
+    public static void emitZBarrier(CompilationResultBuilder crb,
+                    AMD64MacroAssembler masm,
+                    Register resultReg,
+                    ForeignCallLinkage callTarget,
+                    AMD64Address address,
+                    boolean isNotStrong) {
+        assert !resultReg.equals(address.getBase()) && !resultReg.equals(address.getIndex()) : Assertions.errorMessage(resultReg, address);
+
+        final Label entryPoint = new Label();
+        final Label continuation = new Label();
+
+        if (isNotStrong) {
+            masm.testl(resultReg, AMD64HotSpotZBarrierSetLIRGenerator.UNPATCHED);
+            crb.recordMark(HotSpotMarkId.Z_BARRIER_RELOCATION_FORMAT_MARK_BAD_AFTER_TEST);
+            masm.jcc(AMD64Assembler.ConditionFlag.NotZero, entryPoint);
+            AMD64HotSpotZBarrierSetLIRGenerator.zUncolor(crb, masm, resultReg);
+        } else {
+            AMD64HotSpotZBarrierSetLIRGenerator.zUncolor(crb, masm, resultReg);
+            masm.jcc(AMD64Assembler.ConditionFlag.Above, entryPoint);
+        }
+        masm.bind(entryPoint);
+
+        CallingConvention cc = callTarget.getOutgoingCallingConvention();
+        AMD64Address cArg0 = (AMD64Address) crb.asAddress(cc.getArgument(0));
+        AMD64Address cArg1 = (AMD64Address) crb.asAddress(cc.getArgument(1));
+
+        // The fast-path shift destroyed the oop - need to re-read it
+        masm.movq(resultReg, address);
+
+        masm.movq(cArg0, resultReg);
+        masm.leaq(resultReg, address);
+        masm.movq(cArg1, resultReg);
+        AMD64Call.directCall(crb, masm, callTarget, null, false, null);
+        masm.movq(resultReg, cArg0);
+
+        // Return to inline code
+        masm.jmp(continuation);
+        masm.bind(continuation);
+    }
+
+    public void loadSizedValue(AMD64MacroAssembler asm, Register dst, AMD64Address src, int sizeInBytes, boolean isSigned) {
+        switch (sizeInBytes) {
+            case 8:
+                asm.movq(dst, src);
+                break;
+            case 4:
+                asm.movl(dst, src);
+                break;
+            case 2:
+                if (isSigned) {
+                    loadSignedShort(asm, dst, src);
+                } else {
+                    loadUnsignedShort(asm, dst, src);
+                }
+                break;
+            case 1:
+                if (isSigned) {
+                    loadSignedByte(asm, dst, src);
+                } else {
+                    loadUnsignedByte(asm, dst, src);
+                }
+                break;
+        }
+    }
+
+    public void loadSignedShort(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movswl(dst, src);
+    }
+
+    public void loadUnsignedShort(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movzwl(dst, src);
+    }
+
+    public void loadSignedByte(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movsbl(dst, src);
+    }
+
+    public void loadUnsignedByte(AMD64MacroAssembler asm, Register dst, AMD64Address src) {
+        asm.movzbl(dst, src);
+    }
+
+    /**
+     * Tries to resolve circular dependencies by spilling.
+     *
+     * @return true if spilling shouldn't be performed again in the current round, false otherwise
+     */
+    public boolean shuffleInlineArgsSpill(AMD64MacroAssembler asm, State[] state, AllocatableValue[] currentArguments,
+                    JavaType[] currentParameterTypes, int fromIndex) {
+        AllocatableValue fromArgument = currentArguments[fromIndex];
+        JavaKind fromKind = currentParameterTypes[fromIndex].getJavaKind();
+        int fromArgumentStateIndex = argumentToStateIndex(fromArgument);
+        State fromArgumentState = state[fromArgumentStateIndex];
+        if (fromArgumentState != State.READ_ONLY) {
+            // spilling this won't break any cycles
+            return true;
+        }
+
+        // Spill argument to be able to write the source and resolve circular dependencies
+        AllocatableValue spilled = spillRegFor(fromArgument);
+        int spilledArgumentStateIndex = argumentToStateIndex(spilled);
+        if (state[spilledArgumentStateIndex] == State.READ_ONLY) {
+            // We have already spilled (in previous round). The spilled register should be consumed
+            // by this round.
+        } else {
+            boolean result = moveHelper(asm, fromArgument, spilled, fromKind, state);
+            assert result : "spilling should not fail";
+            // Set spill_reg as new source and update state
+            currentArguments[fromIndex] = spilled;
+            state[spilledArgumentStateIndex] = State.READ_ONLY;
+        }
+
+        // Do not spill again in this round
+        return false;
+    }
+
+    /**
+     * Decides which register should be used for spilling a certain value.
+     *
+     * @return the spill register for the {@code value}
+     */
+    private AllocatableValue spillRegFor(AllocatableValue value) {
+        if (ValueUtil.isRegister(value) && ValueUtil.asRegister(value).getRegisterCategory().equals(AMD64.XMM)) {
+            return xmm8.asValue(value.getValueKind());
+        }
+        return r14.asValue(value.getValueKind());
+    }
+
+    /**
+     * Helper function to move an argument to an other position.
+     *
+     * @return true if the move can be executed, false otherwise.
+     */
+    private boolean moveHelper(AMD64MacroAssembler asm, AllocatableValue fromValue, AllocatableValue toValue, JavaKind kind, State[] state) {
+        assert !ValueUtil.isIllegal(fromValue) && !ValueUtil.isIllegal(toValue) : "source and destination must be valid";
+        int toValueIndex = argumentToStateIndex(toValue);
+        int fromValueIndex = argumentToStateIndex(fromValue);
+        if (state[toValueIndex] == State.WRITTEN) {
+            // already written
+            return true;
+        }
+        if (fromValueIndex != toValueIndex) {
+            if (state[toValueIndex] == State.READ_ONLY) {
+                return false;
+            }
+
+            if (ValueUtil.isRegister(fromValue)) {
+                if (ValueUtil.isRegister(toValue)) {
+                    if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
+                        if (kind == JavaKind.Double) {
+                            asm.movdbl(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                        } else {
+                            assert kind == JavaKind.Float : "kind must be float";
+                            asm.movflt(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                        }
+                    } else {
+                        asm.movq(ValueUtil.asRegister(toValue), ValueUtil.asRegister(fromValue));
+                    }
+                } else {
+                    AMD64Address toAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
+                    if (isXMMRegister(ValueUtil.asRegister(fromValue))) {
+                        if (kind == JavaKind.Double) {
+                            asm.movdbl(toAddress, ValueUtil.asRegister(fromValue));
+                        } else {
+                            assert kind == JavaKind.Float : "kind must be float";
+                            asm.movflt(toAddress, ValueUtil.asRegister(fromValue));
+                        }
+                    } else {
+                        asm.movq(toAddress, ValueUtil.asRegister(fromValue));
+                    }
+                }
+            } else {
+                AMD64Address fromAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) fromValue));
+                if (ValueUtil.isRegister(toValue)) {
+                    if (isXMMRegister(ValueUtil.asRegister(toValue))) {
+                        if (kind == JavaKind.Double) {
+                            asm.movdbl(ValueUtil.asRegister(toValue), fromAddress);
+                        } else {
+                            assert kind == JavaKind.Float : "kind must be float";
+                            asm.movflt(ValueUtil.asRegister(toValue), fromAddress);
+                        }
+                    } else {
+                        asm.movq(ValueUtil.asRegister(toValue), fromAddress);
+                    }
+                } else {
+                    AMD64Address toAddress = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
+                    asm.movq(r13, fromAddress);
+                    asm.movq(toAddress, r13);
+                }
+
+            }
+        }
+
+        // update states
+        state[fromValueIndex] = State.WRITEABLE;
+        state[toValueIndex] = State.WRITTEN;
+        return true;
+    }
+
+    private boolean isXMMRegister(Register register) {
+        return register.getRegisterCategory().equals(AMD64.XMM);
+    }
+
+    private boolean isXMMRegister(AllocatableValue value) {
+        if (!ValueUtil.isRegister(value))
+            return false;
+        return ValueUtil.asRegister(value).getRegisterCategory().equals(AMD64.XMM);
+    }
+
+    /**
+     *
+     * Initialize the states for unpacking. Each Slot is associated with a state. Slots which
+     * include arguments that have not been processed yet are read-only.
+     */
+    public State[] initRegState(AllocatableValue[] currentArguments, int currentStackSizeArguments, int expectedStackSizeArguments, int spInc) {
+        RegisterArray registers = getTarget().arch.getAvailableValueRegisters();
+        int wordSize = getTarget().wordSize;
+        int registerSize = registers.size();
+        int currentArgsOnStack = currentStackSizeArguments / wordSize;
+        State[] state;
+        if (spInc == 0) {
+            // include all registers, the current args and RA
+            state = new State[registerSize + currentArgsOnStack + 1];
+        } else {
+            // include all registers, the current args, the increased stack space (old RA +
+            // expected args + padding if necessary) and RA
+            state = new State[registerSize + currentArgsOnStack + 1 + spInc / wordSize];
+        }
+
+        // initialize the state, set all locations to writeable
+        Arrays.fill(state, State.WRITEABLE);
+
+        // correct the stack offset of the current args by the stack increment
+        for (int i = 0; i < currentArguments.length; i++) {
+            if (currentArguments[i] instanceof StackSlot stackSlot) {
+                StackSlot newStackSlot = StackSlot.get(stackSlot.getValueKind(), stackSlot.getRawOffset() + spInc, stackSlot.getRawAddFrameSize());
+                currentArguments[i] = newStackSlot;
+
+            }
+            // make the slot read only to prevent accidental writing
+            state[argumentToStateIndex(currentArguments[i])] = State.READ_ONLY;
+        }
+
+        return state;
+    }
+
+    public enum State {
+        READ_ONLY,
+        WRITEABLE,
+        WRITTEN
+    }
+
+    /**
+     * Checks whether stack extension and therefore also stack repair needs to be performed for a
+     * certain method.
+     *
+     * @param rootMethod the method to be compiled
+     * @return true if stack repair is necessary, false otherwise
+     */
+    public boolean needStackRepair(ResolvedJavaMethod rootMethod) {
+        if (rootMethod == null)
+            return false;
+        CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this);
+        CallingConvention ccScalarized = CodeUtil.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
+        CallingConvention ccScalarizedWithoutReceiver = CodeUtil.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
+
+        return ccScalarized.getStackSize() > cc.getStackSize() || ccScalarized.getStackSize() > ccScalarizedWithoutReceiver.getStackSize();
+    }
+
+    /**
+     *
+     * Calculates the state index of this argument used during unpacking of inline type arguments.
+     */
+    public int argumentToStateIndex(AllocatableValue argument) {
+        // include all registers
+        RegisterArray registers = getTarget().arch.getAvailableValueRegisters();
+        for (int i = 0; i < registers.size(); i++) {
+            if (argument instanceof RegisterValue registerValue) {
+                if (registerValue.getRegister().equals(registers.get(i))) {
+                    return i;
+                }
+            } else {
+                break;
+            }
+        }
+
+        // no register, calculate index from offset, every stack slot is 8 byte aligned
+        int regNumber = registers.size();
+        assert argument instanceof StackSlot : "expected stack slot in calling convention";
+        return regNumber + stackSlotToOffset((StackSlot) argument) / getTarget().wordSize;
+    }
+
+    /**
+     * For extending the stack in case the VEP has a larger stack size than the VIEP or VIEP_RO.
+     * 
+     * @return size of Args + RA + Padding
+     */
+    public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
+        JavaType[] parameterTypes = rootMethod.getScalarizedParameters(true);
+        CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
+
+        int RAsize = crb.target.arch.getReturnAddressSize();
+        int spInc = (cc.getStackSize() + RAsize);
+        int stackAlignment = crb.target.stackAlignment;
+        spInc = spInc % stackAlignment == 0 ? spInc : ((spInc / stackAlignment) + 1) * stackAlignment;
+
+        // pop the return address
+        asm.pop(r13);
+        asm.decrementq(rsp, spInc);
+
+        // push the return address
+        asm.push(r13);
+        return spInc;
+    }
+
+    private void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
         HotSpotProviders providers = getProviders();
-        if (installedCodeOwner != null && !installedCodeOwner.isStatic()) {
+        if (rootMethod != null && !rootMethod.isStatic()) {
             JavaType[] parameterTypes = {providers.getMetaAccess().lookupJavaType(Object.class)};
             CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
             Register receiver = asRegister(cc.getArgument(0));
             int before;
             if (config.icSpeculatedKlassOffset == Integer.MAX_VALUE) {
-                crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+                crb.recordMark(markId);
+                if (additionalMarkId != null) {
+                    crb.recordMark(additionalMarkId);
+                }
+
                 // c1_LIRAssembler_x86.cpp: const Register IC_Klass = rax;
                 Register inlineCacheKlass = rax;
 
@@ -387,7 +1173,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 asm.align(config.codeEntryAlignment, asm.position() + inlineCacheCheckSize);
 
                 int startICCheck = asm.position();
-                crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+                crb.recordMark(markId);
+                if (additionalMarkId != null) {
+                    crb.recordMark(additionalMarkId);
+                }
+
                 AMD64Address icSpeculatedKlass = new AMD64Address(data, config.icSpeculatedKlassOffset);
 
                 AMD64BaseAssembler.OperandSize size;
@@ -413,9 +1203,223 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 }
             }
         }
+    }
+
+    /**
+     *
+     * Helper function to emit an unverified or verified entry.
+     */
+    private void emitEntry(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, boolean receiverOnly,
+                    boolean verified, Label verifiedEntry, HotSpotMarkId additionalMarkId) {
+
+        crb.recordMark(markId);
+        if (additionalMarkId != null) {
+            crb.recordMark(additionalMarkId);
+        }
+        if (!verified) {
+            icCheck(rootMethod, crb, asm, regConfig, markId, additionalMarkId);
+        } else {
+            // create dummy frame
+            crb.frameContext.enter(crb, 0, true);
+            crb.frameContext.leave(crb, false);
+            int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
+
+            // create real entry point frame
+            crb.frameContext.enter(crb, stackIncrement, false);
+            asm.jmp(verifiedEntry);
+        }
 
         asm.align(config.codeEntryAlignment);
-        crb.recordMark(crb.compilationResult.getEntryBCI() != -1 ? HotSpotMarkId.OSR_ENTRY : HotSpotMarkId.VERIFIED_ENTRY);
+    }
+
+    private void emitEntry(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, HotSpotMarkId markId, boolean receiverOnly,
+                    boolean verified, Label verifiedEntry) {
+        emitEntry(rootMethod, crb, asm, regConfig, markId, receiverOnly, verified, verifiedEntry, null);
+    }
+
+    /**
+     * Emits the code prior to the verified entry point.
+     *
+     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     */
+
+    // @formatter:off
+    // The entry points of JVMCI-compiled methods can have the following types:
+    //
+    // (1) Methods with no inline type arguments
+    // (2) Methods with an inline type receiver but no inline type arguments
+    //     VIEP_RO is the same as VIEP
+    // (3) Methods with a non-inline type receiver and some inline type arguments
+    //     VIEP_RO is the same as VEP
+    // (4) Methods with an inline type receiver and other inline type arguments
+    //     Separate VEP, VIEP, and VIEP_RO
+
+    //
+    // (1)               (2)                 (3)                    (4)
+    // UEP/UIEP:         UEP/UIEP:           UIEP:                  UEP:
+    //   check_icache      check_icache       check_icache           check_icache
+    // VEP/VIEP/VIEP_RO  VIEP/VIEP_RO:       VIEP:                  VIEP_RO:
+    //   body              unpack receiver    unpack inline args     unpack receiver
+    //                     jump to VEP        jump to VEP            jump to VEP
+    //                   VEP                 UEP:                   UIEP:
+    //                     body                check_icache           check_icache
+    //                                       VEP/VIEP_RO:           VIEP:
+    //                                         body                   unpack all inline args
+    //                                                                jump to VEP
+    //                                                              VEP:
+    //                                                                body
+    // @formatter:on
+    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
+
+        boolean verifiedInlineSet = false;
+        boolean verifiedInlineROSet = false;
+        boolean unverifiedSet = false;
+        boolean unverifiedInlineSet = false;
+
+        Label verifiedEntry = new Label();
+        if (installedCodeOwner != null) {
+            if (crb.compilationResult.getEntryBCI() == -1 && installedCodeOwner.hasScalarizedParameters()) {
+                // we have parameters that need to be scalarized
+                if (!installedCodeOwner.isStatic()) {
+
+                    if (installedCodeOwner.hasScalarizedReceiver()) {
+                        // additional entry points for receiver
+
+                        if (installedCodeOwner.getScalarizedParametersCount() == 1) {
+                            // case (2)
+
+                            // only receiver needs to be scalarized share entries
+
+                            /*
+                             * unverified and no parameter scalarized, falls through to
+                             * VERIFIED_INLINE_ENTRY
+                             */
+                            emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                            HotSpotMarkId.INLINE_ENTRY, false, false, null, HotSpotMarkId.UNVERIFIED_ENTRY);
+
+                            /*
+                             * verified but no parameter scalarized yet, produce code that
+                             * scalarizes all of them and jump to verified entry after its frame
+                             * enter
+                             */
+                            emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                            HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry, HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                        } else {
+                            // case (4)
+
+                            // receiver specific entry needed
+
+                            /*
+                             * unverified and no parameter scalarized, falls through to
+                             * VERIFIED_INLINE_ENTRY
+                             */
+                            emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                            HotSpotMarkId.INLINE_ENTRY, false, false, null);
+
+                            /*
+                             * verified but no parameter scalarized yet, produce code that
+                             * scalarizes all of them and jump to verified entry after its frame
+                             * enter
+                             */
+                            emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                            HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+
+                            /*
+                             * unverified and all parameters except receiver scalarized, falls
+                             * through to VERIFIED_INLINE_ENTRY_RO
+                             */
+                            emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                            HotSpotMarkId.UNVERIFIED_ENTRY, true, false, null);
+
+                            /*
+                             * verified and all parameters except receiver scalarized, produce code
+                             * that scalarizes the receiver and jump to verified entry after its
+                             * frame enter
+                             */
+                            emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                            HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, true, true, verifiedEntry);
+                        }
+
+                        verifiedInlineSet = true;
+                        verifiedInlineROSet = true;
+                        unverifiedSet = true;
+                        unverifiedInlineSet = true;
+                    } else {
+                        // case (3)
+
+                        // no entry points specific for receiver needed
+
+                        /*
+                         * unverified and no parameter scalarized, falls through to
+                         * VERIFIED_INLINE_ENTRY
+                         */
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.INLINE_ENTRY, false, false, null);
+
+                        /*
+                         * verified but no parameter scalarized yet, produce code that scalarizes
+                         * all of them and jump to verified entry after its frame enter
+                         */
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+
+                        /*
+                         * unverified and all parameters scalarized, falls through to the verified
+                         * entry
+                         */
+                        emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                        HotSpotMarkId.UNVERIFIED_ENTRY, true, false, null);
+                        verifiedInlineSet = true;
+                        verifiedInlineROSet = false;
+                        unverifiedSet = true;
+                        unverifiedInlineSet = true;
+                    }
+
+                } else {
+                    // static method, no receiver specific entry points needed
+
+                    // verified but no parameter scalarized yet, produce code that scalarizes
+                    // all of them and jump to verified entry after its frame enter
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
+                    verifiedInlineSet = true;
+                }
+            } else if (!installedCodeOwner.isStatic()) {
+                // case (1)
+
+                // no additional entry points needed
+                emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null, HotSpotMarkId.INLINE_ENTRY);
+                unverifiedSet = true;
+                unverifiedInlineSet = true;
+            }
+        }
+
+        if (crb.compilationResult.getEntryBCI() != -1) {
+            crb.recordMark(HotSpotMarkId.OSR_ENTRY);
+            crb.frameContext.enter(crb);
+
+        } else {
+            // set entry points (if not set yet) to verified entry point
+            if (!unverifiedSet) {
+                crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+            }
+            if (!unverifiedInlineSet) {
+                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+            }
+            if (!verifiedInlineSet) {
+                crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+            }
+            if (!verifiedInlineROSet) {
+                crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+            }
+            // record the normal entry point
+            crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
+            crb.frameContext.enter(crb, 0, true);
+            asm.bind(verifiedEntry);
+        }
+
+
     }
 
     public void emitCodeSuffix(CompilationResultBuilder crb, AMD64MacroAssembler asm) {

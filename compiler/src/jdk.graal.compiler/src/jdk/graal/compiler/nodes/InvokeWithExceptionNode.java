@@ -34,6 +34,8 @@ import static jdk.graal.compiler.nodes.Invoke.SIZE_UNKNOWN_RATIONALE;
 
 import java.util.Map;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
@@ -43,14 +45,10 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
-import jdk.graal.compiler.nodes.spi.LIRLowerable;
-import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.graal.compiler.nodes.util.GraphUtil;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.code.BytecodeFrame;
 
 // @formatter:off
@@ -59,7 +57,7 @@ import jdk.vm.ci.code.BytecodeFrame;
           cycles = CYCLES_UNKNOWN, cyclesRationale = CYCLES_UNKNOWN_RATIONALE,
           size   = SIZE_UNKNOWN,   sizeRationale   = SIZE_UNKNOWN_RATIONALE)
 // @formatter:on
-public final class InvokeWithExceptionNode extends WithExceptionNode implements Invoke, IterableNodeType, SingleMemoryKill, LIRLowerable, UncheckedInterfaceProvider, Simplifiable {
+public final class InvokeWithExceptionNode extends WithExceptionNode implements Invoke, IterableNodeType, SingleMemoryKill, UncheckedInterfaceProvider, Simplifiable {
     public static final NodeClass<InvokeWithExceptionNode> TYPE = NodeClass.create(InvokeWithExceptionNode.class);
 
     @OptionalInput ValueNode classInit;
@@ -140,10 +138,6 @@ public final class InvokeWithExceptionNode extends WithExceptionNode implements 
         }
     }
 
-    @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.emitInvoke(this);
-    }
 
     @Override
     public FrameState stateAfter() {

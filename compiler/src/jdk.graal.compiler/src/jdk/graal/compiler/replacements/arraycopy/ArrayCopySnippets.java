@@ -29,6 +29,7 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
+import static jdk.graal.compiler.nodes.extended.IsFlatArrayNode.isFlatArray;
 
 import java.util.EnumMap;
 import java.util.function.Supplier;
@@ -213,7 +214,7 @@ public abstract class ArrayCopySnippets implements Snippets {
      * Snippet that performs a stub call for an {@linkplain BasicArrayCopyNode#isExact() exact}
      * array copy.
      */
-    @Snippet
+    @Snippet(allowPartialIntrinsicArgumentMismatch = true)
     public void arraycopyExactStubCallSnippet(@NonNullParameter Object src, int srcPos, @NonNullParameter Object dest, int destPos, int length, @ConstantParameter ArrayCopyTypeCheck arrayTypeCheck,
                     @ConstantParameter JavaKind elementKind, @ConstantParameter LocationIdentity locationIdentity, @ConstantParameter SnippetCounter elementKindCounter,
                     @ConstantParameter SnippetCounter elementKindCopiedCounter, @ConstantParameter Counters counters, @ConstantParameter boolean exceptionSeen) {
@@ -225,6 +226,13 @@ public abstract class ArrayCopySnippets implements Snippets {
 
         elementKindCounter.inc();
         elementKindCopiedCounter.add(checkedLength);
+
+        if (probability(NOT_FREQUENT_PROBABILITY, isFlatArray(src)) || probability(NOT_FREQUENT_PROBABILITY, isFlatArray(dest))) {
+            // e.g. copy values from flat array to object array, need to buffer the elements from
+            // src array first
+            System.arraycopy(src, srcPos, dest, destPos, length);
+            return;
+        }
 
         doArraycopyExactStubCallSnippet(src, checkedSrcPos, dest, checkedDestPos, checkedLength, elementKind, locationIdentity, counters);
     }
@@ -309,6 +317,7 @@ public abstract class ArrayCopySnippets implements Snippets {
         int arrayBaseOffset = ReplacementsUtil.getArrayBaseOffset(INJECTED_META_ACCESS, elementKind);
         long sourceOffset = arrayBaseOffset + srcPos * scale;
         long destOffset = arrayBaseOffset + destPos * scale;
+
 
         if (probability(FREQUENT_PROBABILITY, src == dest) && probability(NOT_FREQUENT_PROBABILITY, srcPos < destPos)) {
             // bad aliased case so we need to copy the array from back to front
@@ -675,7 +684,8 @@ public abstract class ArrayCopySnippets implements Snippets {
                     // there is a sufficient type match - we don't need any additional type checks
                     snippetInfo = arraycopyExactStubCallSnippet;
                     arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
-                } else if (srcComponentType == null && destComponentType == null) {
+                } else if (srcComponentType == null && destComponentType == null ||
+                                arraycopy.canBeInlineTypeArrayCopy(tool.getValhallaOptionsProvider())) {
                     // we don't know anything about the types - use the generic copying
                     snippetInfo = delayedGenericArraycopySnippet;
                     // no need for additional type check to avoid duplicated work

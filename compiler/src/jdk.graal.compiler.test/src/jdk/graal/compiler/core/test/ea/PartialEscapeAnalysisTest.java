@@ -28,6 +28,10 @@ import java.lang.ref.SoftReference;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
+
 import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.core.test.TypeSystemTest;
 import jdk.graal.compiler.graph.Node;
@@ -42,9 +46,6 @@ import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
 import jdk.graal.compiler.phases.common.DeadCodeEliminationPhase;
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
 
 /**
  * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
@@ -71,6 +72,26 @@ public class PartialEscapeAnalysisTest extends EATestBase {
         public TestObject2(Object x, Object y) {
             this.x = x;
             this.y = y;
+        }
+    }
+
+    public static value class ValueTestObject {
+        final int x;
+        final float y;
+        final Object z;
+
+        ValueTestObject(int x, float y, Object z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        ValueTestObject() {
+            this(2, 3.0f, null);
+        }
+
+        ValueTestObject(Object z) {
+            this(2, 3.0f, z);
         }
     }
 
@@ -128,6 +149,93 @@ public class PartialEscapeAnalysisTest extends EATestBase {
             return obj;
         } else {
             return null;
+        }
+    }
+
+    @Test
+    public void testIfAcmpeq1() {
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet1", 0, 0, StoreFieldNode.class, LoadFieldNode.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static boolean testIfAcmpeqSnippet1(int a, int b) {
+        ValueTestObject valueObject1 = new ValueTestObject();
+        ValueTestObject valueObject2 = new ValueTestObject();
+        ValueTestObject valueObject3 = new ValueTestObject(valueObject1);
+        ValueTestObject valueObject4 = new ValueTestObject(valueObject1);
+        ValueTestObject valueObject5 = new ValueTestObject(valueObject2);
+
+        if (a < 0) {
+            return valueObject1 == valueObject2;
+        } else {
+            if (b < 0) {
+                return valueObject3 == valueObject4;
+            } else {
+                return valueObject4 == valueObject5;
+            }
+        }
+    }
+
+    @Test
+    public void testIfAcmpeq2() {
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet2", 0, 0, StoreFieldNode.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static boolean testIfAcmpeqSnippet2(int a, int b) {
+
+        ValueTestObject valueObject1 = new ValueTestObject(2, 3.0f, null);
+        ValueTestObject valueObject2 = new ValueTestObject(3, 3.0f, null);
+        ValueTestObject valueObject3 = new ValueTestObject(2, 4.0f, null);
+
+        if (a < 0) {
+            return valueObject1 == valueObject2;
+        } else {
+            return valueObject1 == valueObject3;
+        }
+    }
+
+    @Test
+    public void testIfAcmpeq3() {
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet3", 0, 0, StoreFieldNode.class, LoadFieldNode.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static boolean testIfAcmpeqSnippet3(int a, float b) {
+        ValueTestObject valueObject1 = new ValueTestObject();
+        ValueTestObject valueObject2 = new ValueTestObject(2 + a, 3.0f, null);
+        ValueTestObject valueObject3 = new ValueTestObject(2, 3.0f + b, null);
+
+        if (a < 0) {
+            // no need to materialize just produce comparison against int
+            return valueObject1 == valueObject2;
+        } else {
+            // no need to materialize just produce comparison against float
+            return valueObject1 == valueObject3;
+        }
+    }
+
+    @Test
+    public void testIfAcmpeq4() {
+        testPartialEscapeAnalysis("testIfAcmpeqSnippet4", 1.5, 3, StoreFieldNode.class, LoadFieldNode.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    public static boolean testIfAcmpeqSnippet4(int a, int b, ValueTestObject c) {
+        ValueTestObject valueObject1 = new ValueTestObject();
+        ValueTestObject valueObject2 = new ValueTestObject(null);
+        ValueTestObject valueObject3 = new ValueTestObject(valueObject1);
+        ValueTestObject valueObject4 = new ValueTestObject(c);
+
+        if (a < 0) {
+            if (b < 0) {
+                return valueObject2 == valueObject3;
+            } else {
+                return valueObject2 == valueObject4;
+            }
+        } else {
+            // materializes
+            return valueObject3 == valueObject4;
         }
     }
 

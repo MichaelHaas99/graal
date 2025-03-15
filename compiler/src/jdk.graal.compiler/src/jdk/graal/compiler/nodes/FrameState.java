@@ -60,6 +60,7 @@ import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.MaterializedObjectState;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
@@ -551,6 +552,17 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         return duplicateModified(graph(), newBci, StackState.AfterPop, popKind, null, null, null);
     }
 
+    /**
+     * The additional option {@code removeTopVirtualObjectMapping} becomes effective if a virtual
+     * object is popped. The option specifies if its virtual object mapping should be removed as
+     * well from the framestate. E.g. The virtual object mapping created for an invoke node with a
+     * nullable scalarized inline object as return value, can be removed, when the
+     * {@code stateDuring} is computed.
+     */
+    public FrameState duplicateModifiedDuringCall(int newBci, JavaKind popKind, boolean removeTopVirtualObjectMapping) {
+        return duplicateModified(graph(), newBci, StackState.AfterPop, popKind, null, null, null, removeTopVirtualObjectMapping);
+    }
+
     public FrameState duplicateModifiedBeforeCall(int newBci,
                     JavaKind popKind,
                     JavaKind[] pushedSlotKinds,
@@ -579,7 +591,17 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     JavaKind[] pushedSlotKinds,
                     ValueNode[] pushedValues,
                     List<EscapeObjectState> pushedVirtualObjectMappings) {
-        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true);
+        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true, false);
+    }
+
+    public FrameState duplicateModified(StructuredGraph graph,
+                    int newBci,
+                    StackState newStackState,
+                    JavaKind popKind,
+                    JavaKind[] pushedSlotKinds,
+                    ValueNode[] pushedValues,
+                    List<EscapeObjectState> pushedVirtualObjectMappings, boolean removeTopVirtualObjectMapping) {
+        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true, removeTopVirtualObjectMapping);
     }
 
     /**
@@ -595,11 +617,12 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     JavaKind[] pushedSlotKinds,
                     ValueNode[] pushedValues,
                     List<EscapeObjectState> pushedVirtualObjectMappings,
-                    boolean checkStackDepth) {
+                    boolean checkStackDepth, boolean removeTopVirtualObjectMapping) {
         // Compute size of stack to copy (accounting for popping)
         // and final stack size after pushing
         int copyStackSize;
         int newStackSize = 0;
+        VirtualInstanceNode virtualObject = null;
         if (pushedValues != null) {
             assert pushedSlotKinds.length == pushedValues.length : Assertions.errorMessage(pushedSlotKinds, pushedValues);
             for (int i = 0; i < pushedValues.length; i++) {
@@ -617,6 +640,10 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     copyStackSize = stackSize - 1;
                 }
                 ValueNode lastSlot = stackAt(copyStackSize);
+
+                // check if we pop a virtual object
+                virtualObject = lastSlot instanceof VirtualInstanceNode ? (VirtualInstanceNode) lastSlot : null;
+
                 assert lastSlot.getStackKind() == popKind.getStackKind() : Assertions.errorMessage(lastSlot, popKind);
             } else {
                 copyStackSize = stackSize;
@@ -661,6 +688,24 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         assert newValues.size() == newValuesSize : newValues.size() + " != " + newValuesSize;
         assert !checkStackDepth || checkStackDepth(bci, stackSize, stackState, newBci, newStackSize, newStackState);
 
+
+        if (virtualObject != null && removeTopVirtualObjectMapping) {
+            // remove virtual object mapping created for an invoke node with a nullable scalarized
+            // inline object as return value, when we pop the corresponding virtual object. E.g.
+            // caused by
+            // duplicateModifiedDuringCall.
+            assert virtualObjectMappings != null : "virtual object mapping must exist";
+            List<EscapeObjectState> result = new ArrayList<>();
+            result.addAll(virtualObjectMappings);
+            for (int i = 0; i < virtualObjectMappings.size(); i++) {
+                EscapeObjectState existingEscapeObjectState = virtualObjectMappings.get(i);
+                if (existingEscapeObjectState.object() == virtualObject) {
+                    result.remove(i);
+                    copiedVirtualObjectMappings = result;
+                    break;
+                }
+            }
+        }
         return graph.add(new FrameState(outerFrameState(),
                         code,
                         newBci,

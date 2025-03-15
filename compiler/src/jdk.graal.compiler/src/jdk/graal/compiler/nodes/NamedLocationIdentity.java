@@ -25,6 +25,7 @@
 package jdk.graal.compiler.nodes;
 
 import java.util.EnumMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -32,6 +33,7 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaKind.FormatWithToString;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
  * A {@link LocationIdentity} with a name.
@@ -148,4 +150,28 @@ public class NamedLocationIdentity extends LocationIdentity implements FormatWit
     public static boolean isArrayLocation(LocationIdentity l) {
         return ARRAY_LOCATIONS.containsValue(l);
     }
+
+    /**
+     * Returns the named location identity for a flat array. Accesses to fields of an inline type
+     * array element need to be distinct. This is achieved by also considering the offset of the
+     * field.
+     */
+    public static LocationIdentity getFlatArrayLocation(ResolvedJavaField field) {
+        String name = FLAT_ARRAY_BASE_STRING + field.getOffset();
+        return FLAT_ARRAY_LOCATIONS.computeIfAbsent(name, NamedLocationIdentity::mutable);
+
+    }
+
+    /**
+     * Needed for {@link jdk.graal.compiler.replacements.BoxingSnippets}.
+     */
+    public static LocationIdentity getFlatArrayDefaultLocation() {
+        String name = FLAT_ARRAY_BASE_STRING + "0";
+        return FLAT_ARRAY_LOCATIONS.computeIfAbsent(name, NamedLocationIdentity::mutable);
+
+    }
+
+    private static final ConcurrentHashMap<String, LocationIdentity> FLAT_ARRAY_LOCATIONS = new ConcurrentHashMap<>();
+    private static final String FLAT_ARRAY_BASE_STRING = "Array: " + JavaKind.Object.getJavaName() + " ";
+
 }

@@ -34,7 +34,10 @@ import jdk.graal.compiler.debug.GraalError;
  */
 public enum HotSpotMarkId implements CompilationResult.MarkId {
     VERIFIED_ENTRY,
+    VERIFIED_INLINE_ENTRY,
+    VERIFIED_INLINE_ENTRY_RO,
     UNVERIFIED_ENTRY,
+    INLINE_ENTRY,
     OSR_ENTRY,
     EXCEPTION_HANDLER_ENTRY,
     DEOPT_HANDLER_ENTRY,

@@ -429,7 +429,13 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
     @Override
     public final void initializeObjectHeader(Word memory, Word hub, boolean isArray) {
         KlassPointer klassPtr = KlassPointer.fromWord(hub);
-        Word markWord = Word.signed(HotSpotReplacementsUtil.defaultPrototypeMarkWord(INJECTED_VMCONFIG));
+        Word markWord;
+        if (config.valhallaEnabled) {
+            markWord = klassPtr.readWord(HotSpotReplacementsUtil.klassProtoTypeHeaderOffset(INJECTED_VMCONFIG));
+        } else {
+            markWord = Word.signed(HotSpotReplacementsUtil.defaultPrototypeMarkWord(INJECTED_VMCONFIG));
+        }
+
         HotSpotReplacementsUtil.initializeObjectHeader(memory, markWord, klassPtr);
     }
 

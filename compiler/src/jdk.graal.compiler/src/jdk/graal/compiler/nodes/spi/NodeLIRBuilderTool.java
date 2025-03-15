@@ -33,9 +33,6 @@ import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.lir.LIRFrameState;
 import jdk.graal.compiler.lir.gen.LIRGeneratorTool;
-import jdk.graal.compiler.nodes.cfg.HIRBlock;
-import jdk.graal.compiler.nodes.extended.ForeignCall;
-import jdk.graal.compiler.nodes.extended.SwitchNode;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
 import jdk.graal.compiler.nodes.AbstractEndNode;
 import jdk.graal.compiler.nodes.AbstractMergeNode;
@@ -49,6 +46,11 @@ import jdk.graal.compiler.nodes.SafepointNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.ConditionalNode;
+import jdk.graal.compiler.nodes.cfg.HIRBlock;
+import jdk.graal.compiler.nodes.extended.ForeignCall;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
+import jdk.graal.compiler.nodes.extended.SwitchNode;
+import jdk.vm.ci.meta.JavaType;
 
 public interface NodeLIRBuilderTool extends NodeValueMap {
 
@@ -62,6 +64,10 @@ public interface NodeLIRBuilderTool extends NodeValueMap {
     void emitSwitch(SwitchNode i);
 
     void emitInvoke(Invoke i);
+
+    default void emitInvokeWithScalarizedReturn(Invoke i, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull, JavaType[] types) {
+        throw new UnsupportedOperationException();
+    }
 
     void emitForeignCall(ForeignCall i);
 

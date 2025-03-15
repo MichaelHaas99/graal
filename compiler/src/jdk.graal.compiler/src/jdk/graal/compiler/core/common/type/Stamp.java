@@ -28,7 +28,6 @@ import jdk.graal.compiler.core.common.LIRKind;
 import jdk.graal.compiler.core.common.calc.Condition;
 import jdk.graal.compiler.core.common.spi.LIRKindTool;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup.SpeculationContextObject;
-
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
@@ -288,8 +287,7 @@ public abstract class Stamp implements SpeculationContextObject {
      * {@link TriState#UNKNOWN}.
      */
     public TriState tryConstantFold(Condition condition, Constant x, Constant y, boolean unorderedIsTrue, ConstantReflectionProvider constantReflection) {
-        if (x instanceof PrimitiveConstant) {
-            PrimitiveConstant lp = (PrimitiveConstant) x;
+        if (x instanceof PrimitiveConstant lp) {
             PrimitiveConstant rp = (PrimitiveConstant) y;
             return TriState.get(condition.foldCondition(lp, rp, unorderedIsTrue));
         } else {

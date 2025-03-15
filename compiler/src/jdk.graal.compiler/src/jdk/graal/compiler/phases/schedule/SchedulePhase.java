@@ -54,6 +54,7 @@ import jdk.graal.compiler.graph.Graph.NodeEventListener;
 import jdk.graal.compiler.graph.Graph.NodeEventScope;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeBitMap;
+import jdk.graal.compiler.graph.NodeFlood;
 import jdk.graal.compiler.graph.NodeMap;
 import jdk.graal.compiler.graph.NodeStack;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
@@ -68,6 +69,7 @@ import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.GuardNode;
 import jdk.graal.compiler.nodes.IfNode;
+import jdk.graal.compiler.nodes.InvokeWithExceptionNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
 import jdk.graal.compiler.nodes.PhiNode;
@@ -85,13 +87,18 @@ import jdk.graal.compiler.nodes.cfg.ControlFlowGraph;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.cfg.HIRLoop;
 import jdk.graal.compiler.nodes.cfg.LocationSet;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.memory.FloatingReadNode;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.MultiMemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.ValueProxy;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
+import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.BasePhase;
 import jdk.graal.compiler.phases.tiers.LowTierContext;
@@ -390,9 +397,116 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
         }
 
         private static void checkLatestEarliestRelation(Node currentNode, HIRBlock earliestBlock, HIRBlock latestBlock, Node currentUsage) {
-            GraalError.guarantee(earliestBlock.dominates(latestBlock) || (currentNode instanceof FrameState && latestBlock == earliestBlock.getDominator()),
+            GraalError.guarantee(
+                            earliestBlock.dominates(latestBlock) || currentNode instanceof FrameState && latestBlock == earliestBlock.getDominator() ||
+                                            checkInvokeWithExceptionScalarizedReturn(currentNode, earliestBlock, latestBlock, currentUsage),
                             "%s earliest block %s (%s) does not dominate latest block %s (%s), added usage %s", currentNode, earliestBlock, earliestBlock.getBeginNode(), latestBlock,
                             latestBlock.getBeginNode(), currentUsage);
+        }
+
+        /**
+         * An {@link InvokeWithExceptionNode} represents the end of a block, therefore technically
+         * nothing can be scheduled after it in the same block. But in case it has a scalarized
+         * return value, multiple {@link ReadMultiValueNode} will be attached to it. Their results
+         * will be generated during {@link InvokeWithExceptionNode#generate(NodeLIRBuilderTool)}.The
+         * scheduler can therefore make an exception for this case. A valid graph has this cycle:
+         * InvokeWithExceptionNode -> Framestate -> ReadMultiValueNode -> InvokeWithExceptionNode.
+         */
+        private static boolean checkInvokeWithExceptionScalarizedReturn(Node currentNode, HIRBlock earliestBlock, HIRBlock latestBlock, Node currentUsage) {
+            if (!((currentNode instanceof ReadMultiValueNode && (currentUsage == null || currentUsage instanceof VirtualObjectState)) ||
+                            (currentNode instanceof VirtualObjectState && (currentUsage == null || currentUsage instanceof FrameState))))
+                return false;
+
+            if (latestBlock != earliestBlock.getDominator()) {
+                return false;
+            }
+
+            boolean cycleDetected = false;
+            InvokeWithExceptionNode seenInvokeWithException = null;
+            FrameState seenFrameState = null;
+            NodeFlood flood = currentNode.graph().createNodeFlood();
+            flood.add(currentNode);
+            for (Node n : flood) {
+                if (n instanceof ReadMultiValueNode readMultiValueNode) {
+                    // check if the multi read values point to an invoke with exception
+                    if (!(readMultiValueNode.getMultiValueNode() instanceof InvokeWithExceptionNode)) {
+                        return false;
+                    }
+                    flood.add(readMultiValueNode.getMultiValueNode());
+                } else if (n instanceof VirtualObjectState virtualObjectState) {
+
+                    // expect the object to be a virtual instance
+                    if (!(virtualObjectState.object() instanceof VirtualInstanceNode)) {
+                        return false;
+                    }
+
+                    // values should only be multi read values
+                    if (virtualObjectState.values().filter(node -> !(node instanceof ReadMultiValueNode)).count() > 0) {
+                        return false;
+                    }
+
+                    // in case we started from a ReadMultiValueNode, we should be able to detect the
+                    // cycle now
+                    cycleDetected |= virtualObjectState.values().stream().anyMatch(flood::isMarked);
+                    flood.addAll(virtualObjectState.values());
+                    cycleDetected |= flood.isMarked(virtualObjectState.getNonNull());
+                    flood.add(virtualObjectState.getNonNull());
+
+                } else if (n instanceof InvokeWithExceptionNode invokeWithExceptionNode) {
+                    if (seenInvokeWithException == null) {
+                        seenInvokeWithException = invokeWithExceptionNode;
+                    } else if (seenInvokeWithException != invokeWithExceptionNode) {
+                        // graph is broken
+                        return false;
+                    }
+
+                    if (invokeWithExceptionNode.stateAfter() == null) {
+                        return false;
+                    }
+                    flood.add(invokeWithExceptionNode.stateAfter());
+                } else if (n instanceof FrameState frameState) {
+                    if (seenFrameState == null) {
+                        seenFrameState = frameState;
+                    } else if (seenFrameState != frameState) {
+                        // graph is broken
+                        return false;
+                    }
+
+                    if (frameState.stackSize() < 1) {
+                        return false;
+                    }
+
+                    // get the top of the stack which should be a virtual object we should be able
+                    // to detect the cycle now
+                    int topOfStack;
+                    int stackSize = frameState.stackSize();
+                    if (frameState.stackAt(frameState.stackSize() - 1) == null) {
+                        topOfStack = stackSize - 2;
+                    } else {
+                        topOfStack = stackSize - 1;
+                    }
+                    ValueNode lastSlot = frameState.stackAt(topOfStack);
+
+                    if (!(lastSlot instanceof VirtualInstanceNode)) {
+                        return false;
+                    }
+
+                    // get the virtual object mapping associated to the virtual object
+                    List<EscapeObjectState> virtualObjectMappings = frameState.virtualObjectMappings();
+                    for (EscapeObjectState existingEscapeObjectState : virtualObjectMappings) {
+                        if (existingEscapeObjectState.object() == lastSlot) {
+                            // in case we started from a VirtualObjectState
+                            cycleDetected |= flood.isMarked(existingEscapeObjectState);
+                            flood.add(existingEscapeObjectState);
+                            break;
+                        }
+                    }
+                } else {
+                    return false;
+                }
+
+            }
+            return cycleDetected;
         }
 
         private static boolean verifySchedule(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodesMap, NodeMap<HIRBlock> nodeMap) {

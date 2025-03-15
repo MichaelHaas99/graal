@@ -36,6 +36,7 @@ public class HotSpotPlatformConfigurationProvider implements PlatformConfigurati
 
     private final boolean useLightweightLocking;
 
+
     public HotSpotPlatformConfigurationProvider(GraalHotSpotVMConfig config, BarrierSet barrierSet) {
         this.barrierSet = barrierSet;
         this.canVirtualizeLargeByteArrayAccess = config.deoptimizationSupportLargeAccessByteArrayVirtualization;
@@ -66,4 +67,5 @@ public class HotSpotPlatformConfigurationProvider implements PlatformConfigurati
     public BarrierSet getBarrierSet() {
         return barrierSet;
     }
+
 }

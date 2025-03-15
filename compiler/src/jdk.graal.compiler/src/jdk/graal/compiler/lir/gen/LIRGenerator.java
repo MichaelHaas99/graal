@@ -302,6 +302,22 @@ public abstract class LIRGenerator extends CoreProvidersDelegate implements LIRG
         return reg.asValue(valueKind);
     }
 
+    /**
+     * Gets the ABI specific operands used to return multiple values from a method.
+     *
+     * @param javaKinds the kinds of values being returned
+     * @param values the values being returned
+     * @return the operands representing the ABI defined locations used return multiple values
+     */
+    public AllocatableValue[] resultOperandsFor(JavaKind[] javaKinds, Value[] values) {
+        Register[] regs = getRegisterConfig().getReturnRegisters(javaKinds, false);
+        AllocatableValue[] result = new AllocatableValue[regs.length];
+        for (int i = 0; i < javaKinds.length; i++) {
+            result[i] = regs[i].asValue(values[i].getValueKind());
+        }
+        return result;
+    }
+
     NodeSourcePosition currentPosition;
 
     public void setSourcePosition(NodeSourcePosition position) {

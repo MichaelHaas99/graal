@@ -24,6 +24,8 @@
  */
 package jdk.graal.compiler.nodes.java;
 
+import java.util.List;
+
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
@@ -32,6 +34,7 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
+import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.BeginNode;
@@ -45,10 +48,13 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.AnchoringNode;
+import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
@@ -60,9 +66,15 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo
-public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
+public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable, Lowerable {
     public static final NodeClass<MethodCallTargetNode> TYPE = NodeClass.create(MethodCallTargetNode.class);
     protected JavaTypeProfile typeProfile;
+
+    @Input NodeInputList<ValueNode> scalarizedArguments = new NodeInputList<>(this);
+
+    public List<ValueNode> getScalarizedArguments() {
+        return scalarizedArguments;
+    }
 
     public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp, JavaTypeProfile typeProfile) {
         this(TYPE, invokeKind, targetMethod, arguments, returnStamp, typeProfile);
@@ -218,6 +230,11 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
     private boolean trySimplifyToSpecial(ResolvedJavaType contextType) {
         ResolvedJavaMethod specialCallTarget = findSpecialCallTarget(invokeKind, receiver(), targetMethod, contextType);
         if (specialCallTarget != null) {
+            /*
+             * e.g. Object.toString with a Long receiver will be converted to Long.toString()
+             * therefore we need to scalarize the boxed object
+             */
+            InlineTypeUtil.handleDevirtualizationOnCallTarget(this, this.targetMethod, specialCallTarget, false);
             this.setTargetMethod(specialCallTarget);
             setInvokeKind(InvokeKind.Special);
             return true;
@@ -321,6 +338,10 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                     arguments[0] = valueNode;
                     callTargetResult = new MethodCallTargetNode(invokeKind, singleImplementorMethod, arguments, callTarget.returnStamp, profile);
                 }
+
+                // after de-virtualization we maybe need to scalarize the receiver
+                InlineTypeUtil.handleDevirtualizationOnCallTarget(callTargetResult, targetMethod, singleImplementorMethod, false);
+
                 // Virtual calls can be further de-virtualized.
                 callTargetResult.trySimplifyToSpecial(contextType);
                 return callTargetResult;
@@ -352,5 +373,29 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
 
     public void setJavaTypeProfile(JavaTypeProfile profile) {
         this.typeProfile = profile;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        if (tool.getValhallaOptionsProvider().callingConventionEnabled()) {
+            replaceArguments();
+        }
+        assert scalarizedArguments.isEmpty() : "no scalarized arguments expected";
+
+    }
+
+    /**
+     * Replaces the non-scalarized arguments with the scalarized-arguments as it is expected by the
+     * Valhalla Calling Convention. If there are no scalarized-arguments e.g. Valhalla is disabled,
+     * the {@link #scalarizedArguments} will be empty.
+     */
+    public void replaceArguments() {
+        if (scalarizedArguments.isEmpty()) {
+            return;
+        }
+
+        arguments.clear();
+        arguments.addAll(scalarizedArguments);
+        scalarizedArguments.clear();
     }
 }

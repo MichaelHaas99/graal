@@ -55,6 +55,7 @@ import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
+import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
@@ -165,6 +166,19 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
+
+
+            ObjectState obj = getObjectState(state, unproxiedObject);
+            if (obj != null) {
+                assert !obj.isVirtual() : object;
+
+                assert StampTool.isPointerNonNull(object) : "null-check should be done before PEA";
+                if (StampTool.isInlineType(object.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+                    FixedWithNextNode replacement = new FixedValueAnchorNode(cachedValue);
+                    effects.addFixedNodeBefore(replacement, load);
+                    cachedValue = replacement;
+                }
+            }
             // perform the read elimination
             effects.replaceAtUsages(load, cachedValue, load);
             addScalarAlias(load, cachedValue);
@@ -288,7 +302,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (load.index().isConstant()) {
             int index = ((JavaConstant) load.index().asConstant()).asInt();
             JavaKind elementKind = load.elementKind();
-            LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(elementKind);
+            // ensure correct location identity for flat arrays
+            LocationIdentity arrayLocation = load.getLocationIdentity();
             return processLoad(load, load.array(), arrayLocation, index, elementKind, state, effects);
         }
         return false;
@@ -364,7 +379,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         }
     }
-
     @Override
     protected PEReadEliminationBlockState cloneState(PEReadEliminationBlockState other) {
         return new PEReadEliminationBlockState(other);

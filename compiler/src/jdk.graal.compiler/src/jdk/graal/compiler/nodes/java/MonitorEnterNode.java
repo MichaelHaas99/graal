@@ -32,6 +32,9 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.FixedGuardNode;
+import jdk.graal.compiler.nodes.LogicConstantNode;
+import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.MonitorEnter;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
@@ -39,6 +42,8 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
@@ -66,12 +71,16 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
         if (!tool.getPlatformConfigurationProvider().areLocksSideEffectFree()) {
             return;
         }
+
         ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualObjectNode virtual = (VirtualObjectNode) alias;
+        if (alias instanceof VirtualObjectNode virtual) {
             if (virtual.hasIdentity()) {
                 tool.addLock(virtual, getMonitorId());
                 tool.delete();
+            } else {
+                LogicNode node = LogicConstantNode.forBoolean(false, graph());
+                ValueNode deopt = new FixedGuardNode(node, DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile);
+                tool.replaceWith(deopt);
             }
         }
     }

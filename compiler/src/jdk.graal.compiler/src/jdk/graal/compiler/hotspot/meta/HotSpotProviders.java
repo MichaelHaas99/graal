@@ -51,6 +51,7 @@ public class HotSpotProviders extends Providers {
     private SuitesProvider suites;
     private final HotSpotRegistersProvider registers;
     private final GraalHotSpotVMConfig config;
+    private final HotspotValhallaOptionsProvider valhallaOptionsProvider;
 
     public HotSpotProviders(MetaAccessProvider metaAccess,
                     HotSpotCodeCacheProvider codeCache,
@@ -68,12 +69,13 @@ public class HotSpotProviders extends Providers {
                     MetaAccessExtensionProvider metaAccessExtensionProvider,
                     LoopsDataProvider loopsDataProvider,
                     GraalHotSpotVMConfig config,
-                    IdentityHashCodeProvider identityHashCodeProvider) {
+                    IdentityHashCodeProvider identityHashCodeProvider, HotspotValhallaOptionsProvider valhallaOptionsProvider) {
         super(metaAccess, codeCache, constantReflection, constantField, foreignCalls, lowerer, replacements, stampProvider, platformConfigurationProvider, metaAccessExtensionProvider,
                         snippetReflection, wordTypes, loopsDataProvider, identityHashCodeProvider);
         this.suites = suites;
         this.registers = registers;
         this.config = config;
+        this.valhallaOptionsProvider = valhallaOptionsProvider;
     }
 
     @Override
@@ -103,6 +105,11 @@ public class HotSpotProviders extends Providers {
         return (HotSpotWordTypes) super.getWordTypes();
     }
 
+    @Override
+    public HotspotValhallaOptionsProvider getValhallaOptionsProvider() {
+        return valhallaOptionsProvider;
+    }
+
     public GraalHotSpotVMConfig getConfig() {
         return config;
     }
@@ -117,7 +124,7 @@ public class HotSpotProviders extends Providers {
         return new HotSpotProviders(getMetaAccess(), getCodeCache(), substitution, getConstantFieldProvider(), getForeignCalls(), getLowerer(), getReplacements(), getSuites(),
                         getRegisters(), getSnippetReflection(), getWordTypes(), getStampProvider(), getPlatformConfigurationProvider(), getMetaAccessExtensionProvider(),
                         getLoopsDataProvider(),
-                        config, getIdentityHashCodeProvider());
+                        config, getIdentityHashCodeProvider(), getValhallaOptionsProvider());
     }
 
     @Override
@@ -126,7 +133,7 @@ public class HotSpotProviders extends Providers {
                         getSuites(),
                         getRegisters(), getSnippetReflection(), getWordTypes(), getStampProvider(), getPlatformConfigurationProvider(), getMetaAccessExtensionProvider(),
                         getLoopsDataProvider(),
-                        config, getIdentityHashCodeProvider());
+                        config, getIdentityHashCodeProvider(), getValhallaOptionsProvider());
     }
 
     @Override
@@ -134,14 +141,14 @@ public class HotSpotProviders extends Providers {
         return new HotSpotProviders(getMetaAccess(), getCodeCache(), getConstantReflection(), getConstantFieldProvider(), getForeignCalls(), getLowerer(), substitution,
                         getSuites(), getRegisters(), getSnippetReflection(), getWordTypes(), getStampProvider(), getPlatformConfigurationProvider(),
                         getMetaAccessExtensionProvider(),
-                        getLoopsDataProvider(), config, getIdentityHashCodeProvider());
+                        getLoopsDataProvider(), config, getIdentityHashCodeProvider(), getValhallaOptionsProvider());
     }
 
     public HotSpotProviders copyWith() {
         return new HotSpotProviders(getMetaAccess(), getCodeCache(), getConstantReflection(), getConstantFieldProvider(), getForeignCalls(), getLowerer(), getReplacements(),
                         getSuites(), getRegisters(), getSnippetReflection(), getWordTypes(), getStampProvider(), getPlatformConfigurationProvider(), getMetaAccessExtensionProvider(),
                         getLoopsDataProvider(),
-                        config, getIdentityHashCodeProvider());
+                        config, getIdentityHashCodeProvider(), getValhallaOptionsProvider());
     }
 
     public void setSuites(HotSpotSuitesProvider suites) {

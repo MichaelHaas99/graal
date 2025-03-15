@@ -5122,6 +5122,13 @@ public class AMD64Assembler extends AMD64BaseAssembler implements MemoryReadInte
         AMD64RMOp.MOVSXB.emit(this, OperandSize.DWORD, dst, src);
     }
 
+    public final void movq(AMD64Address dst, int imm32) {
+        prefixq(dst);
+        emitByte(0xC7);
+        emitOperandHelper(AMD64.rax, dst, 4);
+        emitInt(imm32);
+    }
+
     public final void movsbq(Register dst, AMD64Address src) {
         AMD64RMOp.MOVSXB.emit(this, OperandSize.QWORD, dst, src);
     }

@@ -49,6 +49,7 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.meta.Constant;
@@ -125,7 +126,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
 
     public abstract static class CompareOp {
         public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, CanonicalCondition condition,
-                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
+                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view, ValhallaOptionsProvider valhallaOptionsProvider) {
             LogicNode constantCondition = tryConstantFold(condition, forX, forY, constantReflection, unorderedIsTrue);
             if (constantCondition != null) {
                 return constantCondition;
@@ -182,6 +183,11 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                 }
             }
             return null;
+        }
+
+        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, CanonicalCondition condition,
+                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
+            return canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view, null);
         }
 
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,

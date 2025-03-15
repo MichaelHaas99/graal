@@ -37,19 +37,26 @@ import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.ProfileData;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.BoxNode;
+import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.GetClassNode;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
+import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
@@ -58,14 +65,35 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(shortName = "==")
-public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable {
+public final class ObjectEqualsNode extends PointerEqualsNode implements Virtualizable, Lowerable {
 
     public static final NodeClass<ObjectEqualsNode> TYPE = NodeClass.create(ObjectEqualsNode.class);
     private static final ObjectEqualsOp OP = new ObjectEqualsOp();
 
+    private boolean substitutabilityCheck;
+
+    public boolean substitutabilityCheck() {
+        return substitutabilityCheck;
+    }
+
+    public void reevaluateSubstituabilityCheck(ValhallaOptionsProvider valhallaOptionsProvider) {
+        substitutabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, valhallaOptionsProvider);
+    }
+
+    private ACmpDataAccessor profile;
+
+    public ACmpDataAccessor getProfile() {
+        return profile;
+    }
+
+    public void setProfile(ACmpDataAccessor profile) {
+        this.profile = profile;
+    }
+
     public ObjectEqualsNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
         assert x.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp && y.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp : Assertions.errorMessageContext("x", x, "y", y);
+        substitutabilityCheck = InlineTypeUtil.needsSubstitutabilityCheck(x, y, null);
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {
@@ -91,9 +119,36 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        // set the substitutability check to false in case valhalla is disabled
+        reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+
+        ValueNode updatedX = null;
+        if (forX instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode && !StampTool.canBeInlineType(xAnchorNode, tool.getValhallaOptionsProvider())) {
+            updatedX = xAnchorNode.object();
+        }
+
+        ValueNode updatedY = null;
+        if (forY instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode && !StampTool.canBeInlineType(yAnchorNode, tool.getValhallaOptionsProvider())) {
+            updatedY = yAnchorNode.object();
+        }
+
+        if (updatedX != null || updatedY != null) {
+            LogicNode replacement = create(tool.getConstantReflection(), tool.getMetaAccess(),
+                            tool.getOptions(), updatedX == null ? forX : updatedX, updatedY == null ? forY : updatedY, NodeView.DEFAULT);
+            if (replacement instanceof ObjectEqualsNode objectEqualsNode) {
+                objectEqualsNode.reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+            }
+            return replacement;
+        }
+
         NodeView view = NodeView.from(tool);
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, forX, forY, view);
+
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, forX, forY, view,
+                        tool.getValhallaOptionsProvider());
         if (value != null) {
+            if (value instanceof ObjectEqualsNode objectEqualsNode) {
+                objectEqualsNode.reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
+            }
             return value;
         }
         return this;
@@ -105,8 +160,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
             ResolvedJavaType type = constantReflection.asJavaType(constant);
-            if (type != null && nonConstant instanceof GetClassNode) {
-                GetClassNode getClassNode = (GetClassNode) nonConstant;
+            if (type != null && nonConstant instanceof GetClassNode getClassNode) {
                 ValueNode object = getClassNode.getObject();
                 assert ((ObjectStamp) object.stamp(view)).nonNull() : "getClassNode %s object %s should have a non-null stamp, got: %s".formatted(getClassNode, object, object.stamp(view));
                 if (!type.isPrimitive() && (type.isConcrete() || type.isArray())) {
@@ -135,8 +189,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     }
 
     private static LogicNode virtualizeNonVirtualComparison(VirtualObjectNode virtual, ValueNode other, StructuredGraph graph, VirtualizerTool tool) {
-        if (virtual instanceof VirtualBoxingNode && other.isConstant()) {
-            VirtualBoxingNode virtualBoxingNode = (VirtualBoxingNode) virtual;
+        if (virtual instanceof VirtualBoxingNode virtualBoxingNode && other.isConstant()) {
             if (virtualBoxingNode.getBoxingKind() == JavaKind.Boolean) {
                 JavaConstant otherUnboxed = tool.getConstantReflection().unboxPrimitive(other.asJavaConstant());
                 if (otherUnboxed != null && otherUnboxed.getJavaKind() == JavaKind.Boolean) {
@@ -146,11 +199,24 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                     return LogicConstantNode.contradiction(graph);
                 }
             }
+
         }
-        if (virtual.hasIdentity()) {
-            // one of them is virtual: they can never be the same objects
-            return LogicConstantNode.contradiction(graph);
+
+        if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant())) {
+            // virtual has identity or other is constant null, they can only be equal if they are
+            // both null
+            if (StampTool.isPointerNonNull(virtual)) {
+                // virtual is non-null they can never be the same objects
+                return LogicConstantNode.contradiction(graph);
+            } else {
+                assert !virtual.hasIdentity() : "only inline objects can be virtual and nullable, they have no identity";
+                // virtual is nullable, only equal if virtual is also null
+                LogicNode result = new IntegerEqualsNode(tool.getNonNull(virtual), ConstantNode.forInt(0));
+                tool.addNode(result);
+                return result;
+            }
         }
+
         return null;
     }
 
@@ -179,13 +245,113 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                 ResolvedJavaType type = xVirtual.type();
                 if (type.equals(yVirtual.type())) {
                     MetaAccessProvider metaAccess = tool.getMetaAccess();
+
+                    // node indicating the result of field comparison
+                    LogicNode fieldComparison = LogicConstantNode.tautology(graph);
+
+                    // node indicating the result of nonNull comparison
+                    LogicNode nonNullComparison = LogicConstantNode.tautology();
+
+                    // make sure nullable scalarized inline objects are handled correctly
+                    ValueNode xNonNull = tool.getNonNull(xVirtual);
+                    ValueNode yNonNull = tool.getNonNull(yVirtual);
+
+                    LogicNode orWithFieldComparison = LogicConstantNode.contradiction();
+                    if (!StampTool.isPointerNonNull(xVirtual) && !StampTool.isPointerNonNull(yVirtual)) {
+                        assert xNonNull != null && yNonNull != null : "nullable scalarized object expected non-null information to be set";
+                        nonNullComparison = new IntegerEqualsNode(xNonNull, yNonNull);
+
+                        // need to make field comparison true, in case both are null
+                        orWithFieldComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(0));
+                    } else if (StampTool.isPointerNonNull(xVirtual) && StampTool.isPointerNonNull(yVirtual)) {
+                        // nothing to do both are non-null
+                    } else if (!StampTool.isPointerNonNull(xVirtual)) {
+                        // x may be null, y is not therefore x needs to be non-null
+                        assert xNonNull != null : "nullable scalarized object expected non-null information to be set";
+                        nonNullComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(1));
+                    } else {
+                        // y may be null, x is not therefore y needs to be non-null
+                        assert yNonNull != null : "nullable scalarized object expected non-null information to be set";
+                        nonNullComparison = new IntegerEqualsNode(yNonNull, ConstantNode.forInt(1));
+                    }
+
                     if (type.equals(metaAccess.lookupJavaType(Integer.class)) || type.equals(metaAccess.lookupJavaType(Long.class))) {
                         // both are virtual without identity: check contents
                         assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1 : Assertions.errorMessageContext("x", xVirtual, "y", yVirtual);
                         assert xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0).getStackKind() == JavaKind.Int ||
                                         xVirtual.entryKind(tool.getMetaAccessExtensionProvider(), 0) == JavaKind.Long : Assertions.errorMessage(x, y, xVirtual);
-                        return new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
+                        fieldComparison = LogicNode.andWithoutGraphAdd(fieldComparison, new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0)),
+                                        ProfileData.BranchProbabilityData.unknown());
+
+                    } else {
+                        boolean comparisonResultUnknown = false;
+
+                        for (int i = 0; i < xVirtual.entryCount(); i++) {
+                            ValueNode xFieldNode = tool.getEntry(xVirtual, i);
+                            ValueNode yFieldNode = tool.getEntry(yVirtual, i);
+
+                            // if fields reference the same node they are equal
+                            if (xFieldNode.equals(yFieldNode))
+                                continue;
+
+                            LogicNode result = null;
+                            if (xFieldNode instanceof VirtualObjectNode || yFieldNode instanceof VirtualObjectNode) {
+                                // one field is virtual do a recursive call
+                                result = virtualizeComparison(xFieldNode, yFieldNode, graph, tool);
+                            } else {
+                                // both fields are non-virtual
+                                if (xFieldNode.stamp(NodeView.DEFAULT).isIntegerStamp()) {
+                                    result = IntegerEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
+                                                    tool.getOptions(), null, xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                } else if (xFieldNode.stamp(NodeView.DEFAULT).isObjectStamp()) {
+// ForeignCallNode logx = new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph), xFieldNode,
+// ConstantNode.forBoolean(true,
+// graph));
+// ForeignCallNode logy = new ForeignCallNode(LOG_PRIMITIVE,
+// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph), yFieldNode,
+// ConstantNode.forBoolean(true,
+// graph));
+// ForeignCallNode logx = new ForeignCallNode(LOG_OBJECT, xFieldNode, ConstantNode.forBoolean(true,
+// graph), ConstantNode.forBoolean(true, graph));
+// ForeignCallNode logy = new ForeignCallNode(LOG_OBJECT, yFieldNode, ConstantNode.forBoolean(true,
+// graph), ConstantNode.forBoolean(true, graph));
+// tool.addNode(logx);
+// tool.addNode(logy);
+                                    result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
+                                                    tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                    // result = LogicConstantNode.tautology();
+                                } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
+                                    ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,
+                                                    tool.getConstantReflection());
+                                    ValueNode constantZero = ConstantNode.forConstant(JavaConstant.INT_0, tool.getMetaAccess(), graph);
+                                    result = IntegerEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
+                                                    tool.getOptions(), null, normalizeNode, constantZero, NodeView.DEFAULT);
+                                }
+
+                            }
+
+
+                            if (result == null) {
+                                // field comparison result not known at compile time, but continue
+                                // searching for contradiction
+                                comparisonResultUnknown = true;
+                                continue;
+                            }
+
+                            if (result.isContradiction())
+                                return result;
+
+                            fieldComparison = LogicNode.andWithoutGraphAdd(fieldComparison, result,
+                                            ProfileData.BranchProbabilityData.unknown());
+                        }
+
+                        if (comparisonResultUnknown)
+                            return null;
+
                     }
+                    return LogicNode.andWithoutGraphAdd(nonNullComparison, LogicNode.orWithoutGraphAdd(orWithFieldComparison, fieldComparison, ProfileData.BranchProbabilityData.unknown()),
+                                    ProfileData.BranchProbabilityData.unknown());
                 }
             } else {
                 // both are virtual with identity: check if they refer to the same object
@@ -197,10 +363,54 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode node = virtualizeComparison(getX(), getY(), graph(), tool);
-        if (node == null) {
-            return;
+        ValueNode x = getX();
+        ValueNode y = getY();
+
+        if (getX() instanceof FixedInlineTypeEqualityAnchorNode xAnchorNode) {
+            x = xAnchorNode.object();
         }
+
+        if (getY() instanceof FixedInlineTypeEqualityAnchorNode yAnchorNode) {
+            y = yAnchorNode.object();
+        }
+
+        ValueNode node = virtualizeComparison(x, y, graph(), tool);
+        if (node == null) {
+
+            /*
+             * comparison can't be done at compile time, make sure that inputs stay wrapped with an
+             * anchor node
+             *
+             * TODO: maybe not necessary and can be optimized away
+             *
+             */
+
+            ValueNode xAlias = tool.getAlias(x);
+            ValueNode yAlias = tool.getAlias(y);
+            if (xAlias instanceof VirtualObjectNode xNode)
+                if (!tool.ensureMaterialized(xNode))
+                    return;
+            if (yAlias instanceof VirtualObjectNode yNode)
+                if (!tool.ensureMaterialized(yNode))
+                    return;
+            xAlias = tool.getAlias(x);
+            yAlias = tool.getAlias(y);
+
+            if (getX() instanceof FixedInlineTypeEqualityAnchorNode) {
+                ValueNode xAnchor = new FixedInlineTypeEqualityAnchorNode(xAlias);
+                tool.ensureAdded(xAnchor);
+                tool.replaceFirstInput(getX(), xAnchor);
+            }
+
+            if (getY() instanceof FixedInlineTypeEqualityAnchorNode) {
+                ValueNode yAnchor = new FixedInlineTypeEqualityAnchorNode(yAlias);
+                tool.ensureAdded(yAnchor);
+                tool.replaceFirstInput(getY(), yAnchor);
+            }
+            return;
+
+        }
+
         tool.ensureAdded(node);
         tool.replaceWithValue(node);
     }

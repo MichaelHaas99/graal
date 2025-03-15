@@ -56,15 +56,18 @@ final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp implemen
 
     public static final LIRInstructionClass<AMD64HotSpotReturnOp> TYPE = LIRInstructionClass.create(AMD64HotSpotReturnOp.class);
     @Use({REG, ILLEGAL}) protected Value value;
+    @Use({REG, ILLEGAL}) protected Value[] scalarizedValues;
     private final boolean isStub;
     private final Register thread;
     private final Register scratchForSafepointOnReturn;
     private final GraalHotSpotVMConfig config;
     private final boolean requiresReservedStackAccessCheck;
 
-    AMD64HotSpotReturnOp(Value value, boolean isStub, Register thread, Register scratchForSafepointOnReturn, GraalHotSpotVMConfig config, boolean requiresReservedStackAccessCheck) {
+    AMD64HotSpotReturnOp(Value value, Value[] additionalValues, boolean isStub, Register thread, Register scratchForSafepointOnReturn, GraalHotSpotVMConfig config,
+                    boolean requiresReservedStackAccessCheck) {
         super(TYPE);
         this.value = value;
+        this.scalarizedValues = additionalValues;
         this.isStub = isStub;
         this.thread = thread;
         this.scratchForSafepointOnReturn = scratchForSafepointOnReturn;

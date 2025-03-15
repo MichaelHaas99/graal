@@ -28,6 +28,7 @@ import jdk.graal.compiler.api.replacements.SnippetReflectionProvider;
 import jdk.graal.compiler.core.common.spi.ConstantFieldProvider;
 import jdk.graal.compiler.core.common.spi.ForeignCallsProvider;
 import jdk.graal.compiler.core.common.spi.MetaAccessExtensionProvider;
+import jdk.graal.compiler.hotspot.meta.HotspotValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.IdentityHashCodeProvider;
 import jdk.graal.compiler.nodes.spi.LoopsDataProvider;
@@ -35,6 +36,7 @@ import jdk.graal.compiler.nodes.spi.LoweringProvider;
 import jdk.graal.compiler.nodes.spi.PlatformConfigurationProvider;
 import jdk.graal.compiler.nodes.spi.Replacements;
 import jdk.graal.compiler.nodes.spi.StampProvider;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.word.WordTypes;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -59,6 +61,7 @@ public class Providers implements CoreProviders {
     protected final SnippetReflectionProvider snippetReflection;
     protected final WordTypes wordTypes;
     protected final IdentityHashCodeProvider identityHashCodeProvider;
+
 
     public Providers(MetaAccessProvider metaAccess, CodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
                     ForeignCallsProvider foreignCalls, LoweringProvider lowerer, Replacements replacements, StampProvider stampProvider, PlatformConfigurationProvider platformConfigurationProvider,
@@ -154,6 +157,12 @@ public class Providers implements CoreProviders {
     @Override
     public WordTypes getWordTypes() {
         return wordTypes;
+    }
+
+    @Override
+    public ValhallaOptionsProvider getValhallaOptionsProvider() {
+        // to avoid problems with other providers being a subclass using the Providers constructor
+        return new HotspotValhallaOptionsProvider();
     }
 
     public Providers copyWith(ConstantReflectionProvider substitution) {

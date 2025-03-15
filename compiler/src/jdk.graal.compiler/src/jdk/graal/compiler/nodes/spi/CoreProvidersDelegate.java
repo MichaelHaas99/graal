@@ -114,4 +114,9 @@ public class CoreProvidersDelegate implements CoreProviders {
     public IdentityHashCodeProvider getIdentityHashCodeProvider() {
         return providers.getIdentityHashCodeProvider();
     }
+
+    @Override
+    public ValhallaOptionsProvider getValhallaOptionsProvider() {
+        return providers.getValhallaOptionsProvider();
+    }
 }

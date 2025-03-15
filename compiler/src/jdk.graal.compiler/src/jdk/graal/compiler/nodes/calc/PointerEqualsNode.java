@@ -45,6 +45,7 @@ import jdk.graal.compiler.nodes.extended.LoadMethodNode;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
@@ -129,8 +130,11 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
          *
          * @return {@code true} if this is an equality test that will always fail
          */
-        private static boolean isAlwaysFailingEqualityTest(CanonicalCondition condition, ValueNode originalX, ValueNode originalY) {
+        private static boolean isAlwaysFailingEqualityTest(CanonicalCondition condition, ValueNode originalX, ValueNode originalY, ValhallaOptionsProvider valhallaOptionsProvider) {
             if (condition != CanonicalCondition.EQ) {
+                return false;
+            }
+            if (StampTool.canBeInlineType(originalX, valhallaOptionsProvider) && StampTool.canBeInlineType(originalY.stamp(NodeView.DEFAULT), valhallaOptionsProvider)) {
                 return false;
             }
             ValueNode forX = GraphUtil.unproxify(originalX);
@@ -163,7 +167,7 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
         @Override
         public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         CanonicalCondition condition,
-                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
+                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view, ValhallaOptionsProvider valhallaOptionsProvider) {
             LogicNode result = findSynonym(forX, forY, view);
             if (result != null) {
                 return result;
@@ -171,10 +175,10 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
             if (isAlwaysFailingVirtualDispatchTest(condition, forX, forY)) {
                 return LogicConstantNode.contradiction();
             }
-            if (isAlwaysFailingEqualityTest(condition, forX, forY)) {
+            if (isAlwaysFailingEqualityTest(condition, forX, forY, valhallaOptionsProvider)) {
                 return LogicConstantNode.contradiction();
             }
-            return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);
+            return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view, valhallaOptionsProvider);
         }
 
         @Override
@@ -186,7 +190,7 @@ public class PointerEqualsNode extends CompareNode implements Canonicalizable.Bi
     public static LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return LogicConstantNode.tautology();
-        } else if (forX.stamp(view).alwaysDistinct(forY.stamp(view))) {
+        } else if (forX.stamp(view).alwaysDistinct(forY.stamp(view))) { // done if one is null
             return LogicConstantNode.contradiction();
         } else if (forX.stamp(view) instanceof AbstractPointerStamp && ((AbstractPointerStamp) forX.stamp(view)).alwaysNull()) {
             return nullSynonym(forY, forX);

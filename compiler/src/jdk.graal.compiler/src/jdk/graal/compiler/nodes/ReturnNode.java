@@ -29,15 +29,14 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_4;
 
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.memory.MemoryMapNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
-import jdk.graal.compiler.nodes.memory.MemoryMapNode;
-
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo(cycles = CYCLES_2, size = SIZE_4, cyclesRationale = "Restore frame + ret", sizeRationale = "Restore frame + ret")
-public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLowerable {
+public class ReturnNode extends MemoryMapControlSinkNode implements LIRLowerable {
 
     public static final NodeClass<ReturnNode> TYPE = NodeClass.create(ReturnNode.class);
     @OptionalInput ValueNode result;
@@ -52,6 +51,11 @@ public final class ReturnNode extends MemoryMapControlSinkNode implements LIRLow
 
     public ReturnNode(ValueNode result, MemoryMapNode memoryMap) {
         super(TYPE, memoryMap);
+        this.result = result;
+    }
+
+    protected ReturnNode(NodeClass<? extends ReturnNode> c, ValueNode result) {
+        super(c);
         this.result = result;
     }
 

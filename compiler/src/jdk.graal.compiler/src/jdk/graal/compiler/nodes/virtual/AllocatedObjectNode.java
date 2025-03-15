@@ -28,17 +28,16 @@ import static jdk.graal.compiler.nodeinfo.InputType.Extension;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_0;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.graal.compiler.core.common.type.StampFactory;
-import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.spi.ArrayLengthProvider;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 
 /**
  * Selects one object from a {@link CommitAllocationNode}. The object is identified by its
@@ -52,7 +51,9 @@ public final class AllocatedObjectNode extends FloatingNode implements Virtualiz
     @Input(Extension) CommitAllocationNode commit;
 
     public AllocatedObjectNode(VirtualObjectNode virtualObject) {
-        super(TYPE, StampFactory.objectNonNull(TypeReference.createExactTrusted(virtualObject.type())));
+        // virtual object can also be null due to nullable scalarized inline objects, therefore
+        // just reuse the stamp
+        super(TYPE, virtualObject.stamp(NodeView.DEFAULT));
         this.virtualObject = virtualObject;
     }
 

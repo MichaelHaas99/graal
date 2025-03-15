@@ -29,6 +29,8 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 
 import java.util.List;
 
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.SuppressFBWarnings;
 import jdk.graal.compiler.core.common.type.AbstractPointerStamp;
 import jdk.graal.compiler.core.common.type.FloatStamp;
@@ -57,6 +59,8 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.phases.common.ConditionalEliminationPhase;
+import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState;
+import jdk.graal.compiler.virtual.phases.ea.PartialEscapeClosure;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -230,6 +234,26 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
         return piStamp.improveWith(object().stamp(NodeView.DEFAULT));
     }
 
+    /**
+     * We need to stop unproxification at the {@code PiNode} in case it represents a new virtual
+     * object during PEA. This happens if it represents a safe transition from nullable to a
+     * non-null stamp. It follows that in case the new virtual object materializes at some point,
+     * the materialization is associated to the pi node, not to the unproxified node. This means
+     * that if we would unproxify completely, the method
+     * {@link PEReadEliminationBlockState#getReadCache(ValueNode, LocationIdentity, int, JavaKind, PartialEscapeClosure)}.triggers
+     * an assertion error, because the state of the unproxified node is still virtual.
+     */
+    @Override
+    public boolean stopUnproxify() {
+        if (stopPEAUnproxify) {
+            return !graph().getGraphState().isAfterStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE);
+        }
+        return ValueProxy.super.stopUnproxify();
+
+    }
+
+    private boolean stopPEAUnproxify = false;
+
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
@@ -237,6 +261,12 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
             VirtualObjectNode virtual = (VirtualObjectNode) alias;
             ResolvedJavaType type = StampTool.typeOrNull(this, tool.getMetaAccess());
             if (type != null && type.isAssignableFrom(virtual.type())) {
+                if (!StampTool.isPointerNonNull(alias) && StampTool.isPointerNonNull(this)) {
+                    // Pi narrows the type to non-null, therefore change the virtual object to
+                    // non-null
+                    virtual = tool.copyVirtualObjectNonNull(virtual);
+                    stopPEAUnproxify = true;
+                }
                 tool.replaceWithVirtual(virtual);
             } else {
                 tool.getDebug().log(DebugContext.INFO_LEVEL, "could not virtualize Pi because of type mismatch: %s %s vs %s", this, type, virtual.type());

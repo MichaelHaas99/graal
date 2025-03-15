@@ -82,11 +82,16 @@ import static jdk.graal.compiler.hotspot.replacements.Log.LOG_PRIMITIVE;
 import static jdk.graal.compiler.hotspot.replacements.Log.LOG_PRINTF;
 import static jdk.graal.compiler.hotspot.replacements.MonitorSnippets.MONITORENTER;
 import static jdk.graal.compiler.hotspot.replacements.MonitorSnippets.MONITOREXIT;
+import static jdk.graal.compiler.hotspot.replacements.ObjectEqualsSnippets.SUBSTITUTABILITY_CHECK;
 import static jdk.graal.compiler.hotspot.stubs.ExceptionHandlerStub.EXCEPTION_HANDLER_FOR_PC;
 import static jdk.graal.compiler.hotspot.stubs.LookUpSecondarySupersTableStub.LOOKUP_SECONDARY_SUPERS_TABLE_SLOW_PATH;
 import static jdk.graal.compiler.hotspot.stubs.StubUtil.VM_MESSAGE_C;
 import static jdk.graal.compiler.hotspot.stubs.UnwindExceptionToCallerStub.EXCEPTION_HANDLER_FOR_RETURN_ADDRESS;
 import static jdk.graal.compiler.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
+import static jdk.graal.compiler.replacements.IdentityHashCodeSnippets.VALUE_OBJECT_HASH_CODE;
+import static jdk.graal.compiler.replacements.InlineTypePlugin.LOAD_UNKNOWN_INLINE;
+import static jdk.graal.compiler.replacements.InlineTypePlugin.STORE_UNKNOWN_INLINE;
+import static jdk.graal.compiler.replacements.MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF;
 import static jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates.findMethod;
 import static jdk.graal.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation.POW;
 import static jdk.graal.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
@@ -119,6 +124,7 @@ import jdk.graal.compiler.hotspot.stubs.ClassCastExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.CreateExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.DivisionByZeroExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.ExceptionHandlerStub;
+import jdk.graal.compiler.hotspot.stubs.IdentityExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.IllegalArgumentExceptionArgumentIsNotAnArrayStub;
 import jdk.graal.compiler.hotspot.stubs.IntegerExactOverflowExceptionStub;
 import jdk.graal.compiler.hotspot.stubs.IntrinsicStubsGen;
@@ -140,9 +146,9 @@ import jdk.graal.compiler.replacements.arraycopy.ArrayCopyForeignCalls;
 import jdk.graal.compiler.replacements.nodes.AESNode;
 import jdk.graal.compiler.replacements.nodes.ArrayCompareToForeignCalls;
 import jdk.graal.compiler.replacements.nodes.ArrayCopyWithConversionsForeignCalls;
-import jdk.graal.compiler.replacements.nodes.ArrayFillNode;
 import jdk.graal.compiler.replacements.nodes.ArrayEqualsForeignCalls;
 import jdk.graal.compiler.replacements.nodes.ArrayEqualsWithMaskForeignCalls;
+import jdk.graal.compiler.replacements.nodes.ArrayFillNode;
 import jdk.graal.compiler.replacements.nodes.ArrayIndexOfForeignCalls;
 import jdk.graal.compiler.replacements.nodes.ArrayRegionCompareToForeignCalls;
 import jdk.graal.compiler.replacements.nodes.BigIntegerMulAddNode;
@@ -538,6 +544,8 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         link(new IllegalArgumentExceptionArgumentIsNotAnArrayStub(options, providers,
                         registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY),
                                         SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
+        link(new IdentityExceptionStub(options, providers,
+                        registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.IDENTITY), SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
 
         link(new LookUpSecondarySupersTableStub(options, providers,
                         registerStubCall(LOOKUP_SECONDARY_SUPERS_TABLE_SLOW_PATH, DESTROYS_ALL_CALLER_SAVE_REGISTERS)));
@@ -546,6 +554,11 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         linkForeignCall(options, providers, createDescriptor(REGISTER_FINALIZER, SAFEPOINT, HAS_SIDE_EFFECT, any()), c.registerFinalizerAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, MONITORENTER, c.monitorenterAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, MONITOREXIT, c.monitorexitAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, SUBSTITUTABILITY_CHECK, c.substitutabilityCheckAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, VALUE_OBJECT_HASH_CODE, c.valueObjectHashCodeAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, LOAD_UNKNOWN_INLINE, c.loadUnknownInlineAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, STORE_UNKNOWN_INLINE, c.storeUnknownInlineAddress, PREPEND_THREAD);
+        linkForeignCall(options, providers, STORE_INLINE_TYPE_FIELDS_TO_BUF, c.storeInlineTypeFieldsToBuf, PREPEND_THREAD);
         registerForeignCall(NOTIFY, c.notifyAddress, NativeCall);
         registerForeignCall(NOTIFY_ALL, c.notifyAllAddress, NativeCall);
 

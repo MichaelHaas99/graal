@@ -25,17 +25,25 @@
 package jdk.graal.compiler.replacements;
 
 import static jdk.graal.compiler.core.common.GraalOptions.MaximumRecursiveInlining;
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
+import static jdk.graal.compiler.nodes.memory.MemoryKill.NO_LOCATION;
 
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampPair;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.NodeInputList;
+import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.CallTargetNode;
 import jdk.graal.compiler.nodes.CallTargetNode.InvokeKind;
+import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.Invokable;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.InvokeNode;
+import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
+import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
@@ -100,6 +108,9 @@ public class MethodHandlePlugin implements NodePlugin {
                     b.add(methodHandleNode.asNode());
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
+                    if (b.getValhallaOptionsProvider().returnConventionEnabled() && invokeReturnStamp.getTrustedStamp().isObjectStamp()) {
+                        appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
+                    }
                 }
             } else {
                 ResolvedMethodHandleCallTargetNode callTarget = (ResolvedMethodHandleCallTargetNode) invoke.callTarget();
@@ -127,15 +138,27 @@ public class MethodHandlePlugin implements NodePlugin {
                     return false;
                 }
 
-                Invokable newInvokable = b.handleReplacedInvoke(invoke.getInvokeKind(), targetMethod, argumentsList.toArray(new ValueNode[argumentsList.size()]), inlineEverything);
+
+                // also make sure that inline objects are not scalarized on the new call target
+                Invokable newInvokable = b.handleReplacedInvoke(invoke.getInvokeKind(),
+                                targetMethod, argumentsList.toArray(new ValueNode[argumentsList.size()]),
+                                inlineEverything, true);
+
                 if (newInvokable != null) {
                     if (newInvokable instanceof Invoke newInvoke && !newInvoke.callTarget().equals(callTarget) && newInvoke.asFixedNode().isAlive()) {
                         // In the case where the invoke is not inlined, replace its call target with
                         // the special ResolvedMethodHandleCallTargetNode.
+
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
+                        if (callTarget.targetMethod().hasScalarizedReturn()) {
+                            appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci());
+                        }
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
-                        macroInvokable.addMethodHandleInfo(callTarget);
+                        macroInvokable.addMethodHandleInfo(b.append(callTarget));
+                        if (callTarget.targetMethod().hasScalarizedReturn()) {
+                            appendForeignCall(b, macroInvokable, invokeReturnStamp, invoke.bci());
+                        }
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
                     }
@@ -164,5 +187,34 @@ public class MethodHandlePlugin implements NodePlugin {
             return true;
         }
         return false;
+    }
+
+    public static final HotSpotForeignCallDescriptor STORE_INLINE_TYPE_FIELDS_TO_BUF = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATION,
+                    "storeInlineTypeFieldsToBuf",
+                    Object.class,
+                    long.class /* oop or hub */);
+
+    // see PhaseMacroExpand::expand_mh_intrinsic_return
+    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
+
+        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(STORE_INLINE_TYPE_FIELDS_TO_BUF, invokable.asNode());
+        bufferInlineTypeCall.setBci(bci);
+        b.append(bufferInlineTypeCall);
+
+        // get the framestate of the macro invokable
+        FrameState correctFrameState = invokable.stateAfter().duplicate();
+        b.append(correctFrameState);
+
+        // replace the top of the stack with the result of the foreign call
+        correctFrameState.replaceFirstInput(invokable.asNode(), bufferInlineTypeCall);
+        bufferInlineTypeCall.setStateAfter(correctFrameState);
+
+        // set the foreign call as result
+        b.pop(invokeReturnStamp.getTrustedStamp().getStackKind());
+        b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), bufferInlineTypeCall);
+
+        // add a membar for newly created inline objects
+        b.append(MembarNode.forInitialization());
+
     }
 }

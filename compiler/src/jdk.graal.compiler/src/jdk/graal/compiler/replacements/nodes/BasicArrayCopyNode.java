@@ -52,6 +52,7 @@ import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
@@ -204,6 +205,10 @@ public abstract class BasicArrayCopyNode extends WithExceptionNode
 
     public ValueNode getLength() {
         return length;
+    }
+
+    public boolean canBeInlineTypeArrayCopy(ValhallaOptionsProvider valhallaOptionsProvider) {
+        return StampTool.canBeInlineTypeArray(getSource(), valhallaOptionsProvider) || StampTool.canBeInlineTypeArray(getDestination(), valhallaOptionsProvider);
     }
 
     public void setSource(ValueNode value) {

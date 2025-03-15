@@ -270,6 +270,7 @@ suite = {
           "jdk.internal.misc",
           "jdk.internal.util",
           "jdk.internal.vm.annotation",
+          "jdk.internal.value",
         ],
         "java.instrument" : [
           "sun.instrument",
@@ -297,6 +298,7 @@ suite = {
       "javaCompliance" : "21+",
       "jacoco" : "exclude",
       "graalCompilerSourceEdition": "ignore",
+      "javaPreviewNeeded": "21+",
     },
 
     "jdk.graal.compiler.management" : {
@@ -365,6 +367,7 @@ suite = {
       "forceJavac": True,
       "workingSets" : "Graal,HotSpot,Test",
       "graalCompilerSourceEdition": "ignore",
+      "javaPreviewNeeded": "21+",
     },
 
     "jdk.graal.compiler.virtual.bench" : {
