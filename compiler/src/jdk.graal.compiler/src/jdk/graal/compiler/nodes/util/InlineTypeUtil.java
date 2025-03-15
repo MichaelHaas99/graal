@@ -15,6 +15,7 @@ import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
+import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.IfNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicConstantNode;
@@ -41,6 +42,7 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -140,16 +142,34 @@ public class InlineTypeUtil {
      * @param nothingScalarizedYet determines if no arguments of the old method were scalarized yet
      */
     public static void handleDevirtualizationOnCallTarget(MethodCallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
+        if (oldMethod.hasScalarizedParameters() && !newMethod.hasScalarizedParameters()) {
+            throw new GraalError("method parameters scalarization mismatch between" + oldMethod + " and " + newMethod);
+        }
+        if (!newMethod.hasScalarizedParameters() || callTargetNode instanceof ResolvedMethodHandleCallTargetNode) {
+            return;
+        }
+
+        StructuredGraph graph = callTargetNode.graph();
         int parameterLength = oldMethod.getSignature().getParameterCount(!oldMethod.isStatic());
         if (nothingScalarizedYet) {
             if (callTargetNode.arguments().size() != parameterLength)
                 throw new GraalError("Expected actual argument size to be equal to signature parameter size" + callTargetNode.toString() + "\n" + callTargetNode.arguments() + "\n");
         }
 
-        if (callTargetNode.getScalarizedArguments().isEmpty()) {
-            callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
+        List<ValueNode> arguments;
+        if (graph.getGraphState().isAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
+            // directly operate on the call target arguments
+            assert callTargetNode.getScalarizedArguments().isEmpty() : "should be empty after Valhalla Calling Convention phase";
+            arguments = callTargetNode.arguments();
+        } else {
+            // safe the arguments in an extra list
+            if (callTargetNode.getScalarizedArguments().isEmpty()) {
+                callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
+            }
+            arguments = callTargetNode.getScalarizedArguments();
+
         }
-        List<ValueNode> arguments = callTargetNode.getScalarizedArguments();
+
         boolean[] scalarizeParameters = new boolean[parameterLength];
         int argumentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {

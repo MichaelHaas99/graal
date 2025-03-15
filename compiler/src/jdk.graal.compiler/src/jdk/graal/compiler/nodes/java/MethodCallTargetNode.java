@@ -380,22 +380,22 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         if (tool.getValhallaOptionsProvider().callingConventionEnabled()) {
             replaceArguments();
         }
-        assert scalarizedArguments.isEmpty() || scalarizedArguments.equals(arguments) : "no scalarized arguments expected if Valhalla Calling Convention is disabled";
+        assert scalarizedArguments.isEmpty() : "no scalarized arguments expected";
 
     }
 
     /**
      * Replaces the non-scalarized arguments with the scalarized-arguments as it is expected by the
      * Valhalla Calling Convention. If there are no scalarized-arguments e.g. Valhalla is disabled,
-     * the {@link #scalarizedArguments} will be empty or the same.
+     * the {@link #scalarizedArguments} will be empty.
      */
     public void replaceArguments() {
         if (scalarizedArguments.isEmpty()) {
             return;
         }
-        MethodCallTargetNode replacement = graph().add(
-                        new MethodCallTargetNode(invokeKind, targetMethod, scalarizedArguments.toArray(new ValueNode[scalarizedArguments.size()]), returnStamp, null));
 
-        this.replaceAndDelete(replacement);
+        arguments.clear();
+        arguments.addAll(scalarizedArguments);
+        scalarizedArguments.clear();
     }
 }

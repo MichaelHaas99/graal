@@ -61,6 +61,12 @@ public class ValhallaCallingConventionPhase extends BasePhase<CoreProviders> {
     }
 
     @Override
+    public void updateGraphState(GraphState graphState) {
+        super.updateGraphState(graphState);
+        graphState.setAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION);
+    }
+
+    @Override
     public boolean checkContract() {
         return false;
     }
