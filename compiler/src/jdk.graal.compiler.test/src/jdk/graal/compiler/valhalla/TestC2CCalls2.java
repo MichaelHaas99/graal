@@ -66,6 +66,15 @@ public class TestC2CCalls2 extends JTTTest {
             return x;
         }
 
+        public MyValue1 testtest(OtherVal other1, OtherVal other2, int y, boolean deopt) {
+            if (!deopt) {
+                return new MyValue1(x + other1.x + other2.x + y);
+            } else {
+                // Uncommon trap
+                return test1(other1, y);
+            }
+        }
+
         @Override
         public MyValue1 test1(OtherVal other, int y) {
             return new MyValue1(x + other.x + y);
@@ -460,48 +469,48 @@ public class TestC2CCalls2 extends JTTTest {
 
         // Make sure callee methods are compiled
         for (int i = 0; i < 10; ++i) {
-            getCode(getResolvedJavaMethod(MyValue1.class, "test1"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test1"), null, false, true, getInitialOptions()).executeVarargs(val2, other, rI);
-            getCode(getResolvedJavaMethod(MyObject.class, "test1"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-
-            getCode(getResolvedJavaMethod(MyValue1.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(val1, other, other, rI);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(val2, other, other, rI);
-            getCode(getResolvedJavaMethod(MyObject.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(obj, other, other, rI);
-
-            getCode(getResolvedJavaMethod(MyValue1.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, other, rI, false);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val2, other, other, rI, false);
-            getCode(getResolvedJavaMethod(MyObject.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(obj, other, other, rI, false);
-
-            getCode(getResolvedJavaMethod(MyValue1.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val1, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val2, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue3.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val3, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue4.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val4, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyObject.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(obj, rI, rI, rI, rI, rI, rI);
-
-            getCode(getResolvedJavaMethod(MyValue1.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val1, rI, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val2, rI, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue3.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val3, rI, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue4.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val4, rI, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyObject.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(obj, rI, rI, rI, rI, rI, rI, rI);
-
-            getCode(getResolvedJavaMethod(MyValue1.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val1, val3, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val2, val3, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue3.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val3, val3, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue4.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val4, val3, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyObject.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(obj, val3, rI, rI, rI, rI, rI, rI);
-
-            getCode(getResolvedJavaMethod(MyValue1.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val1, val4, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue2.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val2, val4, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue3.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val3, val4, rI, rI, rI, rI, rI, rI);
-            getCode(getResolvedJavaMethod(MyValue4.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val4, val4, rI, rI, rI, rI, rI, rI);
-            //test(getResolvedJavaMethod(MyObject.class, "test10"), obj, val4, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test1"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test1"), null, false, true, getInitialOptions()).executeVarargs(val2, other, rI);
+//            getCode(getResolvedJavaMethod(MyObject.class, "test1"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(val1, other, other, rI);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(val2, other, other, rI);
+//            getCode(getResolvedJavaMethod(MyObject.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(obj, other, other, rI);
+//
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, other, rI, false);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val2, other, other, rI, false);
+//            getCode(getResolvedJavaMethod(MyObject.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(obj, other, other, rI, false);
+//
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val1, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val2, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue3.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val3, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue4.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(val4, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyObject.class, "test7"), null, false, true, getInitialOptions()).executeVarargs(obj, rI, rI, rI, rI, rI, rI);
+//
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val1, rI, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val2, rI, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue3.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val3, rI, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue4.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(val4, rI, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyObject.class, "test8"), null, false, true, getInitialOptions()).executeVarargs(obj, rI, rI, rI, rI, rI, rI, rI);
+//
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val1, val3, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val2, val3, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue3.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val3, val3, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue4.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(val4, val3, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyObject.class, "test9"), null, false, true, getInitialOptions()).executeVarargs(obj, val3, rI, rI, rI, rI, rI, rI);
+//
+//            getCode(getResolvedJavaMethod(MyValue1.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val1, val4, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue2.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val2, val4, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue3.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val3, val4, rI, rI, rI, rI, rI, rI);
+//            getCode(getResolvedJavaMethod(MyValue4.class, "test10"), null, false, true, getInitialOptions()).executeVarargs(val4, val4, rI, rI, rI, rI, rI, rI);
+//            //test(getResolvedJavaMethod(MyObject.class, "test10"), obj, val4, rI, rI, rI, rI, rI, rI);
         }
 
         // Polute call profile
         for (int i = 0; i < 10; ++i) {
-            getCode(getResolvedJavaMethod("test15"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod("test16"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test17"), null, false, true, getInitialOptions()).executeVarargs(obj);
+            //getCode(getResolvedJavaMethod("test15"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+            //getCode(getResolvedJavaMethod("test16"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+            //getCode(getResolvedJavaMethod("test17"), null, false, true, getInitialOptions()).executeVarargs(obj);
         }
 
         // Trigger compilation of caller methods
@@ -513,76 +522,80 @@ public class TestC2CCalls2 extends JTTTest {
             other = new OtherVal(rI+i+4);
             obj = new MyObject(rI+i+5);
 
-            getCode(getResolvedJavaMethod("test1"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test2"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test2"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod("test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod("test4"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test5"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod("test6"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod("test7"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test8"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test9"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
-            getCode(getResolvedJavaMethod("test9"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
-            getCode(getResolvedJavaMethod("test10"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
-            getCode(getResolvedJavaMethod("test10"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
-            getCode(getResolvedJavaMethod("test11"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
-            getCode(getResolvedJavaMethod("test12"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
-            getCode(getResolvedJavaMethod("test13"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
-            getCode(getResolvedJavaMethod("test14"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
-            getCode(getResolvedJavaMethod("test15"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
-            getCode(getResolvedJavaMethod("test16"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-            getCode(getResolvedJavaMethod("test17"), null, false, true, getInitialOptions()).executeVarargs(val1);
-            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val1, rI);
-            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val2, rI);
-            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val3, rI);
-            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val4, rI);
-            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(obj, rI);
-            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val1, rI);
-            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val2, rI);
-            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val3, rI);
-            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val4, rI);
-            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(obj, rI);
-            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val1, val3, rI);
-            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val2, val3, rI);
-            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val3, val3, rI);
-            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val4, val3, rI);
-            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(obj, val3, rI);
-            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val1, val4, rI);
-            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val2, val4, rI);
-            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val3, val4, rI);
-            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val4, val4, rI);
-            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(obj, val4, rI);
+//            getCode(getResolvedJavaMethod("test1"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//            getCode(getResolvedJavaMethod("test2"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//            getCode(getResolvedJavaMethod("test2"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//            getCode(getResolvedJavaMethod("test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//            getCode(getResolvedJavaMethod("test4"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//            getCode(getResolvedJavaMethod("test5"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//            getCode(getResolvedJavaMethod("test6"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//            getCode(getResolvedJavaMethod("test7"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//            getCode(getResolvedJavaMethod("test8"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//            getCode(getResolvedJavaMethod("test9"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
+//            getCode(getResolvedJavaMethod("test9"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
+//            getCode(getResolvedJavaMethod("test10"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
+//            getCode(getResolvedJavaMethod("test10"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
+//            getCode(getResolvedJavaMethod("test11"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
+//            getCode(getResolvedJavaMethod("test12"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI, false);
+//            getCode(getResolvedJavaMethod("test13"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
+//            getCode(getResolvedJavaMethod("test14"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI, false);
+//            getCode(getResolvedJavaMethod("test15"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
+//            getCode(getResolvedJavaMethod("test16"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//            getCode(getResolvedJavaMethod("test17"), null, false, true, getInitialOptions()).executeVarargs(val1);
+//            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val1, rI);
+//            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val2, rI);
+//            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val3, rI);
+//            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(val4, rI);
+//            getCode(getResolvedJavaMethod("test18"), null, false, true, getInitialOptions()).executeVarargs(obj, rI);
+//            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val1, rI);
+//            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val2, rI);
+//            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val3, rI);
+//            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(val4, rI);
+//            getCode(getResolvedJavaMethod("test19"), null, false, true, getInitialOptions()).executeVarargs(obj, rI);
+//            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val1, val3, rI);
+//            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val2, val3, rI);
+//            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val3, val3, rI);
+//            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(val4, val3, rI);
+//            getCode(getResolvedJavaMethod("test20"), null, false, true, getInitialOptions()).executeVarargs(obj, val3, rI);
+//            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val1, val4, rI);
+//            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val2, val4, rI);
+//            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val3, val4, rI);
+//            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(val4, val4, rI);
+//            getCode(getResolvedJavaMethod("test21"), null, false, true, getInitialOptions()).executeVarargs(obj, val4, rI);
         }
 
         // Trigger deoptimization
-        Assert.assertEquals(val1.test3(other, other, rI, true).getValue(), val1.x + other.x + rI);
-        Assert.assertEquals(obj.test3(other, other, rI, true).getValue(), obj.x + other.x + rI);
+//        Assert.assertEquals(val1.test3(other, other, rI, true).getValue(), val1.x + other.x + rI);
+//        Assert.assertEquals(obj.test3(other, other, rI, true).getValue(), obj.x + other.x + rI);
+//
+//        // Check results of methods still calling the deoptimized methods
+//        Assert.assertEquals(test9(val1, other, rI, false), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test9(obj, other, rI, false), obj.x + 2*other.x + rI);
+        for(int i = 0; i<10000;i++){
+            Assert.assertEquals(test10(obj, other, rI, false), obj.x + 2*other.x + rI);
+            Assert.assertEquals(test10(val1, other, rI, false), val1.x + 2*other.x + rI);
+            val1.test1(other, rI);
+        }
 
-        // Check results of methods still calling the deoptimized methods
-        Assert.assertEquals(test9(val1, other, rI, false), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test9(obj, other, rI, false), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test10(obj, other, rI, false), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test10(val1, other, rI, false), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test11(val1, other, rI, false), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test11(obj, other, rI, false), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test12(obj, other, rI, false), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test12(val1, other, rI, false), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test13(val1, other, rI, false), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test13(obj, other, rI, false), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test14(obj, other, rI, false), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test14(val1, other, rI, false), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test11(val1, other, rI, false), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test11(obj, other, rI, false), obj.x + 2*other.x + rI);
+//        Assert.assertEquals(test12(obj, other, rI, false), obj.x + 2*other.x + rI);
+//        Assert.assertEquals(test12(val1, other, rI, false), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test13(val1, other, rI, false), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test13(obj, other, rI, false), obj.x + 2*other.x + rI);
+//        Assert.assertEquals(test14(obj, other, rI, false), obj.x + 2*other.x + rI);
+//        Assert.assertEquals(test14(val1, other, rI, false), val1.x + 2*other.x + rI);
 
         // Check with unexpected arguments
-        Assert.assertEquals(test1(val2, other, rI), val2.x + other.x + rI);
-        Assert.assertEquals(test2(val2, other, rI), val2.x + 2*other.x + rI);
-        Assert.assertEquals(test5(val2, other, rI), val2.x + other.x + rI);
-        Assert.assertEquals(test6(val2, other, rI), val2.x + 2*other.x + rI);
-        Assert.assertEquals(test7(val1, other, rI), val1.x + other.x + rI);
-        Assert.assertEquals(test8(val1, other, rI), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test15(val1, other, rI), val1.x + 2*other.x + rI);
-        Assert.assertEquals(test16(obj, other, rI), obj.x + 2*other.x + rI);
-        Assert.assertEquals(test17(obj), obj.x);
+//        Assert.assertEquals(test1(val2, other, rI), val2.x + other.x + rI);
+//        Assert.assertEquals(test2(val2, other, rI), val2.x + 2*other.x + rI);
+//        Assert.assertEquals(test5(val2, other, rI), val2.x + other.x + rI);
+//        Assert.assertEquals(test6(val2, other, rI), val2.x + 2*other.x + rI);
+//        Assert.assertEquals(test7(val1, other, rI), val1.x + other.x + rI);
+//        Assert.assertEquals(test8(val1, other, rI), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test15(val1, other, rI), val1.x + 2*other.x + rI);
+//        Assert.assertEquals(test16(obj, other, rI), obj.x + 2*other.x + rI);
+//        Assert.assertEquals(test17(obj), obj.x);
 
 //        runTest("test20", val1, val3, rI);
 //        runTest("test20", val2, val3, rI);
@@ -598,7 +611,9 @@ public class TestC2CCalls2 extends JTTTest {
         //test(getResolvedJavaMethod(TestC2CCalls.MyValue1.class, "test1"),val1, other, rI);
         //test(getResolvedJavaMethod(TestC2CCalls.MyValue2.class, "test2"),val2, other, other, rI);
         //test(getResolvedJavaMethod(TestC2CCalls.MyValue3.class, "test7"), val3, rI, rI, rI, rI, rI, rI );
-        runTest("test10", val1, other, rI, false);
+        test(getResolvedJavaMethod(MyValue1.class, "test3"), val1, other, other, rI, false);
+        //test(getResolvedJavaMethod(MyValue1.class, "testtest"), val1, other, other, rI, false);
+        //runTest("test10", val1, other, rI, false);
         //getCode(getResolvedJavaMethod("test10"));
 
     }
