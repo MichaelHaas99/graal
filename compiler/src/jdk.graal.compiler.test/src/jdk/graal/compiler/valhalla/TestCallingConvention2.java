@@ -361,4 +361,100 @@ public class TestCallingConvention2 extends JTTTest {
     private static String ArrayToString(Object[] array){
         return Arrays.toString(array);
     }
+
+    // Test selection of correct entry point in SharedRuntime::handle_wrong_method
+    static boolean test34_deopt = false;
+
+    @DontInline
+    public static long test34_callee(MyValue2 vt, int i1, int i2, int i3, int i4) {
+        Assert.assertEquals(i1, rI);
+        Assert.assertEquals(i2, rI);
+        Assert.assertEquals(i3, rI);
+        Assert.assertEquals(i4, rI);
+
+        if (test34_deopt) {
+            // uncommon trap
+            int result = 0;
+            for (int i = 0; i < 10; ++i) {
+                result += rL;
+            }
+            return vt.hash() + i1 + i2 + i3 + i4 + result;
+        }
+        return vt.hash() + i1 + i2 + i3 + i4;
+    }
+
+    public static long test34(MyValue2 vt, int i1, int i2, int i3, int i4) {
+        return test34_callee(vt, i1, i2, i3, i4);
+    }
+    // Make sure test34_callee is compiled
+    public void test34_verifier(RunInfo info) {
+        MyValue2 vt = MyValue2.createWithFieldsInline(rI, rD);
+        long result = test34(vt, rI, rI, rI, rI);
+        Assert.assertEquals(result, vt.hash()+4*rI);
+        if (!info.isWarmUp()) {
+            test34_deopt = true;
+            for (int i = 0; i < 100; ++i) {
+                result = test34(vt, rI, rI, rI, rI);
+                Assert.assertEquals(result, vt.hash()+4*rI+10*rL);
+            }
+        }
+    }
+
+    static class RunInfo{
+        public boolean isWarmUp(){
+            return true;
+        }
+    }
+
+
+    @Test
+    public void run13() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("test34_verifier"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+        //c.executeVarargs();
+        //c.executeVarargs(this);
+    }
+
+    public static byte p;
+    public static int u;
+    public void testVirtualObjects(boolean check) {
+        MyValue2 vt = MyValue2.createWithFieldsInline(rI, rD);
+        if(check){
+            p = vt.y;
+            p = (byte)vt.x;
+        }else{
+            p = (byte)vt.x;
+        }
+        u = vt.x;
+
+    }
+
+    @Test
+    public void run14() throws  Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod("testVirtualObjects"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+
+    }
+
+    public MyValue2 testVirtualObjects2(boolean check) {
+        MyValue2 result;
+        if(check){
+            result = MyValue2.createWithFieldsInline(rI+1, rD);
+        }else{
+            result = MyValue2.createWithFieldsInline(rI+1, rD);
+        }
+        return result;
+
+    }
+
+    @Test
+    public void run15() throws  Throwable{
+        resetCache();
+        InstalledCode c = getCode(getResolvedJavaMethod("testVirtualObjects2"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+
+    }
+
+
 }

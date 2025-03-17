@@ -516,4 +516,49 @@ java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileD
         InstalledCode c = getCode(getResolvedJavaMethod(String.class, "getBytes", byte[].class, int.class, byte.class), null, true, true, getInitialOptions());
         //c.executeVarargs(this);
     }
+
+    static value class CompareValue2{
+        int o = 3;
+    }
+
+    static value class CompareValue{
+        int a = 3;
+        long l = 4;
+        Object u = 5;
+        CompareValue2 s;
+        public CompareValue(){
+            s = null;
+        }
+    }
+
+    private static boolean testFunc(CompareValue a, CompareValue b){
+        return a == b;
+    }
+
+    public static boolean testFunc_Ref() {
+        boolean result = testFunc(new CompareValue(), new CompareValue());
+        return result;
+    }
+
+    private static final OptionValues TRACE = new OptionValues(getInitialOptions(), HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "testFunc");
+
+    @Test
+    public void run12() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("testFunc"), null, true, true, getInitialOptions());
+        c.executeVarargs(new CompareValue(), new CompareValue());
+        //c.executeVarargs(this);
+    }
+
+    @Test
+    public void run13() throws  Throwable{
+        resetCache();
+        //MyValue2.createWithFieldsInline
+        //InstalledCode c = getCode(getResolvedJavaMethod(MyValue2.class, "createWithFieldsInline", int.class, double.class), null, true, false, DEMO_OPTIONS_WITHOUT_INLINING);
+        InstalledCode c = getCode(getResolvedJavaMethod("testFunc_Ref"), null, true, true, TRACE);
+        c.executeVarargs();
+        //c.executeVarargs(this);
+    }
 }
