@@ -96,5 +96,5 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
     }
 
     @NodeIntrinsic
-    public static native boolean load(Object object1, Object object2, long offset, Object kind, Object locationIdentity, Object stamp);
+    public static native boolean compare(Object object1, Object object2, long offset, Object kind, Object locationIdentity, Object stamp);
 }
