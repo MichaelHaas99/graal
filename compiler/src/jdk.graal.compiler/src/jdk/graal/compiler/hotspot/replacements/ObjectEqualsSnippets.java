@@ -293,36 +293,40 @@ public class ObjectEqualsSnippets implements Snippets {
         x = PiNode.piCastNonNull(x, anchorNode);
         y = PiNode.piCastNonNull(y, anchorNode);
 
-        trace(trace, "apply type comparison");
-        KlassPointer xHub = loadHub(x);
-        KlassPointer yHub = loadHub(y);
 
         trace(trace, "check both operands for inline type bit");
         if (!xIsInlineType && hasIdentity(x) || !yIsInlineType && hasIdentity(y)) {
             return falseValue;
         }
 
+        trace(trace, "apply hub comparison");
+        KlassPointer xHub = loadHub(x);
+        KlassPointer yHub = loadHub(y);
+
         if (xHub.notEqual(yHub)) {
             return falseValue;
         }
 
-        // inline field comparison
+
         if (inlineComparison) {
-            trace(trace, "inline comparison");
+            // inline field comparison
+            trace(trace, "inline substitutability check");
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];
-                if (!DelayedRawComparisonNode.load(x, y, offsets[i], kind, identities[i], stamps[i])) {
+                if (!DelayedRawComparisonNode.compare(x, y, offsets[i], kind, identities[i], stamps[i])) {
                     return falseValue;
                 }
 
             }
             return trueValue;
+        } else {
+            // do runtime call
+            trace(trace, "call to library for substitutability check");
+            return substitutabilityCheckStubC(SUBSTITUTABILITY_CHECK, x, y) ? trueValue : falseValue;
         }
 
-        trace(trace, "call to library for substitutability check");
 
-        return substitutabilityCheckStubC(SUBSTITUTABILITY_CHECK, x, y) ? trueValue : falseValue;
     }
 
     public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "substitutabilityCheck", boolean.class, Object.class,

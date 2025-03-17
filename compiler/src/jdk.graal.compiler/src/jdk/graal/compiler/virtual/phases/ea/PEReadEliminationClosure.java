@@ -173,7 +173,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 assert !obj.isVirtual() : object;
 
                 assert StampTool.isPointerNonNull(object) : "null-check should be done before PEA";
-                if (StampTool.isInlineType(object.stamp(NodeView.DEFAULT), tool.getValhallaOptionsProvider())) {
+                if (StampTool.isInlineType(object, tool.getValhallaOptionsProvider())) {
                     FixedWithNextNode replacement = new FixedValueAnchorNode(cachedValue);
                     effects.addFixedNodeBefore(replacement, load);
                     cachedValue = replacement;
