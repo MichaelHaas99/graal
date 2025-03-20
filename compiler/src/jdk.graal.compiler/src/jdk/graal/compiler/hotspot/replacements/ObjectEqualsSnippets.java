@@ -151,7 +151,7 @@ public class ObjectEqualsSnippets implements Snippets {
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
                 args.add("trace", isTracingEnabledForMethod(node.graph()));
-                args.add("inlineComparison", inlineComparison);
+                args.add("inlineComparison", inlineComparison && inlineSubstitutabilityCheck(node.graph()));
                 args.addVarargs("offsets", long.class, StampFactory.forKind(JavaKind.Long), offsets);
                 args.addVarargs("kinds", JavaKind.class, StampFactory.forKind(JavaKind.Object), kinds);
                 args.addVarargs("identities", LocationIdentity.class, StampFactory.forKind(JavaKind.Object), identities);
@@ -196,6 +196,10 @@ public class ObjectEqualsSnippets implements Snippets {
                 }
                 return (graph.method().format("%H.%n").contains(filter));
             }
+        }
+
+        private static boolean inlineSubstitutabilityCheck(StructuredGraph graph) {
+            return HotspotSnippetsOptions.InlineSubstitutabilityCheck.getValue(graph.getOptions());
         }
     }
 
