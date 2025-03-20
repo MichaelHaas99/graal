@@ -3,13 +3,13 @@ package jdk.graal.compiler.hotspot.replacements;
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_KIND_LOCATION;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayKlassKind;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.flatArrayPattern;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.isUnlocked;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.klassKindOffset;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markWordLockMaskInPlace;
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.unlockedValue;
 import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
 import jdk.graal.compiler.api.replacements.Snippet;
@@ -62,9 +62,8 @@ public class IsFlatArraySnippets implements Snippets {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        final Word lockBits = mark.and(Word.unsigned(markWordLockMaskInPlace(INJECTED_VMCONFIG)));
-        if (lockBits.equal(Word.unsigned(unlockedValue(INJECTED_VMCONFIG)))) {
-            return mark.and(Word.unsigned(flatArrayPattern(INJECTED_VMCONFIG))).equal(Word.unsigned(flatArrayPattern(INJECTED_VMCONFIG)));
+        if (isUnlocked(mark)) {
+            return mark.and(Word.unsigned(flatArrayMaskInPlace(INJECTED_VMCONFIG))).equal(Word.unsigned(flatArrayPattern(INJECTED_VMCONFIG)));
         }
         return isFlatArrayFromKlass(object);
 
