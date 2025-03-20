@@ -714,19 +714,23 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             setResult(nonNull, nonNullVariable);
         }
 
-        assert isLegal(result) : "expected a legal Value for nonNull";
+        assert isLegal(result) : "expected a legal Value for result";
         // if the klass pointer is returned we need to zero out the return register
         // e.g. see if (return_value_is_used()) { in ad_x86.cpp
 
-        ValueKind<?> kind = result.getValueKind();
-        Variable scratch = gen.emitMove(result);
-        Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
-        ConstantValue intOne = new ConstantValue(kind,
-                        JavaConstant.forLong(1));
+        if (oop != null) {
+            ValueKind<?> kind = result.getValueKind();
+            Variable scratch = gen.emitMove(result);
+            Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
+            ConstantValue intOne = new ConstantValue(kind,
+                            JavaConstant.forLong(1));
 
-        // returnRegister = (returnRegister contains klassPointer)? null : returnRegister
-        Variable temp = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
-        setResult(x.asNode(), temp);
+            // returnRegister = (returnRegister contains klassPointer)? null : returnRegister
+            Variable temp = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
+            setResult(x.asNode(), temp);
+        } else {
+            setResult(x.asNode(), gen.emitMove(result));
+        }
 
         if (oop != null) {
             assert isLegal(results[oop.getIndex()]) : "expected legal Value for oop";
