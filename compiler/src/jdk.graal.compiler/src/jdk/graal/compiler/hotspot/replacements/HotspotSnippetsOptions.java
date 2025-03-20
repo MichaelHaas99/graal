@@ -67,6 +67,10 @@ public class HotspotSnippetsOptions {
     @Option(help = "Trace substitutability check in methods whose fully qualified name contains this substring.", type = OptionType.Debug)
     public static final OptionKey<String> TraceSubstitutabilityCheckMethodFilter = new OptionKey<>(null);
 
+    @Option(help = "Inline substitutability check", type = OptionType.Expert)
+    public static final OptionKey<Boolean> InlineSubstitutabilityCheck = new OptionKey<>(true);
+
+
     @Option(help = "Emit extra code to dynamically check monitor operations are balanced.", type = OptionType.Debug)
     public static final OptionKey<Boolean> VerifyBalancedMonitors = new OptionKey<>(false);
     //@formatter:on
