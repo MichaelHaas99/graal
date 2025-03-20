@@ -717,6 +717,7 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
             StructuredGraph graph = node.graph();
             ResolvedJavaType elementType = node.elementType();
             HotSpotResolvedObjectType arrayType = (HotSpotResolvedObjectType) elementType.getArrayClass();
+            assert !arrayType.isFlatArray() : " no flat array support at the moment";
             JavaKind elementKind = elementType.getJavaKind();
             ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), arrayType.klass(), tool.getMetaAccess(), graph);
             final int arrayBaseOffset = tool.getMetaAccess().getArrayBaseOffset(elementKind);

@@ -411,6 +411,11 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static long flatArrayMaskInPlace(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.flatArrayMaskInPlace;
+    }
+
+    @Fold
     public static long nullFreeArrayPattern(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.nullFreeArrayPattern;
     }
@@ -503,6 +508,11 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int markOffset(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.markOffset;
+    }
+
+    public static boolean isUnlocked(Word markWord) {
+        final Word lockBits = markWord.and(Word.unsigned(markWordLockMaskInPlace(INJECTED_VMCONFIG)));
+        return lockBits.equal(Word.unsigned(unlockedValue(INJECTED_VMCONFIG)));
     }
 
     public static final LocationIdentity HUB_WRITE_LOCATION = NamedLocationIdentity.mutable("Hub:write");
