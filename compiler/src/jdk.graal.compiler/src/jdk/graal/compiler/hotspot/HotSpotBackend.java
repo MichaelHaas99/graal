@@ -79,6 +79,7 @@ import jdk.graal.compiler.options.Option;
 import jdk.graal.compiler.options.OptionKey;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.tiers.SuitesProvider;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CompilationRequest;
@@ -427,7 +428,12 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
         MapCursor<LIRFrameState, SaveRegistersOp> cursor = calleeSaveInfo.getEntries();
         while (cursor.advance()) {
             SaveRegistersOp save = cursor.getValue();
-            save.remove(destroyedRegisters);
+            // In the function SharedRuntime::store_inline_type_fields_to_buf, the statement
+            // InlineKlass* verif_vk = InlineKlass::returned_inline_klass(reg_map); expects the
+            // first general return register to be in the register map so don't remove it
+            if (((HotSpotForeignCallLinkageImpl) stub.getLinkage()).descriptor != MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF) {
+                save.remove(destroyedRegisters);
+            }
             if (cursor.getKey().hasDebugInfo()) {
                 cursor.getKey().debugInfo().setCalleeSaveInfo(save.getRegisterSaveLayout(frameMap));
             }
