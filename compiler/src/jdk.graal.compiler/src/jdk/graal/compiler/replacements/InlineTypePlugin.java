@@ -23,7 +23,6 @@ import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.IfNode;
-import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
@@ -71,8 +70,7 @@ public class InlineTypePlugin implements NodePlugin {
             if (!field.isNullFreeInlineType()) {
                 // field is flat and nullable
 
-                // TODO: functionality not correctly implemented yet, wait until it's fully
-                // implemented in the JVM
+                // TODO: when JDK-8341767 is done, current implementation is rubbish
 
                 BeginNode trueBegin = b.getGraph().add(new BeginNode());
                 BeginNode falseBegin = b.getGraph().add(new BeginNode());
@@ -168,10 +166,11 @@ public class InlineTypePlugin implements NodePlugin {
             ResolvedJavaField innerField = innerFields[i];
             assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
 
-            // returned fields include a header offset of their holder
+            // returned fields include a header offset of their holder, calculate the offset without
+            // the header
             int off = innerField.getOffset() - fieldType.firstFieldOffset();
 
-            // holder has no header so remove the header offset
+            // holder is directly embedded in other object, use the offset without the header
             loads[i] = b.add(
                             LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
@@ -223,6 +222,8 @@ public class InlineTypePlugin implements NodePlugin {
             // field is flat
             if (!field.isNullFreeInlineType()) {
                 // field is flat and nullable
+
+                // TODO: when JDK-8341767 is done, current implementation is rubbish
 
                 BeginNode trueBegin = b.getGraph().add(new BeginNode());
                 BeginNode falseBegin = b.getGraph().add(new BeginNode());
@@ -288,14 +289,15 @@ public class InlineTypePlugin implements NodePlugin {
             ResolvedJavaField innerField = innerFields[i];
             assert !innerField.isFlat() : "the iteration over nested fields is handled by the loop itself";
 
-            // returned fields include a header offset of their holder
+            // returned fields include a header offset of their holder, calculate the offset without
+            // the header
             int off = innerField.getOffset() - fieldType.firstFieldOffset();
 
-            // holder has a header
+            // holder has a header, use the offset with the header
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
-            // holder has no header so remove the header offset
+            // holder is directly embedded in other object, use the offset without the header
             writeOperations.add(new StoreFlatFieldNode.StoreFieldInfo(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
@@ -392,8 +394,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // avoid allocation due to merge
                 StructuredGraph graph = b.getGraph();
                 ResolvedJavaType type = resultStamp.javaType(b.getMetaAccess());
-                LogicNode nonNull = LogicNegationNode.create(graph.addOrUnique(IsNullNode.create(instanceNonFlatArray)));
-                ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(falseEnd, instanceNonFlatArray, nonNull, type.getInstanceFields(true), false, true);
+                ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(falseEnd, instanceNonFlatArray, type.getInstanceFields(true), false, true);
                 InlineTypeNode inlineTypeNode = graph.add(new InlineTypeNode(type, instanceNonFlatArray, Arrays.copyOfRange(phis, 1, phis.length), phis[0]));
                 graph.addBeforeFixed(falseEnd, inlineTypeNode);
                 instanceNonFlatArray = inlineTypeNode;
@@ -435,7 +436,8 @@ public class InlineTypePlugin implements NodePlugin {
                 load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(field.getJavaKind()), array, index, boundsCheck, field.getJavaKind());
             }
 
-            // returned fields include a header offset of their holder, remove it
+            // returned fields include a header offset of their holder, calculate the offset without
+            // the header
             int off = field.getOffset() - componentType.firstFieldOffset();
             load.setAdditionalOffset(off);
             load.setShift(shift);
@@ -565,7 +567,8 @@ public class InlineTypePlugin implements NodePlugin {
                 returnValue = load;
             }
 
-            // returned fields include a header offset of their holder, remove it
+            // returned fields include a header offset of their holder, calculate the offset without
+            // the header
             int off = field.getOffset() - elementType.firstFieldOffset();
             writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(i, field.getJavaKind(), off, shift));
 
