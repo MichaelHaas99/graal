@@ -9,6 +9,7 @@ import static jdk.graal.compiler.replacements.DefaultJavaLoweringProvider.POSITI
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.Stamp;
@@ -22,6 +23,7 @@ import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.IfNode;
+import jdk.graal.compiler.nodes.LogicNegationNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
@@ -51,6 +53,7 @@ import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
@@ -326,7 +329,6 @@ public class InlineTypePlugin implements NodePlugin {
         if (!elementKind.isObject() || !b.getValhallaOptionsProvider().useArrayFlattening())
             return false;
 
-        boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
         boolean canBeInlineTypeArray = StampTool.canBeInlineTypeArray(array, b.getValhallaOptionsProvider());
 
         if (canBeInlineTypeArray) {
@@ -337,6 +339,7 @@ public class InlineTypePlugin implements NodePlugin {
             boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
             index = createPositiveIndex(b.getGraph(), index, boundsCheck);
 
+            boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
@@ -383,6 +386,17 @@ public class InlineTypePlugin implements NodePlugin {
                 falseBegin.setNext(fixedNode);
             } else {
                 falseBegin.setNext(falseEnd);
+            }
+
+            if (isInlineTypeArray) {
+                // avoid allocation due to merge
+                StructuredGraph graph = b.getGraph();
+                ResolvedJavaType type = resultStamp.javaType(b.getMetaAccess());
+                LogicNode nonNull = LogicNegationNode.create(graph.addOrUnique(IsNullNode.create(instanceNonFlatArray)));
+                ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(falseEnd, instanceNonFlatArray, nonNull, type.getInstanceFields(true), false, true);
+                InlineTypeNode inlineTypeNode = graph.add(new InlineTypeNode(type, instanceNonFlatArray, Arrays.copyOfRange(phis, 1, phis.length), phis[0]));
+                graph.addBeforeFixed(falseEnd, inlineTypeNode);
+                instanceNonFlatArray = inlineTypeNode;
             }
 
             ValuePhiNode phiNode = b.add(new ValuePhiNode(resultStamp, null,
@@ -442,7 +456,7 @@ public class InlineTypePlugin implements NodePlugin {
     public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
         if (!elementKind.isObject() || !b.getValhallaOptionsProvider().useArrayFlattening())
             return false;
-        boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
+
         boolean canBeInlineTypeArray = StampTool.canBeInlineTypeArray(array, b.getValhallaOptionsProvider());
 
         if (canBeInlineTypeArray) {
@@ -455,6 +469,7 @@ public class InlineTypePlugin implements NodePlugin {
             index = createPositiveIndex(b.getGraph(), index, boundsCheck);
             storeCheck = genStoreCheck(b, storeCheck, array, value);
 
+            boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
             if (isInlineTypeArray && resolvedType.isFlatArray()) {
                 // array is known to consist of flat inline objects
                 int shift = resolvedType.getLog2ComponentSize();
