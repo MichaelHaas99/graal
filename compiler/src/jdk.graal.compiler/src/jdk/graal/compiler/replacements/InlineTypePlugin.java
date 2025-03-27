@@ -129,13 +129,14 @@ public class InlineTypePlugin implements NodePlugin {
         }
 
         // do null-check here to avoid it in PEA, if the holder has no identity
-        ResolvedJavaType type = ((ResolvedJavaType) field.getType());
-        if (!field.getDeclaringClass().isIdentity() || !type.isPrimitive() && !type.isIdentity()) {
+        // avoid resolving the field type
+        Stamp stamp = StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp();
+        if (!field.getDeclaringClass().isIdentity() || StampTool.isInlineTypeOrNull(stamp, b.getValhallaOptionsProvider())) {
             object = genNullCheck(b, object);
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
-            if (virtualizeFromInlineObject && StampTool.isInlineType(load, b.getValhallaOptionsProvider())) {
+            if (virtualizeFromInlineObject && StampTool.isInlineTypeOrNull(load, b.getValhallaOptionsProvider())) {
                 FixedNode addBefore = b.add(new ValueAnchorNode());
-                load = virtualizeFromInlineObject(b, load, type, addBefore);
+                load = virtualizeFromInlineObject(b, load, stamp.javaType(b.getMetaAccess()), addBefore);
             }
             b.push(field.getJavaKind(), load);
             return true;
@@ -170,6 +171,8 @@ public class InlineTypePlugin implements NodePlugin {
         object = genNullCheck(b, object);
 
         // only support null-restricted flat fields for now
+        // field type is already resolved because value classes have the loadableDescriptor (also
+        // known as preload) attribute automatically set in hotspot.
         HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
         ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
         LoadFieldNode[] loads = new LoadFieldNode[innerFields.length];
