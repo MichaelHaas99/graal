@@ -235,7 +235,7 @@ public class HotSpotGraphBuilderPlugins {
 
         Plugins plugins = new Plugins(invocationPlugins);
         if (config.valhallaEnabled) {
-            plugins.appendNodePlugin(new InlineTypePlugin());
+            plugins.appendNodePlugin(new InlineTypePlugin(options));
         }
         plugins.appendNodePlugin(new HotSpotExceptionDispatchPlugin(config, wordTypes.getWordKind()));
         StandardGraphBuilderPlugins.registerConstantFieldLoadPlugin(plugins);
