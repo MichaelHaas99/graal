@@ -229,40 +229,40 @@ public class InlineTypeUtil {
      * @return the phi nodes representing the field values of the argument
      */
     private static ValueNode[] createScalarizationCFGForInvokeArg(FixedNode addBefore, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
-        StructuredGraph graph = addBefore.graph();
         boolean isNullFree = targetMethod.isParameterNullFree(signatureIndex, true);
 
         return createScalarizationCFG(addBefore, arg,
-                        graph.addOrUnique(LogicNegationNode.create(graph.addOrUnique(IsNullNode.create(arg)))),
                         targetMethod.getScalarizedParameterFields(signatureIndex, true), isNullFree, !isNullFree);
     }
 
     /**
      *
      * See
-     * {@link #createScalarizationCFG(FixedNode, ValueNode, LogicNode, ResolvedJavaField[], boolean, boolean)}
+     * {@link #createScalarizationCFG(FixedNode, ValueNode, ResolvedJavaField[], boolean, boolean)}
      */
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, LogicNode nonNull, ResolvedJavaField[] fields) {
-        return createScalarizationCFG(addBefore, object, nonNull, fields, false, false);
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields) {
+        return createScalarizationCFG(addBefore, object, fields, false, false);
     }
 
     /**
-     * Scalarizes an object into it's field values.
+     * Scalarizes an object into it's field values. In case the object is nullable a diamond is
+     * which uses default values on the null branch.
      *
      * @param addBefore the node before the diamond should be inserted into the graph
      * @param object the object whose field values should be loaded
-     * @param nonNullCheck condition used as branch condition, indicating if the object is not null
      * @param fields the resolved filed
-     * @param assumeObjectNonNull true if no diamond should be created
-     * @param includeNonNullPhi true if the non-null information should be included in the return
+     * @param assumeObjectNonNull true if no diamond should be created, because the default values
+     *            are not valid
+     * @param includeNonNullPhi true if the non-null information should be included in the returned
      *            phis at position zero
      * @return The field values of the object
      */
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, LogicNode nonNullCheck, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
         StructuredGraph graph = addBefore.graph();
-        if (nonNullCheck.isTautology() || assumeObjectNonNull) {
-            assert StampTool.isPointerNonNull(object) : "expected parameter to be non-null, insert a null check";
+        LogicNode nonNull = graph.addOrUniqueWithInputs(LogicNegationNode.create(IsNullNode.create(object)));
+        if (assumeObjectNonNull || nonNull.isTautology()) {
+            assert StampTool.isPointerNonNull(object) : "no diamond should be created, insert a null check";
             ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
             if (includeNonNullPhi) {
                 loads[0] = ConstantNode.forByte((byte) 1, graph);
@@ -274,7 +274,7 @@ public class InlineTypeUtil {
             }
             return loads;
         }
-        if (nonNullCheck.isContradiction()) {
+        if (nonNull.isContradiction()) {
             ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
             if (includeNonNullPhi) {
                 loads[0] = ConstantNode.forByte((byte) 0, graph);
@@ -289,7 +289,7 @@ public class InlineTypeUtil {
         BeginNode trueBegin = graph.add(new BeginNode());
         BeginNode falseBegin = graph.add(new BeginNode());
 
-        IfNode ifNode = graph.add(new IfNode(graph.addOrUnique(nonNullCheck), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        IfNode ifNode = graph.add(new IfNode(graph.addOrUnique(nonNull), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
         ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
 
         // get a valid framestate for the merge node
@@ -300,10 +300,10 @@ public class InlineTypeUtil {
 
         // true branch - inline object is non-null, load the field values
 
-        ValueNode nonNull = graph.addOrUnique(PiNode.create(object, objectNonNull(), trueBegin));
+        ValueNode nonNullObject = graph.addOrUnique(PiNode.create(object, objectNonNull(), trueBegin));
         FixedWithNextNode previous = trueBegin;
         for (int i = 0; i < fields.length; i++) {
-            LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNull, fields[i]));
+            LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields[i]));
             loads[i] = load;
             previous.setNext(load);
             previous = load;

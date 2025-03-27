@@ -8,7 +8,6 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -55,11 +54,9 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
-        LogicNode nonNull = b.add(new LogicNegationNode(b.add(new IsNullNode(result))));
-
         // PEA will replace oop with tagged hub if it is virtual
         ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, nonNull, fields);
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
         returnNode.fieldValues.clear();
         returnNode.fieldValues.addAll(List.of(phis));
         return returnNode;
@@ -76,8 +73,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         ResolvedJavaType type = method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass());
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
-        LogicNode nonNull = graph.addOrUnique(new LogicNegationNode(graph.addOrUnique(new IsNullNode(result))));
-
         // PEA will replace oop with tagged hub if it is virtual
         ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
         FixedWithNextNode previous = (FixedWithNextNode) oldReturn.predecessor();
@@ -85,7 +80,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         oldReturn.replaceAtUsages(returnNode);
         oldReturn.safeDelete();
 
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, nonNull, fields);
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
         returnNode.fieldValues.clear();
         returnNode.fieldValues.addAll(List.of(phis));
     }
