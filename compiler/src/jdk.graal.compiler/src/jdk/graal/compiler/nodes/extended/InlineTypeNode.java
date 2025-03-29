@@ -244,17 +244,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         if (tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
             ValueNode oop = this.oop;
-            ValueNode notNull = this.nonNull;
+            ValueNode nonNull = this.nonNull;
             if (insertGuardBeforeVirtualize) {
+                // outdated
                 if (!StampTool.isPointerNonNull(this)) {
                     // Because the node can represent a null value, insert a guard before we
                     // virtualize
                     tool.addNode(new FixedGuardNode(createNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
                     if (oop == null) {
-                        notNull = null;
+                        nonNull = null;
                     } else {
-                        notNull = ConstantNode.forInt(1, graph());
-                        tool.ensureAdded(notNull);
+                        nonNull = ConstantNode.forInt(1, graph());
+                        tool.ensureAdded(nonNull);
                     }
                 }
 
@@ -269,21 +270,22 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 state[i] = tool.getAlias(getField(i));
             }
 
-            // oop is maybe outdated use the alias in the created virtual object
+            // oop and nonnull are maybe outdated use the alias in the created virtual object
             oop = tool.getAlias(oop);
+            nonNull = tool.getAlias(nonNull);
 
             // make sure both values are either null or set
             // after an invoke we already have both
             // a parameter only includes the non-null information so use the null pointer constant
-            if (oop == null && notNull != null) {
+            if (oop == null && nonNull != null) {
                 oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
             }
-            if (oop != null && notNull == null) {
-                notNull = ConstantNode.forInt(1, graph());
+            if (oop != null && nonNull == null) {
+                nonNull = ConstantNode.forInt(1, graph());
             }
 
             // create virtual object and hand over oop and non-null info
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, notNull, false);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, nonNull, false);
             tool.replaceWithVirtual(virtualObject);
         }
     }
