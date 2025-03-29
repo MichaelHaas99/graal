@@ -57,6 +57,7 @@ public class ObjectState {
 
     private ValueNode oop;
     private ValueNode nonNull;
+    private boolean isAllocatedOrNull;
 
     private EscapeObjectState cachedState;
 
@@ -73,10 +74,11 @@ public class ObjectState {
         }
     }
 
-    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull) {
+    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
         this(entries, locks, ensureVirtualized);
         this.oop = oop;
         this.nonNull = nonNull;
+        this.isAllocatedOrNull = isAllocatedOrNull;
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
@@ -86,13 +88,14 @@ public class ObjectState {
         this.ensureVirtualized = ensureVirtualized;
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull) {
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
         this.oop = oop;
         this.nonNull = nonNull;
+        this.isAllocatedOrNull = isAllocatedOrNull;
     }
 
     public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
@@ -110,6 +113,7 @@ public class ObjectState {
         ensureVirtualized = other.ensureVirtualized;
         oop = other.oop;
         nonNull = other.nonNull;
+        isAllocatedOrNull = other.isAllocatedOrNull;
     }
 
     public ObjectState cloneState() {
@@ -248,6 +252,10 @@ public class ObjectState {
 
     public ValueNode getNonNull() {
         return nonNull;
+    }
+
+    public boolean isAllocatedOrNull() {
+        return isAllocatedOrNull;
     }
 
     public ValueNode setNonNull(ValueNode nonNull) {

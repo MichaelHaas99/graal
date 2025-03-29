@@ -244,6 +244,11 @@ public class InlineTypeUtil {
         return createScalarizationCFG(addBefore, object, fields, false, false);
     }
 
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
+                    boolean includeNonNullPhi) {
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null);
+    }
+
     /**
      * Scalarizes an object into it's field values. In case the object is nullable a diamond is
      * which uses default values on the null branch.
@@ -255,35 +260,38 @@ public class InlineTypeUtil {
      *            are not valid
      * @param includeNonNullPhi true if the non-null information should be included in the returned
      *            phis at position zero
+     * @param phis specify phis that should be used for the diamond
      * @return The field values of the object
      */
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
-                    boolean includeNonNullPhi) {
+                    boolean includeNonNullPhi, ValuePhiNode[] phis) {
         StructuredGraph graph = addBefore.graph();
         LogicNode nonNull = graph.addOrUniqueWithInputs(LogicNegationNode.create(IsNullNode.create(object)));
-        if (assumeObjectNonNull || nonNull.isTautology()) {
-            assert StampTool.isPointerNonNull(object) : "no diamond should be created, insert a null check";
-            ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
-            if (includeNonNullPhi) {
-                loads[0] = ConstantNode.forByte((byte) 1, graph);
+        if (phis == null) {
+            if (assumeObjectNonNull || nonNull.isTautology()) {
+                assert StampTool.isPointerNonNull(object) : "no diamond should be created, insert a null check";
+                ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+                if (includeNonNullPhi) {
+                    loads[0] = ConstantNode.forByte((byte) 1, graph);
+                }
+                for (int i = 0; i < fields.length; i++) {
+                    LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields[i]));
+                    loads[i + (includeNonNullPhi ? 1 : 0)] = load;
+                    graph.addBeforeFixed(addBefore, load);
+                }
+                return loads;
             }
-            for (int i = 0; i < fields.length; i++) {
-                LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields[i]));
-                loads[i + (includeNonNullPhi ? 1 : 0)] = load;
-                graph.addBeforeFixed(addBefore, load);
+            if (nonNull.isContradiction()) {
+                ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+                if (includeNonNullPhi) {
+                    loads[0] = ConstantNode.forByte((byte) 0, graph);
+                }
+                for (int i = 0; i < fields.length; i++) {
+                    ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
+                    loads[i + (includeNonNullPhi ? 1 : 0)] = load;
+                }
+                return loads;
             }
-            return loads;
-        }
-        if (nonNull.isContradiction()) {
-            ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
-            if (includeNonNullPhi) {
-                loads[0] = ConstantNode.forByte((byte) 0, graph);
-            }
-            for (int i = 0; i < fields.length; i++) {
-                ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
-                loads[i + (includeNonNullPhi ? 1 : 0)] = load;
-            }
-            return loads;
         }
 
         BeginNode trueBegin = graph.add(new BeginNode());
@@ -326,19 +334,32 @@ public class InlineTypeUtil {
         merge.setStateAfter(framestate);
 
         // produces phi nodes
-        ValuePhiNode[] phis;
-        if (includeNonNullPhi) {
-            phis = new ValuePhiNode[fields.length + 1];
-            phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
+        if (phis == null) {
+            phis = new ValuePhiNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+            if (includeNonNullPhi) {
+                phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
+
+            }
             for (int i = 0; i < fields.length; i++) {
-                phis[i + 1] = graph.addOrUnique(new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
+                phis[i + (includeNonNullPhi ? 1 : 0)] = graph.addOrUnique(
+                                new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
             }
         } else {
-            phis = new ValuePhiNode[fields.length];
+            ValuePhiNode current;
+            if (includeNonNullPhi) {
+                current = phis[0];
+                current.setMerge(merge);
+                current.setValueAt(0, ConstantNode.forByte((byte) 1, graph));
+                current.setValueAt(1, ConstantNode.forByte((byte) 0, graph));
+            }
             for (int i = 0; i < fields.length; i++) {
-                phis[i] = graph.addOrUnique(new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
+                current = phis[i + (includeNonNullPhi ? 1 : 0)];
+                current.setMerge(merge);
+                current.setValueAt(0, loads[i]);
+                current.setValueAt(1, consts[i]);
             }
         }
+
 
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);

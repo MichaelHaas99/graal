@@ -29,18 +29,17 @@ import java.util.List;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.IntegerStamp;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.vm.ci.meta.JavaKind;
 
 public final class PEReadEliminationBlockState extends PartialEscapeBlockState<PEReadEliminationBlockState> {
@@ -125,7 +124,7 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
     }
 
     @Override
-    protected void objectMaterialized(VirtualObjectNode virtual, AllocatedObjectNode representation, List<ValueNode> values) {
+    protected void objectMaterialized(VirtualObjectNode virtual, ValueNode representation, List<ValueNode> values) {
         if (virtual instanceof VirtualInstanceNode) {
             VirtualInstanceNode instance = (VirtualInstanceNode) virtual;
             for (int i = 0; i < instance.entryCount(); i++) {

@@ -325,4 +325,7 @@ public final class GraalOptions {
     @Option(help = "Optimize integer division operation by using various mathematical foundations to "
                     + " express it in faster, equivalent, arithmetic.", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptimizeDiv = new OptionKey<>(true);
+
+    @Option(help = "Virtualize from an materialized inline object during PEA", type = OptionType.Expert)
+    public static final OptionKey<Boolean> VirtualizeFromInlineObject = new OptionKey<>(true);
 }

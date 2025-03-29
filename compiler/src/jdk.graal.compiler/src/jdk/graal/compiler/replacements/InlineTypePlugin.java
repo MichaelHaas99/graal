@@ -68,7 +68,7 @@ public class InlineTypePlugin implements NodePlugin {
     boolean virtualizeFromInlineObject;
 
     public InlineTypePlugin(OptionValues options) {
-        virtualizeFromInlineObject = GraalOptions.PartialEscapeAnalysis.getValue(options);
+        virtualizeFromInlineObject = GraalOptions.PartialEscapeAnalysis.getValue(options) && GraalOptions.VirtualizeFromInlineObject.getValue(options);
     }
 
     @Override
