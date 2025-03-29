@@ -71,7 +71,7 @@ public interface VirtualizerTool extends CoreProviders {
      * oop
      */
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oop,
-                    ValueNode nonNull);
+                    ValueNode nonNull, boolean isAllocatedOrNull);
 
     VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from);
 
@@ -110,6 +110,8 @@ public interface VirtualizerTool extends CoreProviders {
     ValueNode getOop(VirtualObjectNode virtualObject);
 
     ValueNode getNonNull(VirtualObjectNode virtualObject);
+
+    boolean isAllocatedOrNull(VirtualObjectNode virtualObject);
 
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 

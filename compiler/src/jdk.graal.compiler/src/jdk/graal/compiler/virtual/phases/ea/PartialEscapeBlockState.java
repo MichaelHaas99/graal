@@ -346,7 +346,13 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         ObjectState obj = getObjectState(virtual);
 
         ValueNode[] entries = obj.getEntries();
-        ValueNode representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
+        ValueNode representation;
+        if (obj.isAllocatedOrNull()) {
+            representation = obj.getOop();
+        } else {
+            representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
+        }
+
         escape(virtual.getObjectId(), representation);
         obj = getObjectState(virtual);
         PartialEscapeClosure.updateStatesForMaterialized(this, virtual, obj.getMaterializedValue());
@@ -377,13 +383,16 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         } else {
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
             otherAllocations.add(representation);
+            if (obj.isAllocatedOrNull()) {
+                objectMaterialized(virtual, representation, List.of(entries));
+            }
             assert obj.getLocks() == null;
         }
         materializeEffects.addLog(fixed.graph().getOptimizationLog(),
                         optimizationLog -> optimizationLog.getPartialEscapeLog().objectMaterialized(virtual));
     }
 
-    protected void objectMaterialized(VirtualObjectNode virtual, AllocatedObjectNode representation, List<ValueNode> values) {
+    protected void objectMaterialized(VirtualObjectNode virtual, ValueNode representation, List<ValueNode> values) {
         VirtualUtil.trace(options, debug, "materialized %s as %s with values %s", virtual, representation, values);
     }
 

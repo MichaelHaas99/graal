@@ -127,9 +127,14 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                                 tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
                 tool.addNode(hub);
 
-                ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
-                tool.ensureAdded(returnResultDecider);
-                tool.replaceFirstInput(result, returnResultDecider);
+                if (tool.isAllocatedOrNull(virtualObjectNode)) {
+                    tool.replaceFirstInput(result, oop);
+                } else {
+                    ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
+                    tool.ensureAdded(returnResultDecider);
+                    tool.replaceFirstInput(result, returnResultDecider);
+                }
+
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
 // ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), returnResultDecider,
 // ConstantNode.forBoolean(true, graph()));

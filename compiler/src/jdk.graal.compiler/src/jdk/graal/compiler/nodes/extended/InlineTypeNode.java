@@ -279,7 +279,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             }
 
             // create virtual object and hand over oop and non-null info
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, notNull);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, notNull, false);
             tool.replaceWithVirtual(virtualObject);
         }
     }
