@@ -25,7 +25,6 @@
 package jdk.graal.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.Iterator;
@@ -61,6 +60,7 @@ import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
+import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
@@ -72,11 +72,10 @@ import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.VirtualState;
 import jdk.graal.compiler.nodes.WithExceptionNode;
-import jdk.graal.compiler.nodes.calc.ConditionalNode;
-import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.AccessMonitorNode;
+import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
@@ -1733,11 +1732,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         /**
-         * Used to virtualze materialized inline objects. This is possible because the don't have
+         * Used to virtualze materialized inline objects. This is possible because they don't have
          * identity. The oop is saved and used if the newly created virtual object materializes
          * again. The field values are either retrieved from the cache of ReadElimination or a
          * scalarization diamond is inserted. This can avoid materializations in merges, if not all
-         * states are virtual and allow further optimizations.
+         * states are virtual and allows further optimizations.
          * 
          * @param node the inline object that should be virtualized
          * @param states the predecessor block states of the merge
@@ -1746,39 +1745,70 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return the newly create virtual object
          */
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex) {
+            assert !(node instanceof VirtualObjectNode) : "should not be virtual";
+            HIRBlock predecessor = getPredecessor(predecessorIndex);
+            GraphEffectList bEffects = blockEffects.get(predecessor);
 
             ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass,
                             instanceClass.isIdentity(), StampTool.isPointerNonNull(node));
             PartialEscapeBlockState<?> state = states[predecessorIndex];
-            tool.reset(state, merge, getPredecessor(predecessorIndex).getEndNode(), mergeEffects);
+            tool.reset(state, merge, merge, mergeEffects);
 
             // try to get cached values e.g. by read elimination
-            ValueNode[] entryState = getScalarValues(node, state);
+            List<ResolvedJavaField> fieldsWithoutValue = new ArrayList<>();
+            ValueNode[] entryState = getScalarValues(node, state, fieldsWithoutValue);
             ValueNode nonNull;
-            if (entryState != null) {
-                if (StampTool.isPointerNonNull(node)) {
-                    nonNull = ConstantNode.forInt(1, graph());
-                } else {
-                    nonNull = new ConditionalNode(IsNullNode.create(node),
-                                    ConstantNode.forInt(0, graph()), ConstantNode.forInt(1,
-                                                    graph()));
-                    mergeEffects.addFloatingNode(nonNull, "");
+
+            HIRBlock block = getPredecessor(predecessorIndex);
+            ResolvedJavaField[] fields = fieldsWithoutValue.toArray(new ResolvedJavaField[fieldsWithoutValue.size()]);
+
+            ValueNode[] additionalFieldValues = new ValueNode[fields.length];
+            int additionalFieldValuesIndex = 0;
+
+            FixedNode addBeforeFixed = block.getEndNode();
+            int entryStateIndex = 0;
+            if (StampTool.isPointerNonNull(node)) {
+                nonNull = ConstantNode.forInt(1, graph());
+                for (int i = 0; i < fields.length; i++) {
+                    LoadFieldNode load = LoadFieldNode.create(graph().getAssumptions(), node, fields[i]);
+                    bEffects.addFixedNodeBefore(load, addBeforeFixed);
+                    additionalFieldValues[additionalFieldValuesIndex++] = load;
+
                 }
-                tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), null, false, node, nonNull, true);
+            } else if (StampTool.isPointerAlwaysNull(node)) {
+                nonNull = ConstantNode.forInt(0, graph());
+                for (int i = 0; i < fields.length; i++) {
+                    ConstantNode load = ConstantNode.defaultForKind(fields[i].getJavaKind());
+                    bEffects.addFloatingNode(load, "scalarizing null value");
+                    additionalFieldValues[additionalFieldValuesIndex++] = load;
+                }
             } else {
-                // create a scalarization cfg
-                HIRBlock block = getPredecessor(predecessorIndex);
-                ResolvedJavaField[] fields = instanceClass.getInstanceFields(true);
                 ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
-                phis[0] = new ValuePhiNode(StampFactory.forKind(JavaKind.Byte).unrestricted(), null, new ValueNode[2]);
-                mergeEffects.addFloatingNode(phis[0], "virtualMergePhi");
+                ValuePhiNode phi = new ValuePhiNode(StampFactory.forKind(JavaKind.Byte).unrestricted(), null, new ValueNode[2]);
+                nonNull = phi;
+                phis[0] = phi;
+                mergeEffects.addFloatingNode(nonNull, "virtualMergePhi");
 
                 for (int j = 0; j < fields.length; j++) {
-                    phis[j + 1] = new ValuePhiNode(StampFactory.forDeclaredType(graph().getAssumptions(), fields[j].getType(), false).getTrustedStamp().unrestricted(), null, new ValueNode[2]);
-                    mergeEffects.addFloatingNode(phis[j + 1], "virtualMergePhi");
+                    phi = new ValuePhiNode(StampFactory.forDeclaredType(graph().getAssumptions(), fields[j].getType(), false).getTrustedStamp().unrestricted(), null, new ValueNode[2]);
+                    mergeEffects.addFloatingNode(phi, "virtualMergePhi");
+                    additionalFieldValues[additionalFieldValuesIndex++] = phi;
+                    phis[j + 1] = phi;
                 }
-                mergeEffects.add(new EffectList.SimpleEffect("create scalarization cfg") {
+
+                LoadFieldNode[] nonNullValues = new LoadFieldNode[fields.length];
+                for (int i = 0; i < fields.length; i++) {
+                    nonNullValues[i] = LoadFieldNode.create(graph().getAssumptions(), node, fields[i]);
+                }
+                ConstantNode[] nullValues = new ConstantNode[fields.length];
+                for (int i = 0; i < fields.length; i++) {
+                    nullValues[i] = ConstantNode.defaultForKind(fields[i].getJavaKind());
+                }
+
+                MergeNode mergeNode = new MergeNode();
+
+                bEffects.add(new EffectList.SimpleEffect("create scalarization cfg") {
                     @Override
                     void format(StringBuilder str) {
 
@@ -1786,14 +1816,44 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                     @Override
                     void apply(StructuredGraph graph) {
-                        InlineTypeUtil.createScalarizationCFG(block.getEndNode(), node, fields, false, true, phis);
+                        InlineTypeUtil.createScalarizationCFG(block.getEndNode(), node, fields, false, true, phis, nonNullValues, nullValues, mergeNode);
                     }
                 });
-                nonNull = phis[0];
-                entryState = Arrays.copyOfRange(phis, 1, phis.length);
+                afterMergeEffects.add(new EffectList.SimpleEffect("set phi inputs") {
+                    @Override
+                    void format(StringBuilder str) {
 
-                tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), null, false, node, nonNull, true);
+                    }
+
+                    @Override
+                    void apply(StructuredGraph graph) {
+                        ValuePhiNode current;
+                        current = phis[0];
+                        current.setMerge(mergeNode);
+                        current.setValueAt(0, ConstantNode.forInt(1, graph));
+                        current.setValueAt(1, ConstantNode.forInt(0, graph));
+                        for (int i = 0; i < fields.length; i++) {
+                            current = phis[i + 1];
+                            current.setMerge(mergeNode);
+                            current.setValueAt(0, nonNullValues[i]);
+                            current.setValueAt(1, nullValues[i]);
+                        }
+                    }
+                });
+
             }
+            additionalFieldValuesIndex = 0;
+            for (int i = 0; i < fields.length; i++) {
+                while (entryStateIndex < entryState.length && entryState[entryStateIndex] != null) {
+                    entryStateIndex++;
+                }
+                if (entryStateIndex == entryState.length) {
+                    throw new GraalError("unexpected end of inline object");
+                }
+                entryState[entryStateIndex] = additionalFieldValues[additionalFieldValuesIndex++];
+            }
+
+            tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
             return virtualObject;
         }
 
@@ -1857,21 +1917,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    ValueNode[] getScalarValues(ValueNode value, PartialEscapeBlockState<?> state) {
-        if (StampTool.isInlineTypeOrNull(value, tool.getValhallaOptionsProvider())) {
-            ResolvedJavaType type = value.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
-            ResolvedJavaField[] fields = type.getInstanceFields(true);
-            ValueNode[] result = new ValueNode[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                ValueNode fieldValue = getScalarValue(value, fields[i], state);
-                if (fieldValue == null) {
-                    return null;
-                }
-                result[i] = fieldValue;
+    ValueNode[] getScalarValues(ValueNode value, PartialEscapeBlockState<?> state, List<ResolvedJavaField> fieldsWithoutValue) {
+        assert StampTool.isInlineTypeOrNull(value, tool.getValhallaOptionsProvider()) : "should only be called on a node with a nullable inline type stamp";
+        ResolvedJavaType type = value.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
+        ValueNode[] result = new ValueNode[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            ValueNode fieldValue = getScalarValue(value, fields[i], state);
+            if (fieldValue == null) {
+                fieldsWithoutValue.add(fields[i]);
             }
-            return result;
+            result[i] = fieldValue;
         }
-        return null;
+        return result;
     }
 
     public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {

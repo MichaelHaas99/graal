@@ -246,7 +246,7 @@ public class InlineTypeUtil {
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null);
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null, null, null, null);
     }
 
     /**
@@ -264,7 +264,7 @@ public class InlineTypeUtil {
      * @return The field values of the object
      */
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
-                    boolean includeNonNullPhi, ValuePhiNode[] phis) {
+                    boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode) {
         StructuredGraph graph = addBefore.graph();
         LogicNode nonNull = graph.addOrUniqueWithInputs(LogicNegationNode.create(IsNullNode.create(object)));
         if (phis == null) {
@@ -311,7 +311,14 @@ public class InlineTypeUtil {
         ValueNode nonNullObject = graph.addOrUnique(PiNode.create(object, objectNonNull(), trueBegin));
         FixedWithNextNode previous = trueBegin;
         for (int i = 0; i < fields.length; i++) {
-            LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields[i]));
+            LoadFieldNode load;
+            if (nonNullValues == null) {
+                load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields[i]));
+            } else {
+                load = graph.add(nonNullValues[i]);
+                load.setObject(nonNullObject);
+            }
+
             loads[i] = load;
             previous.setNext(load);
             previous = load;
@@ -322,7 +329,12 @@ public class InlineTypeUtil {
         // false branch - inline object is null, use default values of fields
 
         for (int i = 0; i < fields.length; i++) {
-            ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
+            ConstantNode load;
+            if (nullValues == null) {
+                load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
+            } else {
+                load = graph.addWithoutUnique(nullValues[i]);
+            }
             consts[i] = load;
         }
         EndNode falseEnd = graph.add(new EndNode());
@@ -330,7 +342,7 @@ public class InlineTypeUtil {
             falseBegin.setNext(falseEnd);
 
         // merge
-        MergeNode merge = graph.add(new MergeNode());
+        MergeNode merge = graph.add(mergeNode == null ? new MergeNode() : mergeNode);
         merge.setStateAfter(framestate);
 
         // produces phi nodes
@@ -345,19 +357,7 @@ public class InlineTypeUtil {
                                 new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
             }
         } else {
-            ValuePhiNode current;
-            if (includeNonNullPhi) {
-                current = phis[0];
-                current.setMerge(merge);
-                current.setValueAt(0, ConstantNode.forByte((byte) 1, graph));
-                current.setValueAt(1, ConstantNode.forByte((byte) 0, graph));
-            }
-            for (int i = 0; i < fields.length; i++) {
-                current = phis[i + (includeNonNullPhi ? 1 : 0)];
-                current.setMerge(merge);
-                current.setValueAt(0, loads[i]);
-                current.setValueAt(1, consts[i]);
-            }
+            // phi inputs set in after merge effects
         }
 
 
