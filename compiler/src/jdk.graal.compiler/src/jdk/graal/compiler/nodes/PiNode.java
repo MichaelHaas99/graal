@@ -262,9 +262,10 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
             ResolvedJavaType type = StampTool.typeOrNull(this, tool.getMetaAccess());
             if (type != null && type.isAssignableFrom(virtual.type())) {
                 if (!StampTool.isPointerNonNull(alias) && StampTool.isPointerNonNull(this)) {
+
                     // Pi narrows the type to non-null, therefore change the virtual object to
                     // non-null
-                    virtual = tool.copyVirtualObjectNonNull(virtual);
+                    virtual = tool.copyVirtualObjectNonNull(virtual, getNodeSourcePosition());
                     stopPEAUnproxify = true;
                 }
                 tool.replaceWithVirtual(virtual);

@@ -73,7 +73,7 @@ public interface VirtualizerTool extends CoreProviders {
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oop,
                     ValueNode nonNull, boolean isAllocatedOrNull);
 
-    VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from);
+    VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from, NodeSourcePosition sourcePosition);
 
     /**
      * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still

@@ -266,13 +266,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
-                // always use the alias, field value may be outdated
-                state[i] = tool.getAlias(getField(i));
+                state[i] = getField(i);
             }
-
-            // oop and nonnull are maybe outdated use the alias in the created virtual object
-            oop = tool.getAlias(oop);
-            nonNull = tool.getAlias(nonNull);
 
             // make sure both values are either null or set
             // after an invoke we already have both
