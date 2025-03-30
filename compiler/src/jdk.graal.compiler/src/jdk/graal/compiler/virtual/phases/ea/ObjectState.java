@@ -262,6 +262,10 @@ public class ObjectState {
         return this.nonNull = nonNull;
     }
 
+    public void clearCachedState() {
+        this.cachedState = null;
+    }
+
     public boolean hasLocks() {
         return locks != null;
     }
