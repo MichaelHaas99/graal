@@ -262,6 +262,10 @@ public class ObjectState {
         return this.nonNull = nonNull;
     }
 
+    public ValueNode setOop(ValueNode oop) {
+        return this.oop = oop;
+    }
+
     public void clearCachedState() {
         this.cachedState = null;
     }

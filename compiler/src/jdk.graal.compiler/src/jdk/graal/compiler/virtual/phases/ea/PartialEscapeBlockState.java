@@ -170,6 +170,19 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         }
     }
 
+    public void setAdditionalEntry(int object, boolean nonNull, ValueNode value) {
+        if (nonNull) {
+            if (objectStates[object].getNonNull() != value) {
+                getObjectStateForModification(object).setNonNull(value);
+            }
+        } else {
+            if (objectStates[object].getOop() != value) {
+                getObjectStateForModification(object).setOop(value);
+            }
+        }
+
+    }
+
     public void escape(int object, ValueNode materialized) {
         getObjectStateForModification(object).escape(materialized);
     }
