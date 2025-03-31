@@ -218,7 +218,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
                     assert StampTool.isPointerNonNull(virtualObjectNode) : "null-check should be done before PEA";
-                    if (StampTool.isInlineType(virtualObjectNode, tool.getValhallaOptionsProvider())) {
+                    if (StampTool.isInlineType(virtualObjectNode, tool.getValhallaOptionsProvider()) && !(tool.getAlias(entry) instanceof VirtualObjectNode)) {
                         ValueNode replacement = new FixedValueAnchorNode(entry);
                         tool.addNode(replacement);
                         tool.replaceWith(replacement);
