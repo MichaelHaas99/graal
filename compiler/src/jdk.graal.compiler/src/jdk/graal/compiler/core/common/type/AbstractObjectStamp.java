@@ -98,7 +98,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         return nonNull() && isExactType() && !type().isIdentity();
     }
 
-    public boolean isInlineTypeOrNull() {
+    public boolean isNullableInlineType() {
         return isExactType() && !type().isIdentity();
     }
 

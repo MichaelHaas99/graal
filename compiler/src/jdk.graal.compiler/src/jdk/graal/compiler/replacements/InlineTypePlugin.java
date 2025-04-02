@@ -130,10 +130,10 @@ public class InlineTypePlugin implements NodePlugin {
 
         // do null-check here to avoid it in PEA, if the holder has no identity
         Stamp stamp = StampFactory.forDeclaredType(b.getAssumptions(), field.getType().resolve(field.getDeclaringClass()), false).getTrustedStamp();
-        if (!field.getDeclaringClass().isIdentity() || StampTool.isInlineTypeOrNull(stamp, b.getValhallaOptionsProvider())) {
+        if (!field.getDeclaringClass().isIdentity() || StampTool.isNullableInlineType(stamp, b.getValhallaOptionsProvider())) {
             object = genNullCheck(b, object);
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
-            if (virtualizeFromInlineObject && StampTool.isInlineTypeOrNull(load, b.getValhallaOptionsProvider())) {
+            if (virtualizeFromInlineObject && StampTool.isNullableInlineType(load, b.getValhallaOptionsProvider())) {
                 FixedNode addBefore = b.add(new ValueAnchorNode());
                 load = virtualizeFromInlineObject(b, load, stamp.javaType(b.getMetaAccess()), addBefore);
             }
