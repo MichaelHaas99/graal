@@ -297,6 +297,7 @@ public class StampTool {
         return false;
     }
 
+    // TODO: rename to isNonNullInlineType
     public static boolean isInlineType(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
         return isInlineType(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
     }
@@ -308,7 +309,7 @@ public class StampTool {
      * @param stamp the stamp to check
      * @param valhallaOptionsProvider options specific for valhalla
      * @return true if this stamp represents a legal object stamp whose values are known to be
-     *         inline types
+     *         non-null inline types
      */
     public static boolean isInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
         if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
@@ -319,8 +320,8 @@ public class StampTool {
         return false;
     }
 
-    public static boolean isInlineTypeOrNull(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
-        return isInlineTypeOrNull(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
+    public static boolean isNullableInlineType(ValueNode node, ValhallaOptionsProvider valhallaOptionsProvider) {
+        return isNullableInlineType(node.stamp(NodeView.DEFAULT), valhallaOptionsProvider);
     }
 
     /**
@@ -332,11 +333,11 @@ public class StampTool {
      * @return true if this stamp represents a legal object stamp whose values are known to be
      *         inline types or null
      */
-    public static boolean isInlineTypeOrNull(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
+    public static boolean isNullableInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
         if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
             return false;
         if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
-            return abstractObjectStamp.isInlineTypeOrNull();
+            return abstractObjectStamp.isNullableInlineType();
         }
         return false;
     }

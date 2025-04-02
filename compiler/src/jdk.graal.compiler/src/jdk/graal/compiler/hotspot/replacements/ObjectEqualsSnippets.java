@@ -101,10 +101,10 @@ public class ObjectEqualsSnippets implements Snippets {
                 JavaKind[] kinds = new JavaKind[0];
                 Stamp[] stamps = new Stamp[0];
                 LocationIdentity[] identities = new LocationIdentity[0];
-                if (StampTool.isInlineTypeOrNull(x, tool.getValhallaOptionsProvider())) {
+                if (StampTool.isNullableInlineType(x, tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) x.stamp(NodeView.DEFAULT);
                     type = stamp.type();
-                } else if (StampTool.isInlineTypeOrNull(y, tool.getValhallaOptionsProvider())) {
+                } else if (StampTool.isNullableInlineType(y, tool.getValhallaOptionsProvider())) {
                     AbstractObjectStamp stamp = (AbstractObjectStamp) y.stamp(NodeView.DEFAULT);
                     type = stamp.type();
                 } else {
@@ -172,9 +172,9 @@ public class ObjectEqualsSnippets implements Snippets {
                 // The access flag read is not done at compile time see
                 // Avoid crash when performing unaligned reads (JDK-8275645)
                 // Therefore pass it as additional input to avoid a read from a hub at runtime
-                args.add("xIsInlineType", StampTool.isInlineTypeOrNull(x,
+                args.add("xIsInlineType", StampTool.isNullableInlineType(x,
                                 tool.getValhallaOptionsProvider()));
-                args.add("yIsInlineType", StampTool.isInlineTypeOrNull(y,
+                args.add("yIsInlineType", StampTool.isNullableInlineType(y,
                                 tool.getValhallaOptionsProvider()));
 
                 return args;
