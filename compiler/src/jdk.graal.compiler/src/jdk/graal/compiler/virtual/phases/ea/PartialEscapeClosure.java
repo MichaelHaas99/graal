@@ -42,6 +42,7 @@ import jdk.graal.compiler.core.common.RetryableBailoutException;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.CounterKey;
 import jdk.graal.compiler.debug.DebugContext;
@@ -1166,6 +1167,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return true if materialization happened during the merge, false otherwise
          */
         private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
+            return mergeObjectStates(resultObject, sourceObjects, states, 0);
+        }
+
+        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int scalarizationDepth) {
             boolean compatible = true;
             boolean ensureVirtual = true;
             IntUnaryOperator getObject = index -> sourceObjects == null ? resultObject : sourceObjects[index];
@@ -1336,6 +1341,73 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                 }
 
+                VirtualObjectNode[] virtualizedEntry = new VirtualObjectNode[values.length];
+                // don't scalarize if we may land in a circle
+                ValueNode firstVirtual = virtualObjects.get(getObject.applyAsInt(0));
+                if (scalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions()) && !(StampTool.isNullableInlineType(firstVirtual, tool.getValhallaOptionsProvider()) &&
+                                InlineTypeUtil.isCircularInlineType(firstVirtual.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess())))) {
+                    // try to keep virtual entries virtual by making entries with materialized
+                    // inline objects
+                    // virtual again, merge each virtual entry recursively.
+                    boolean[] virtualizeInfo = new boolean[values.length];
+                    ResolvedJavaType[] types = new ResolvedJavaType[values.length];
+                    // iterate over each entry
+                    for (int valueIndex = 0; valueIndex < values.length; valueIndex++) {
+                        boolean virtualize = true;
+                        // iterate over the states
+                        for (int i = 0; i < states.length; i++) {
+                            // we are allowed to virtualize if the entry is null or an inline type
+                            int object = getObject.applyAsInt(i);
+                            ValueNode entry = states[i].getObjectState(object).getEntry(valueIndex);
+                            if (object == -1 || !StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider()) && !StampTool.isPointerAlwaysNull(entry)) {
+                                virtualize = false;
+                                break;
+                            } else if (types[valueIndex] == null && StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
+                                // remember the type for null constants
+                                types[valueIndex] = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+                            }
+                        }
+                        virtualizeInfo[valueIndex] = virtualize;
+                    }
+
+                    for (int valueIndex = 0; valueIndex < values.length; valueIndex++) {
+                        if (!virtualizeInfo[valueIndex]) {
+                            continue;
+                        }
+
+                        int tempResult = -1;
+                        int stateIndex = -1;
+                        int[] tempSourceObjects = new int[states.length];
+                        for (int i = 0; i < states.length; i++) {
+                            int object = getObject.applyAsInt(i);
+                            ValueNode entry = states[i].getObjectState(object).getEntry(valueIndex);
+                            VirtualInstanceNode tempVirtual;
+                            if (entry instanceof VirtualInstanceNode virtualInstanceNode && states[i].getObjectState(virtualInstanceNode.getObjectId()).isVirtual()) {
+                                tempVirtual = virtualInstanceNode;
+                            } else if (entry instanceof VirtualInstanceNode virtualInstanceNode) {
+                                tempVirtual = virtualizeFromInlineObject(states[i].getObjectState(virtualInstanceNode.getObjectId()).getMaterializedValue(), states, i,
+                                                StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])));
+
+                            } else {
+                                tempVirtual = virtualizeFromInlineObject(entry, states, i, StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])));
+
+                            }
+                            if (!StampTool.isPointerNonNull(tempVirtual)) {
+                                tempResult = tempVirtual.getObjectId();
+                                stateIndex = i;
+                            }
+                            tempSourceObjects[i] = tempVirtual.getObjectId();
+                        }
+                        if (tempResult == -1) {
+                            tempResult = tempSourceObjects[0];
+                            stateIndex = 0;
+                        }
+                        newState.addObject(tempResult, states[stateIndex].getObjectState(tempResult).share());
+                        virtualizedEntry[valueIndex] = virtualObjects.get(tempResult);
+                        mergeObjectStates(tempResult, tempSourceObjects, states, scalarizationDepth + 1);
+                    }
+                }
+
                 PhiNode[] phis = getValuePhis(virtual, virtual.entryCount() + additionalPhisCount);
                 int valueIndex = 0;
                 while (valueIndex < values.length) {
@@ -1343,6 +1415,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         if (phis[valueIndex] == null) {
                             int object = getObject.applyAsInt(i);
                             if (object != -1) {
+                                if (virtualizedEntry[valueIndex] != null) {
+                                    continue;
+                                }
                                 ValueNode field = states[i].getObjectState(object).getEntry(valueIndex);
                                 if (values[valueIndex] != field) {
                                     phis[valueIndex] = createValuePhi(values[valueIndex].stamp(NodeView.DEFAULT).unrestricted());

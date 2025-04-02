@@ -4,6 +4,7 @@ import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Stack;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -591,5 +592,35 @@ public class InlineTypeUtil {
 
     public static boolean needsSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
         return StampTool.canBeInlineType(x, valhallaOptionsProvider) && StampTool.canBeInlineType(y, valhallaOptionsProvider);
+    }
+
+    /**
+     * Checks whether we can run into a circle when we try to recursively scalarize an inline
+     * object.
+     * 
+     * @param type the inline type
+     * @return true if a circle is possible
+     */
+    public static boolean isCircularInlineType(ResolvedJavaType type) {
+        return isCircularInlineType(type, new ArrayList<>());
+    }
+
+    private static boolean isCircularInlineType(ResolvedJavaType type, List<ResolvedJavaType> visitedTypes) {
+        Stack<ResolvedJavaType> stack = new Stack<>();
+        stack.push(type);
+        while (!stack.isEmpty()) {
+            ResolvedJavaType t = stack.pop();
+            if (visitedTypes.contains(t) || type != t && (!t.isPrimitive() && !t.isIdentity() && (t.isAbstract() && t.isInterface()) || t.isJavaLangObject())) {
+                return true;
+            } else {
+                visitedTypes.add(t);
+                for (ResolvedJavaField field : t.getInstanceFields(true)) {
+                    ResolvedJavaType fieldType = field.getType().resolve(type);
+                    stack.push(fieldType);
+                }
+            }
+        }
+        return false;
+
     }
 }

@@ -328,4 +328,6 @@ public final class GraalOptions {
 
     @Option(help = "Virtualize from an materialized inline object during PEA", type = OptionType.Expert)
     public static final OptionKey<Boolean> VirtualizeFromInlineObject = new OptionKey<>(true);
+    @Option(help = "Defines how deep we are allowed scalarize from an materialized inline object during PEA", type = OptionType.Expert)
+    public static final OptionKey<Integer> ScalarizationDepth = new OptionKey<>(10);
 }
