@@ -578,6 +578,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
             counter.increment(debug);
             VirtualObjectNode virtual = virtualObjects.get(object);
+            boolean isAllocatedOrNull = state.getObjectState(object).isAllocatedOrNull();
             state.materializeBefore(materializeBefore, virtual, effects);
 
             if (requiresStrictLockOrder && materializedAcquiredLocks && objectState.hasLocks()) {
@@ -585,7 +586,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
 
             assert !updateStatesForMaterialized(state, virtual, state.getObjectState(object).getMaterializedValue()) : "method must already have been called before";
-            return true;
+            return isAllocatedOrNull;
         } else {
             return false;
         }
@@ -1454,12 +1455,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 }
                                 ValueNode temp;
                                 if (i == 0) {
-                                    temp = states[i].getObjectState(object).getOop();
+                                    temp = states[i2].getObjectState(object).getOop();
                                     if (temp == null) {
                                         temp = nullPointer;
                                     }
                                 } else {
-                                    temp = states[i].getObjectState(object).getNonNull();
+                                    temp = states[i2].getObjectState(object).getNonNull();
                                     if (temp == null) {
                                         temp = ConstantNode.forInt(1, graph());
                                     }

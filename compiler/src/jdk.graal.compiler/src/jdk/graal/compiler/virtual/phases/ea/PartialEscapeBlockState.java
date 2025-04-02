@@ -369,7 +369,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         escape(virtual.getObjectId(), representation);
         obj = getObjectState(virtual);
         PartialEscapeClosure.updateStatesForMaterialized(this, virtual, obj.getMaterializedValue());
-        if (representation instanceof AllocatedObjectNode) {
+        if (representation instanceof AllocatedObjectNode && !obj.isAllocatedOrNull()) {
             objects.add((AllocatedObjectNode) representation);
             locks.add(LockState.asList(obj.getLocks()));
             oopsOrHubs.add(obj.getOop());
