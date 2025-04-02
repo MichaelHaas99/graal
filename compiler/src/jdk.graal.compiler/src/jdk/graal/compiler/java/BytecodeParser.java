@@ -3127,6 +3127,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected void genMonitorEnter(ValueNode x, int bci) {
         MonitorIdNode monitorId = graph.add(new MonitorIdNode(frameState.lockDepth(true), bci()));
+        if (StampTool.canBeInlineType(x, getValhallaOptionsProvider())) {
+            // to avoid a null-check in PEA
+            x = nullCheckedValue(x);
+        }
         ValueNode object = maybeEmitExplicitNullCheck(x);
         if (getValhallaOptionsProvider().valhallaEnabled() && InlineTypeUtil.isIdentityExceptionClassAvailable()) {
             object = maybeEmitExplicitIdentityCheck(object);

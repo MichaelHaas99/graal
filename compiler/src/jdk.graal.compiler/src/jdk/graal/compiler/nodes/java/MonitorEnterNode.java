@@ -41,6 +41,7 @@ import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -74,10 +75,11 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
 
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode virtual) {
+            assert StampTool.isPointerNonNull(virtual) : "null-check should be done before PEA";
             if (virtual.hasIdentity()) {
                 tool.addLock(virtual, getMonitorId());
                 tool.delete();
-            } else {
+            } else if (StampTool.isInlineType(virtual, tool.getValhallaOptionsProvider())) {
                 LogicNode node = LogicConstantNode.forBoolean(false, graph());
                 ValueNode deopt = new FixedGuardNode(node, DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile);
                 tool.replaceWith(deopt);
