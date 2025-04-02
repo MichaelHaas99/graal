@@ -336,6 +336,22 @@ public class ObjectState {
         if (!Arrays.equals(entries, other.entries)) {
             return false;
         }
+        if (oop == null) {
+            if (other.oop != null) {
+                return false;
+            }
+        } else if (!oop.equals(other.oop)) {
+            return false;
+        }
+
+        if (nonNull == null) {
+            if (other.nonNull != null) {
+                return false;
+            }
+        } else if (!nonNull.equals(other.nonNull)) {
+            return false;
+        }
+
         if (!locksEqual(other)) {
             return false;
         }
