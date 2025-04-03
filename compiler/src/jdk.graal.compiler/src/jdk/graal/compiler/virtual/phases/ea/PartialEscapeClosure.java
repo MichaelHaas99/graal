@@ -1402,9 +1402,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             tempResult = tempSourceObjects[0];
                             stateIndex = 0;
                         }
-                        newState.addObject(tempResult, states[stateIndex].getObjectState(tempResult).share());
+                        ObjectState tempState = states[stateIndex].getObjectState(tempResult).share();
+                        boolean isAllocatedOrNull = true;
+                        for (int j = 0; j < states.length; j++) {
+                            isAllocatedOrNull &= states[j].getObjectState(tempSourceObjects[j]).isAllocatedOrNull();
+                        }
+                        tempState.setAllocatedOrNull(isAllocatedOrNull);
+                        newState.addObject(tempResult, tempState);
                         virtualizedEntry[valueIndex] = virtualObjects.get(tempResult);
                         mergeObjectStates(tempResult, tempSourceObjects, states, scalarizationDepth + 1);
+                        values[valueIndex] = virtualizedEntry[valueIndex];
                     }
                 }
 

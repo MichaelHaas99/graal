@@ -258,12 +258,16 @@ public class ObjectState {
         return isAllocatedOrNull;
     }
 
-    public ValueNode setNonNull(ValueNode nonNull) {
-        return this.nonNull = nonNull;
+    public void setNonNull(ValueNode nonNull) {
+        this.nonNull = nonNull;
     }
 
-    public ValueNode setOop(ValueNode oop) {
-        return this.oop = oop;
+    public void setOop(ValueNode oop) {
+        this.oop = oop;
+    }
+
+    public void setAllocatedOrNull(boolean isAllocatedOrNull) {
+        this.isAllocatedOrNull = isAllocatedOrNull;
     }
 
     public void clearCachedState() {
