@@ -587,7 +587,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
 
             assert !updateStatesForMaterialized(state, virtual, state.getObjectState(object).getMaterializedValue()) : "method must already have been called before";
-            return isAllocatedOrNull;
+            return !isAllocatedOrNull;
         } else {
             return false;
         }
