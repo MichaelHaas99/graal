@@ -140,9 +140,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 // and non-null). Therefore use its values to replace the input list.
                 // At a later stage this will remove the CFG which was created for the scalarized
                 // return.
-                if (!StampTool.isPointerNonNull(virtualObjectNode)) {
-                    replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, type.getType());
-                }
+                replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, type.getType());
 
                 if (tool.isAllocatedOrNull(virtualObjectNode)) {
                     tool.replaceFirstInput(result, oop);
@@ -198,7 +196,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             if (entry instanceof VirtualObjectNode) {
                 tool.ensureMaterialized((VirtualObjectNode) entry);
             }
-            tool.replaceFirstInput(fieldValues.get(i), entry);
+            tool.replaceFirstInput(fieldValues.get(i), tool.getAlias(entry));
         }
     }
 
