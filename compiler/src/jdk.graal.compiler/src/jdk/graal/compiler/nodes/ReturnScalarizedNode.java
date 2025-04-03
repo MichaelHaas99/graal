@@ -107,9 +107,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!virtualize)
+        if (!virtualize) {
             return;
+        }
+
         ValueNode alias = tool.getAlias(result);
+
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
             // make sure oop stays virtual and instead return hub with bit zero set
             TypeReference type = StampTool.typeReferenceOrNull(alias);
@@ -127,13 +130,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                                 tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
                 tool.addNode(hub);
 
-                if (tool.isAllocatedOrNull(virtualObjectNode)) {
-                    tool.replaceFirstInput(result, oop);
-                } else {
-                    ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
-                    tool.ensureAdded(returnResultDecider);
-                    tool.replaceFirstInput(result, returnResultDecider);
-                }
 
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
 // ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), returnResultDecider,
@@ -145,16 +141,23 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 // At a later stage this will remove the CFG which was created for the scalarized
                 // return.
                 if (!StampTool.isPointerNonNull(virtualObjectNode)) {
-                    ResolvedJavaField[] fields = type.getType().getInstanceFields(true);
-                    for (int i = 0; i < fields.length; i++) {
-                        int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(fields[i]);
-                        ValueNode entry = tool.getEntry(virtualObjectNode, fieldIndex);
-                        tool.replaceFirstInput(fieldValues.get(i), entry);
-                    }
+                    replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, type.getType());
+                }
+
+                if (tool.isAllocatedOrNull(virtualObjectNode)) {
+                    tool.replaceFirstInput(result, oop);
+                } else {
+                    ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
+                    tool.ensureAdded(returnResultDecider);
+                    tool.replaceFirstInput(result, returnResultDecider);
                 }
                 return;
 
             }
+
+            // materialize before tagged hub node, a klass pointer in a register is dangerous, make
+            // sure it comes last
+            replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, type.getType());
 
             // get hub
             ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
@@ -172,6 +175,30 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 // ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), taggedHub,
 // ConstantNode.forBoolean(true, graph()));
 // tool.addNode(print);
+        } else {
+            // materialize the field values if they are virtual
+            materializeFields(tool);
+        }
+    }
+
+    private void materializeFields(VirtualizerTool tool) {
+        for (int i = 0; i < fieldValues.size(); i++) {
+            ValueNode field = tool.getAlias(fieldValues.get(i));
+            if (field instanceof VirtualObjectNode virtualObjectNode) {
+                tool.ensureMaterialized(virtualObjectNode);
+            }
+        }
+    }
+
+    private void replaceAndMaterializeFields(VirtualizerTool tool, VirtualInstanceNode alias, ResolvedJavaType type) {
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
+        for (int i = 0; i < fields.length; i++) {
+            int fieldIndex = alias.fieldIndex(fields[i]);
+            ValueNode entry = tool.getEntry(alias, fieldIndex);
+            if (entry instanceof VirtualObjectNode) {
+                tool.ensureMaterialized((VirtualObjectNode) entry);
+            }
+            tool.replaceFirstInput(fieldValues.get(i), entry);
         }
     }
 
