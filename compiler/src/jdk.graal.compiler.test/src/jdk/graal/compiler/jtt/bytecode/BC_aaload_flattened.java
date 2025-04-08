@@ -74,7 +74,9 @@ public class BC_aaload_flattened extends JTTTest {
     // and test0 checks that updating the null marker doesn't corrupt
     // the surrounding fields and vice-versa.
     static long test() {
-        return va[1].l;
+        //Value0[] vl = new Value0[]{new Value0(), new Value0()};
+        long temp = va[1].l;
+        return temp;
     }
 
     static abstract value class A{}

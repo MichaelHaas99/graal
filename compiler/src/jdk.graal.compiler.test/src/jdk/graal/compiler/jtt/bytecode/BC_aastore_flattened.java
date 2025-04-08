@@ -74,8 +74,8 @@ public class BC_aastore_flattened extends JTTTest {
     // and test0 checks that updating the null marker doesn't corrupt
     // the surrounding fields and vice-versa.
     static Value0 test() {
-        //va[1] = new Value0(2,3,(short)4,(byte)5);
-        va[1] = null;
+        va[1] = new Value0(2,3,(short)4,(byte)5);
+        //va[1] = null;
         return va[0];
     }
 
