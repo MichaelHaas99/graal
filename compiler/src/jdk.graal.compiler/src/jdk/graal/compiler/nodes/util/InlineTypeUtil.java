@@ -350,7 +350,7 @@ public class InlineTypeUtil {
         if (phis == null) {
             phis = new ValuePhiNode[fields.length + (includeNonNullPhi ? 1 : 0)];
             if (includeNonNullPhi) {
-                phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Byte), merge, ConstantNode.forByte((byte) 1, graph), ConstantNode.forByte((byte) 0, graph)));
+                phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Int), merge, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph)));
 
             }
             for (int i = 0; i < fields.length; i++) {
