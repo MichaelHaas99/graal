@@ -397,7 +397,21 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
             otherAllocations.add(representation);
             if (obj.isAllocatedOrNull()) {
-                objectMaterialized(virtual, representation, List.of(entries));
+                List<ValueNode> localEntries = new ArrayList<>();
+                // ensure no virtual objects are passed
+                for (ValueNode entry : List.of(entries)) {
+                    if (entry instanceof VirtualObjectNode virtualEntry) {
+                        ObjectState entryState = getObjectState(virtualEntry);
+                        assert !entryState.isVirtual() || entryState.isAllocatedOrNull() : "no virtual states allowed, was created by scalarization from a materialized object";
+                        if (entryState.isAllocatedOrNull()) {
+                            entry = entryState.getOop();
+                        } else {
+                            entry = entryState.getMaterializedValue();
+                        }
+                    }
+                    localEntries.add(entry);
+                }
+                objectMaterialized(virtual, representation, localEntries);
             }
             assert obj.getLocks() == null;
         }
