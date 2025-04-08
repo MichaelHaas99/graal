@@ -5,12 +5,14 @@ import static jdk.graal.compiler.nodeinfo.InputType.Memory;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 
 /**
@@ -62,4 +64,26 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
         }
         tool.delete();
     }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        List<Integer> transferredObjIndexes = simplifyHelper(tool);
+
+        if (transferredObjIndexes == null) {
+            // null means no deletion or simplification was applied
+            return;
+        }
+
+        List<ValueNode> newOops = new ArrayList<>();
+        List<ValueNode> newNonNulls = new ArrayList<>();
+        for (int index : transferredObjIndexes) {
+            newOops.add(oops.get(index));
+            newNonNulls.add(nonNulls.get(index));
+        }
+        oops.clear();
+        oops.addAll(newOops);
+        nonNulls.clear();
+        nonNulls.addAll(newNonNulls);
+    }
+
 }
