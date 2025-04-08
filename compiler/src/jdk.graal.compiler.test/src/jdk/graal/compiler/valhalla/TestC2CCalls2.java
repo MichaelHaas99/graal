@@ -648,4 +648,14 @@ public class TestC2CCalls2 extends JTTTest {
         MethodHandle incrementAndCheck_mh_1 = lookup.findVirtual(MyValue1.class, "test1", mt_1);
         getCode(getResolvedJavaMethod("testMethodHandle"), null, true, true, getInitialOptions()).executeVarargs(incrementAndCheck_mh_1, new MyValue1(3));
     }
+
+    public static void testOptimized(){
+        MyValue1 val1 = new MyValue1(rI);
+        val1.test6();
+    }
+
+    @Test
+    public void run2(){
+        getCode(getResolvedJavaMethod("testOptimized"), null, true, true, getInitialOptions());
+    }
 }

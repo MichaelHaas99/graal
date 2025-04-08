@@ -9,6 +9,7 @@ import jdk.graal.compiler.core.phases.HighTier;
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
 import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
 import jdk.internal.vm.annotation.ForceInline;
+import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.code.InstalledCode;
@@ -58,6 +59,11 @@ public class TestLWorld extends JTTTest {
         @NullRestricted
         MyValue2 v5;
         int c;
+
+        @DontInline
+        long hasInterpreted(){
+            return 0;
+        }
 
         public MyValue1(int x, long y, short z, Integer o, int[] oa, MyValue2 v1, MyValue2 v2, MyValue2 v4, MyValue2 v5, int c) {
             s = 0;
@@ -942,5 +948,37 @@ public class TestLWorld extends JTTTest {
 
         InstalledCode c = getCode(getResolvedJavaMethod(java.io.ObjectStreamField.class, "toString"), null, true, true, getInitialOptions());
     }
+
+    public MyValue1[] test5(boolean b) {
+        MyValue1[] va;
+        if (b) {
+            va = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 5);
+            for (int i = 0; i < 5; ++i) {
+                va[i] = MyValue1.createWithFieldsInline(rI, rL);
+            }
+        } else {
+            va = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 10);
+            for (int i = 0; i < 10; ++i) {
+                va[i] = MyValue1.createWithFieldsInline(rI + i, rL + i);
+            }
+        }
+        long sum = va[0].hasInterpreted();
+        if (b) {
+            va[0] = MyValue1.createWithFieldsDontInline(rI, sum);
+        } else {
+            va[0] = MyValue1.createWithFieldsDontInline(rI + 1, sum + 1);
+        }
+        return va;
+    }
+
+    @Test
+    public void run38() throws  Throwable{
+        resetCache();
+
+        InstalledCode c = getCode(getResolvedJavaMethod("test5"), null, true, true, getInitialOptions());
+    }
+
+
+
 
 }
