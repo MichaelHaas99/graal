@@ -1482,7 +1482,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     }
                                 }
                                 if (value != temp) {
-                                    additionalPhis[additionalPhisIndex] = createValuePhi(value.stamp(NodeView.DEFAULT));
+                                    if (additionalPhisIndex == 0) {
+                                        additionalPhis[additionalPhisIndex] = createValuePhi(virtualObjects.get(resultObject).stamp(NodeView.DEFAULT));
+                                    } else {
+                                        additionalPhis[additionalPhisIndex] = createValuePhi(StampFactory.forInteger(JavaKind.Int, 0, 1));
+                                    }
                                 }
                             }
                         }
@@ -1910,7 +1914,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
             } else {
                 ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
-                ValuePhiNode phi = new ValuePhiNode(StampFactory.forKind(JavaKind.Int), null, new ValueNode[2]);
+                ValuePhiNode phi = new ValuePhiNode(StampFactory.forInteger(JavaKind.Int, 0, 1), null, new ValueNode[2]);
                 nonNull = phi;
                 phis[0] = phi;
                 bEffects.addFloatingNode(nonNull, "virtualMergePhi");
