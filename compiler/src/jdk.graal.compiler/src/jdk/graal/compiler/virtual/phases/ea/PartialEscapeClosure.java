@@ -1483,7 +1483,21 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 }
                                 if (value != temp) {
                                     if (additionalPhisIndex == 0) {
-                                        additionalPhis[additionalPhisIndex] = createValuePhi(virtualObjects.get(resultObject).stamp(NodeView.DEFAULT));
+                                        // iterate over all oops and compute the stamp
+                                        Stamp oopStamp = null;
+                                        for (int j = 0; j < states.length; j++) {
+                                            int tempObject = getObject.applyAsInt(j);
+                                            ValueNode tempOop = states[j].getObjectState(tempObject).getOop();
+                                            if (tempOop == null) {
+                                                tempOop = nullPointer;
+                                            }
+                                            if (oopStamp == null) {
+                                                oopStamp = tempOop.stamp(NodeView.DEFAULT);
+                                            } else {
+                                                oopStamp = oopStamp.meet(tempOop.stamp(NodeView.DEFAULT));
+                                            }
+                                        }
+                                        additionalPhis[additionalPhisIndex] = createValuePhi(oopStamp);
                                     } else {
                                         additionalPhis[additionalPhisIndex] = createValuePhi(StampFactory.forInteger(JavaKind.Int, 0, 1));
                                     }
