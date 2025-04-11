@@ -144,7 +144,8 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         }
 
         ResolvedJavaType componentType = type().getComponentType();
-        return isAlwaysArray() && nonNull() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isIdentity();
+        return isAlwaysArray() && nonNull() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isInterface() && !componentType.isAbstract() &&
+                        !componentType.isIdentity();
     }
 
     @Override
