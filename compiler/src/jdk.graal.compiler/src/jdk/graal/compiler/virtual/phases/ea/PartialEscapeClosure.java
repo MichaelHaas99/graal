@@ -1902,8 +1902,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
-            // TODO: should we just cache if the list is not null?
-            if (needsCaching || true) {
+            if (entryMergeCache != null) {
                 return getEntryMergeObjectCached(resultObject, object, entry, merge, currentResultObject);
             } else {
                 return currentResultObject;
@@ -1911,9 +1910,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         private VirtualObjectNode getEntryMergeObjectCached(int resultObject, int object, int entry, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
-            if (entryMergeCache == null) {
-                entryMergeCache = EconomicMap.create(Equivalence.DEFAULT);
-            }
             EntryMergeCacheKey key = new EntryMergeCacheKey(resultObject, object, entry, merge);
             VirtualObjectNode result = entryMergeCache.get(key);
             if (result == null) {
@@ -1927,8 +1923,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         protected VirtualObjectNode getPhiResultObject(PhiNode phi, VirtualObjectNode currentResultObject) {
-            // TODO: should we just cache if the list is not null?
-            if (needsCaching || true) {
+            if (phiResultCache != null) {
                 return getPhiResultObjectCached(phi, currentResultObject);
             } else {
                 return currentResultObject;
@@ -1936,9 +1931,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         private VirtualObjectNode getPhiResultObjectCached(PhiNode phi, VirtualObjectNode currentResultObject) {
-            if (phiResultCache == null) {
-                phiResultCache = EconomicMap.create(Equivalence.DEFAULT);
-            }
             VirtualObjectNode result = phiResultCache.get(phi);
             if (result == null) {
                 phiResultCache.put(phi, currentResultObject);
