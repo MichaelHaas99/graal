@@ -1217,10 +1217,12 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         FixedWithNextNode insertionPoint = insertAfter;
         StructuredGraph graph = commit.graph();
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
-            PublishWritesNode publish = graph.add(new PublishWritesNode(allocations[objIndex]));
-            allocations[objIndex] = publish;
-            graph.addAfterFixed(insertionPoint, publish);
-            insertionPoint = publish;
+            if (allocations[objIndex] instanceof AbstractNewObjectNode) {
+                PublishWritesNode publish = graph.add(new PublishWritesNode(allocations[objIndex]));
+                allocations[objIndex] = publish;
+                graph.addAfterFixed(insertionPoint, publish);
+                insertionPoint = publish;
+            }
         }
         /*
          * Note that the FrameState that is assigned to these MonitorEnterNodes isn't the correct

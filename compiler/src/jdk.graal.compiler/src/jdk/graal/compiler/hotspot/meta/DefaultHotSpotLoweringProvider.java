@@ -173,7 +173,6 @@ import jdk.graal.compiler.nodes.extended.OSRLocalNode;
 import jdk.graal.compiler.nodes.extended.OSRLockNode;
 import jdk.graal.compiler.nodes.extended.OSRMonitorEnterNode;
 import jdk.graal.compiler.nodes.extended.OSRStartNode;
-import jdk.graal.compiler.nodes.extended.PublishWritesNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.StoreHubNode;
 import jdk.graal.compiler.nodes.gc.G1ArrayRangePostWriteBarrierNode;
@@ -1385,9 +1384,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
         ValueNode replacement = InlineTypeUtil.createAllocationDiamond(inlineTypeNode, inlineTypeNode.getNonNull(), inlineTypeNode.getOop(), writes, true, newObject,
                         inlineTypeNode.getType());
-        PublishWritesNode anchor = graph.add(new PublishWritesNode(replacement));
-        graph.addBeforeFixed(inlineTypeNode, anchor);
-        inlineTypeNode.replaceAtUsages(anchor);
+        inlineTypeNode.replaceAtUsages(replacement);
         graph.removeFixed(inlineTypeNode);
         newObject.lower(tool);
     }

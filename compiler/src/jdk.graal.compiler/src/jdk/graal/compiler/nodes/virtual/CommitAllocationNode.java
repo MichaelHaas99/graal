@@ -313,7 +313,7 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
                     newLockIndexes.add(newLocks.size());
                     newValues.addAll(values.subList(valuePos, valuePos + virtualObject.entryCount()));
                     newEnsureVirtual.add(ensureVirtual.get(objIndex));
-                    transferredObjIndexes.add(valuePos);
+                    transferredObjIndexes.add(objIndex);
                 }
                 valuePos += virtualObject.entryCount();
             }
