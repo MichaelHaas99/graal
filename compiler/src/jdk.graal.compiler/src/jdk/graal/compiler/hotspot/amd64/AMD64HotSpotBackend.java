@@ -429,7 +429,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         }
 
         // Emit code for the LIR
-        crb.emitLIR();
+        crb.emitLIR(false);
 
         // Emit the suffix
         emitCodeSuffix(crb, asm);
