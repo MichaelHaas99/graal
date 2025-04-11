@@ -43,6 +43,8 @@ import java.util.function.BiFunction;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.MapCursor;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 
 import jdk.graal.compiler.api.replacements.Fold;
 import jdk.graal.compiler.api.replacements.Snippet;
@@ -51,6 +53,8 @@ import jdk.graal.compiler.bytecode.BytecodeProvider;
 import jdk.graal.compiler.bytecode.ResolvedJavaMethodBytecode;
 import jdk.graal.compiler.core.common.spi.ForeignCallsProvider;
 import jdk.graal.compiler.core.common.type.AbstractObjectStamp;
+import jdk.graal.compiler.core.common.type.FloatStamp;
+import jdk.graal.compiler.core.common.type.IntegerStamp;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampPair;
@@ -108,7 +112,6 @@ import jdk.graal.compiler.replacements.SnippetCounter;
 import jdk.graal.compiler.replacements.SnippetIntegerHistogram;
 import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.classfile.ClassfileBytecode;
-import jdk.graal.compiler.serviceprovider.GraalServices;
 import jdk.graal.compiler.util.ObjectCopier;
 import jdk.graal.compiler.word.WordTypes;
 import jdk.vm.ci.code.Architecture;
@@ -135,8 +138,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.UnresolvedJavaType;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 
 /**
  * This class performs graph encoding using {@link GraphEncoder} but also converts JVMCI type and
@@ -540,6 +541,13 @@ public class SymbolicSnippetEncoder {
         lookupSnippetType(NamedLocationIdentity.class);
         lookupSnippetType(SnippetTemplate.EagerSnippetInfo.class);
         lookupSnippetType(ForeignCallStub.class);
+
+        // ObjectEqualsSnippets need these types. Add them to avoid an error in
+        // lookupSnippetType with libgraal
+        lookupSnippetType(FieldLocationIdentity.class);
+        lookupSnippetType(IntegerStamp.class);
+        lookupSnippetType(ObjectStamp.class);
+        lookupSnippetType(FloatStamp.class);
 
         // Ensure AbstractForeignCallStub.getGraph is available
         MetaAccessProvider metaAccess = originalReplacements.getProviders().getMetaAccess();
