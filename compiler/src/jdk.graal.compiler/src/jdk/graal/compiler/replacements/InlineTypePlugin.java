@@ -7,6 +7,7 @@ import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Trans
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.OBJECT_ARRAY_LOCATION;
 import static jdk.graal.compiler.replacements.DefaultJavaLoweringProvider.POSITIVE_ARRAY_INDEX_STAMP;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
+import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,6 +20,7 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedNode;
@@ -57,6 +59,7 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -80,33 +83,40 @@ public class InlineTypePlugin implements NodePlugin {
 
                 // TODO: when JDK-8341767 is done, current implementation is rubbish
 
-                BeginNode trueBegin = b.getGraph().add(new BeginNode());
-                BeginNode falseBegin = b.getGraph().add(new BeginNode());
+                if (true) {
+                    b.append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
+                    b.push(field.getJavaKind(), ConstantNode.defaultForKind(field.getJavaKind(), b.getGraph()));
+                    return true;
+                } else {
+                    BeginNode trueBegin = b.getGraph().add(new BeginNode());
+                    BeginNode falseBegin = b.getGraph().add(new BeginNode());
 
-                genFlatFieldNullCheck(b, object, field, trueBegin, falseBegin);
+                    genFlatFieldNullCheck(b, object, field, trueBegin, falseBegin);
 
-                // true branch - flat field is null
-                EndNode trueEnd = b.add(new EndNode());
-                trueBegin.setNext(trueEnd);
+                    // true branch - flat field is null
+                    EndNode trueEnd = b.add(new EndNode());
+                    trueBegin.setNext(trueEnd);
 
-                // false branch - flat field is non-null
-                InlineTypeNode instance = genLoadFlatField(b, object, field);
-                EndNode falseEnd = b.add(new EndNode());
-                falseBegin.setNext(instance);
+                    // false branch - flat field is non-null
+                    InlineTypeNode instance = genLoadFlatField(b, object, field);
+                    EndNode falseEnd = b.add(new EndNode());
+                    falseBegin.setNext(instance);
 
-                ConstantNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, b.getMetaAccess(), b.getGraph());
+                    ConstantNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, b.getMetaAccess(), b.getGraph());
 
-                // return a null pointer if the flat field was null or the read instance otherwise
-                ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), null,
-                                nullPointer, instance));
-                b.push(JavaKind.Object, phiNode);
+                    // return a null pointer if the flat field was null or the read instance
+                    // otherwise
+                    ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), null,
+                                    nullPointer, instance));
+                    b.push(JavaKind.Object, phiNode);
 
-                // merge
-                MergeNode merge = b.add(new MergeNode());
-                phiNode.setMerge(merge);
+                    // merge
+                    MergeNode merge = b.add(new MergeNode());
+                    phiNode.setMerge(merge);
 
-                merge.addForwardEnd(trueEnd);
-                merge.addForwardEnd(falseEnd);
+                    merge.addForwardEnd(trueEnd);
+                    merge.addForwardEnd(falseEnd);
+                }
 
 
 
@@ -248,30 +258,35 @@ public class InlineTypePlugin implements NodePlugin {
 
                 // TODO: when JDK-8341767 is done, current implementation is rubbish
 
-                BeginNode trueBegin = b.getGraph().add(new BeginNode());
-                BeginNode falseBegin = b.getGraph().add(new BeginNode());
+                if (true) {
+                    b.append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
+                    return true;
+                } else {
+                    BeginNode trueBegin = b.getGraph().add(new BeginNode());
+                    BeginNode falseBegin = b.getGraph().add(new BeginNode());
 
-                // generate if node with condition
-                genFlatFieldNullCheck(b, object, field, trueBegin, falseBegin);
+                    // generate if node with condition
+                    genFlatFieldNullCheck(b, object, field, trueBegin, falseBegin);
 
-                // true branch - flat field is null
-                StoreFieldNode storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
-                                b.maskSubWordValue(ConstantNode.forInt(0, b.getGraph()), field.getNullMarkerField().getJavaKind())));
-                trueBegin.setNext(storeField);
-                EndNode trueEnd = b.add(new EndNode());
+                    // true branch - flat field is null
+                    StoreFieldNode storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
+                                    b.maskSubWordValue(ConstantNode.forInt(0, b.getGraph()), field.getNullMarkerField().getJavaKind())));
+                    trueBegin.setNext(storeField);
+                    EndNode trueEnd = b.add(new EndNode());
 
-                // false branch - flat field is non-null
-                b.add(falseBegin);
-                storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
-                                b.maskSubWordValue(ConstantNode.forInt(1, b.getGraph()), field.getNullMarkerField().getJavaKind())));
-                falseBegin.setNext(storeField);
-                genStoreFlatField(b, object, field, value);
-                EndNode falseEnd = b.add(new EndNode());
+                    // false branch - flat field is non-null
+                    b.add(falseBegin);
+                    storeField = b.add(new StoreFieldNode(object, field.getNullMarkerField(),
+                                    b.maskSubWordValue(ConstantNode.forInt(1, b.getGraph()), field.getNullMarkerField().getJavaKind())));
+                    falseBegin.setNext(storeField);
+                    genStoreFlatField(b, object, field, value);
+                    EndNode falseEnd = b.add(new EndNode());
 
-                // merge
-                MergeNode merge = b.add(new MergeNode());
-                merge.addForwardEnd(trueEnd);
-                merge.addForwardEnd(falseEnd);
+                    // merge
+                    MergeNode merge = b.add(new MergeNode());
+                    merge.addForwardEnd(trueEnd);
+                    merge.addForwardEnd(falseEnd);
+                }
 
             } else {
                 // field is null restricted
