@@ -1368,16 +1368,27 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         for (int i = 0; i < states.length; i++) {
                             // we are allowed to virtualize if the entry is null or an inline type
                             int object = getObject.applyAsInt(i);
-                            ValueNode entry = states[i].getObjectState(object).getEntry(valueIndex);
-                            // TODO: -1 check on object should be unnecessary
-                            if (object == -1 || !StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider()) && !StampTool.isPointerAlwaysNull(entry)) {
+                            if (object == -1) {
                                 virtualize = false;
                                 break;
-                            } else if (types[valueIndex] == null && StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                                // remember the type for null constants
-                                types[valueIndex] = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
                             }
-                            if (entry != null && entry instanceof VirtualObjectNode tempVirtual && states[i].getObjectState(tempVirtual.getObjectId()).isVirtual()) {
+
+                            ValueNode entry = states[i].getObjectState(object).getEntry(valueIndex);
+                            if (!StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider()) && !StampTool.isPointerAlwaysNull(entry)) {
+                                virtualize = false;
+                                break;
+                            } else if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
+                                if (types[valueIndex] == null) {
+                                    // remember the type for null constants
+                                    types[valueIndex] = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+                                } else if (entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()) != types[valueIndex]) {
+                                    // inline types are not the same
+                                    virtualize = false;
+                                    break;
+                                }
+
+                            }
+                            if (entry instanceof VirtualObjectNode tempVirtual && states[i].getObjectState(tempVirtual.getObjectId()).isVirtual()) {
                                 allMaterialized = false;
                             }
                         }
@@ -1923,7 +1934,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         protected VirtualObjectNode getPhiResultObject(PhiNode phi, VirtualObjectNode currentResultObject) {
-            if (phiResultCache != null) {
+            if (phiResultCache != null && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
                 return getPhiResultObjectCached(phi, currentResultObject);
             } else {
                 return currentResultObject;
