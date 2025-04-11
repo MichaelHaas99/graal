@@ -138,6 +138,9 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             blockEffects.put(block, new GraphEffectList(debug));
         }
         this.currentMode = EffectsClosureMode.REGULAR_VIRTUALIZATION;
+
+        phiResultCache = EconomicMap.create(Equivalence.IDENTITY);
+        entryMergeCache = EconomicMap.create(Equivalence.DEFAULT);
     }
 
     @Override
@@ -395,6 +398,8 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
         EconomicMap<LoopBeginNode, BlockT> loopEntryStatesCopy = null;
         EconomicMap<CFGLoop<HIRBlock>, LoopKillCache> loopLocationKillCacheCopy = null;
         BlockT initialStateRemovedKilledLocationsBackup = null;
+        EconomicMap<PhiNode, VirtualObjectNode> phiResultCacheCopy = null;
+        EconomicMap<PartialEscapeClosure.MergeProcessor.EntryMergeCacheKey, VirtualObjectNode> entryMergeCacheCopy = null;
 
         if (loop.getDepth() == 1) {
 
@@ -426,6 +431,9 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
 
                 loopLocationKillCacheCopy = EconomicMap.create(Equivalence.IDENTITY);
                 loopLocationKillCacheCopy.putAll(loopLocationKillCache);
+
+                phiResultCacheCopy = EconomicMap.create(Equivalence.IDENTITY);
+                entryMergeCacheCopy = EconomicMap.create(Equivalence.DEFAULT);
             }
         }
         while (true) { // // TERMINATION ARGUMENT: bound by number of basic blocks and iterative
@@ -540,6 +548,8 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 processStateBeforeLoopOnOverflow(initialStateRemovedKilledLocations, ((LoopBeginNode) loop.getHeader().getBeginNode()).forwardEnd(),
                                 blockEffects.get(loop.getHeader().getPredecessorAt(0)));
                 currentMode = EffectsClosureMode.MATERIALIZE_ALL;
+                phiResultCache = phiResultCacheCopy;
+                entryMergeCache = entryMergeCacheCopy;
                 continue;
             }
             throw new GraalError("too many iterations at %s", loop);
