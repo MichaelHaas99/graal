@@ -39,6 +39,9 @@ import org.graalvm.collections.UnmodifiableEconomicMap;
 import jdk.graal.compiler.api.replacements.SnippetReflectionProvider;
 import jdk.graal.compiler.bytecode.BytecodeProvider;
 import jdk.graal.compiler.bytecode.ResolvedJavaMethodBytecode;
+import jdk.graal.compiler.core.common.type.FloatStamp;
+import jdk.graal.compiler.core.common.type.IntegerStamp;
+import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampPair;
 import jdk.graal.compiler.core.common.type.SymbolicJVMCIReference;
@@ -167,6 +170,13 @@ public class EncodedSnippets {
         this.snippetNodeClasses = snippetNodeClasses;
         this.graphDatas = graphDatas;
         this.snippetTypes = snippetTypes;
+
+        // TODO: ObjectEqualsSnippets need these types. Add them to avoid an error in
+        // lookupSnippetType with libgraal, find out the correct location to fix this problem
+        this.snippetTypes.put(FieldLocationIdentity.class, new SnippetResolvedJavaType(FieldLocationIdentity.class));
+        this.snippetTypes.put(IntegerStamp.class, new SnippetResolvedJavaType(IntegerStamp.class));
+        this.snippetTypes.put(ObjectStamp.class, new SnippetResolvedJavaType(ObjectStamp.class));
+        this.snippetTypes.put(FloatStamp.class, new SnippetResolvedJavaType(FloatStamp.class));
     }
 
     public NodeClass<?>[] getSnippetNodeClasses() {
