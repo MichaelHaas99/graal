@@ -33,6 +33,7 @@ import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
+import jdk.graal.compiler.nodes.extended.PublishWritesNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
@@ -462,12 +463,14 @@ public class InlineTypeUtil {
                 assert w != null && w.isAlive() : "WriteNode should be alive";
                 graph.addBeforeFixed(addBefore, w);
             }
+            PublishWritesNode anchor = graph.add(new PublishWritesNode(newInstanceNode));
+            graph.addBeforeFixed(addBefore, anchor);
             if (addMembar) {
                 // all fields implicitly final therefore use constructor freeze
                 MembarNode memBar = graph.add(MembarNode.forInitialization());
                 graph.addBeforeFixed(addBefore, memBar);
             }
-            return newInstanceNode;
+            return anchor;
         }
 
         FrameState framestate = GraphUtil.findLastFrameState(addBefore);
@@ -495,6 +498,10 @@ public class InlineTypeUtil {
             w.setNext(falseEnd);
             previous = w;
         }
+        PublishWritesNode anchor = graph.add(new PublishWritesNode(newInstanceNode));
+        previous.setNext(anchor);
+        anchor.setNext(falseEnd);
+        previous = anchor;
         if (addMembar) {
             // all fields implicitly final therefore use constructor freeze
             MembarNode memBar = graph.add(MembarNode.forInitialization());
@@ -510,7 +517,7 @@ public class InlineTypeUtil {
         merge.addForwardEnd(falseEnd);
         merge.setNext(addBefore);
         ValuePhiNode phi = graph.addOrUnique(new ValuePhiNode(StampFactory.object(TypeReference.create(graph.getAssumptions(), type)), merge,
-                        oop, newInstanceNode));
+                        oop, anchor));
         return phi;
 
     }
