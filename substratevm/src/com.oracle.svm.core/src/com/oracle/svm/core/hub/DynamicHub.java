@@ -1615,6 +1615,17 @@ public final class DynamicHub implements AnnotatedElement, java.lang.reflect.Typ
         return result;
     }
 
+    @Substitute
+    public boolean isIdentity(){
+        // Before Valhalla all classes are identity classes
+        return true;
+    }
+
+    @Substitute
+    public boolean isValue() {
+        return false;
+    }
+
     @KeepOriginal
     @TargetElement(onlyWith = JDKLatest.class)
     public static native Class<?> forPrimitiveName(String primitiveName);
