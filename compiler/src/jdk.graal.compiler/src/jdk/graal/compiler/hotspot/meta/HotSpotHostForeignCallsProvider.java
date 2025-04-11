@@ -77,6 +77,7 @@ import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Trans
 import static jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets.G1WBPOSTCALL;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets.G1WBPRECALL;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets.VALIDATE_OBJECT;
+import static jdk.graal.compiler.hotspot.replacements.HotSpotHashCodeSnippets.VALUE_OBJECT_HASH_CODE;
 import static jdk.graal.compiler.hotspot.replacements.Log.LOG_OBJECT;
 import static jdk.graal.compiler.hotspot.replacements.Log.LOG_PRIMITIVE;
 import static jdk.graal.compiler.hotspot.replacements.Log.LOG_PRINTF;
@@ -88,7 +89,6 @@ import static jdk.graal.compiler.hotspot.stubs.LookUpSecondarySupersTableStub.LO
 import static jdk.graal.compiler.hotspot.stubs.StubUtil.VM_MESSAGE_C;
 import static jdk.graal.compiler.hotspot.stubs.UnwindExceptionToCallerStub.EXCEPTION_HANDLER_FOR_RETURN_ADDRESS;
 import static jdk.graal.compiler.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
-import static jdk.graal.compiler.replacements.IdentityHashCodeSnippets.VALUE_OBJECT_HASH_CODE;
 import static jdk.graal.compiler.replacements.InlineTypePlugin.LOAD_UNKNOWN_INLINE;
 import static jdk.graal.compiler.replacements.InlineTypePlugin.STORE_UNKNOWN_INLINE;
 import static jdk.graal.compiler.replacements.MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF;

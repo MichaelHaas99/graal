@@ -24,8 +24,11 @@
  */
 package jdk.graal.compiler.hotspot.replacements;
 
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.IDENTITY_HASHCODE;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.identityHashCode;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
@@ -38,15 +41,30 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.un
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.useLightweightLocking;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.useObjectMonitorTable;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 
+import org.graalvm.word.LocationIdentity;
+
+import jdk.graal.compiler.api.replacements.Snippet;
+import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
+import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.lir.SyncPort;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.SnippetAnchorNode;
+import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.spi.LoweringTool;
+import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.IdentityHashCodeSnippets;
+import jdk.graal.compiler.replacements.SnippetTemplate;
+import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
 import jdk.graal.compiler.word.Word;
 
 // @formatter:off
@@ -93,7 +111,6 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
         return identityHashCode(IDENTITY_HASHCODE, x);
     }
 
-    @Override
     protected int computeValhallaIdentityHashCode(Object x, boolean canBeInlineType, boolean isInlineType) {
         // check if object has no identity
         if (canBeInlineType) {
@@ -105,5 +122,59 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
         }
 
         return computeIdentityHashCode(x);
+    }
+
+    @Snippet
+    private int valhallaIdentityHashCodeSnippet(final Object thisObj, @Snippet.ConstantParameter boolean canBeInlineType, @Snippet.ConstantParameter boolean isInlineType) {
+        if (probability(NOT_FREQUENT_PROBABILITY, thisObj == null)) {
+            return 0;
+        }
+
+        return computeValhallaIdentityHashCode(thisObj, canBeInlineType, isInlineType);
+    }
+
+    public static final HotSpotForeignCallDescriptor VALUE_OBJECT_HASH_CODE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "valueObjectHashCode", int.class,
+                    Object.class);
+
+    @Node.NodeIntrinsic(ForeignCallNode.class)
+    protected static native int valueObjectHashCodeStubC(@Node.ConstantNodeParameter ForeignCallDescriptor descriptor, Object x);
+
+    public static class Templates extends IdentityHashCodeSnippets.Templates {
+
+        private final SnippetTemplate.SnippetInfo identityHashCodeSnippet;
+
+        @SuppressWarnings("this-escape")
+        public Templates(IdentityHashCodeSnippets receiver, OptionValues options, Providers providers, LocationIdentity locationIdentity) {
+            super(receiver, options, providers, locationIdentity);
+
+            if (providers.getValhallaOptionsProvider().valhallaEnabled()) {
+                identityHashCodeSnippet = snippet(providers,
+                                IdentityHashCodeSnippets.class,
+                                "valhallaIdentityHashCodeSnippet",
+                                null,
+                                receiver,
+                                locationIdentity);
+            } else {
+                identityHashCodeSnippet = snippet(providers,
+                                IdentityHashCodeSnippets.class,
+                                "identityHashCodeSnippet",
+                                null,
+                                receiver,
+                                locationIdentity);
+            }
+
+        }
+
+        public void lower(IdentityHashCodeNode node, LoweringTool tool) {
+            StructuredGraph graph = node.graph();
+            SnippetTemplate.Arguments args = new SnippetTemplate.Arguments(identityHashCodeSnippet, graph.getGuardsStage(), tool.getLoweringStage());
+            args.add("thisObj", node.object());
+            if (tool.getValhallaOptionsProvider().valhallaEnabled()) {
+                args.add("canBeInlineType", StampTool.canBeInlineType(node.object(), tool.getValhallaOptionsProvider()));
+                args.add("isInlineType", StampTool.isInlineType(node.object(), tool.getValhallaOptionsProvider()));
+            }
+            SnippetTemplate template = template(tool, node, args);
+            template.instantiate(tool.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
+        }
     }
 }
