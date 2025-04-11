@@ -7,8 +7,10 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
+import jdk.graal.compiler.hotspot.SnippetObjectConstant;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -17,6 +19,7 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
@@ -70,7 +73,13 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
 
     public JavaKind getConstantKind() {
         assert isAccessKindConstant() : "accessKind must be a constant";
-        return ((HotSpotObjectConstant) accessKind.asJavaConstant()).asObject(JavaKind.class);
+        JavaConstant constant = accessKind.asJavaConstant();
+        if (constant instanceof HotSpotObjectConstant) {
+            return ((HotSpotObjectConstant) constant).asObject(JavaKind.class);
+        } else if (constant instanceof SnippetObjectConstant) {
+            return ((SnippetObjectConstant) constant).asObject(JavaKind.class);
+        }
+        throw new GraalError("unexpected constant type: " + constant);
     }
 
     public boolean isStampConstant() {
@@ -79,12 +88,24 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
 
     public Stamp getConstantStamp() {
         assert isStampConstant() : "stamp must be a constant";
-        return ((HotSpotObjectConstant) stamp.asJavaConstant()).asObject(Stamp.class);
+        JavaConstant constant = stamp.asJavaConstant();
+        if (constant instanceof HotSpotObjectConstant) {
+            return ((HotSpotObjectConstant) constant).asObject(Stamp.class);
+        } else if (constant instanceof SnippetObjectConstant) {
+            return ((SnippetObjectConstant) constant).asObject(Stamp.class);
+        }
+        throw new GraalError("unexpected constant type: " + constant);
     }
 
     public LocationIdentity getLocationIdentity() {
         assert locationIdentity.isJavaConstant() : "locationIdentity must be a constant";
-        return ((HotSpotObjectConstant) locationIdentity.asJavaConstant()).asObject(FieldLocationIdentity.class);
+        JavaConstant constant = locationIdentity.asJavaConstant();
+        if (constant instanceof HotSpotObjectConstant) {
+            return ((HotSpotObjectConstant) constant).asObject(FieldLocationIdentity.class);
+        } else if (constant instanceof SnippetObjectConstant) {
+            return ((SnippetObjectConstant) constant).asObject(FieldLocationIdentity.class);
+        }
+        throw new GraalError("unexpected constant type: " + constant);
     }
 
     @Override
