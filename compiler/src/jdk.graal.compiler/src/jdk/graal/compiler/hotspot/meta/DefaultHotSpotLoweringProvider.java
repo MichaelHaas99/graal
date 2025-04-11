@@ -409,7 +409,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
     @Override
     protected IdentityHashCodeSnippets.Templates createIdentityHashCodeSnippets(OptionValues options, Providers providers) {
-        return new IdentityHashCodeSnippets.Templates(new HotSpotHashCodeSnippets(), options, providers, MARK_WORD_LOCATION);
+        return new HotSpotHashCodeSnippets.Templates(new HotSpotHashCodeSnippets(), options, providers, MARK_WORD_LOCATION);
     }
 
     public HotSpotAllocationSnippets.Templates getAllocationSnippets() {
