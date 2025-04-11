@@ -352,6 +352,9 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
         return processor.newState;
     }
 
+    protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
+    protected EconomicMap<PartialEscapeClosure.MergeProcessor.EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
+
     @Override
     @SuppressWarnings("try")
     protected final List<BlockT> processLoop(CFGLoop<HIRBlock> loop, BlockT initialState) {
@@ -474,7 +477,8 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                                  */
                                 currentMode = EffectsClosureMode.REGULAR_VIRTUALIZATION;
                             }
-
+                            phiResultCache = null;
+                            entryMergeCache = null;
                             return info.exitStates;
                         } else {
                             /*
