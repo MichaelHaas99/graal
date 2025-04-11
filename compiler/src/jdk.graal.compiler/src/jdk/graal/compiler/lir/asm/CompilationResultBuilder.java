@@ -496,16 +496,21 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
         }
     }
 
+    public void emitLIR() {
+        emitLIR(true);
+    }
+
     /**
      * Emits code for {@code lir} in its {@linkplain LIR#codeEmittingOrder() code emitting order}.
      */
-    public void emitLIR() {
+    public void emitLIR(boolean enter) {
         assert currentBlockIndex == 0 : currentBlockIndex;
         assert lastImplicitExceptionOffset == Integer.MIN_VALUE : lastImplicitExceptionOffset;
         this.currentBlockIndex = 0;
         this.lastImplicitExceptionOffset = Integer.MIN_VALUE;
-        // already done in emitCodePrefix
-        // frameContext.enter(this);
+        if (enter) {
+            frameContext.enter(this);
+        }
         final BasicBlockInfoLogger logger = new BasicBlockInfoLogger();
         BasicBlock<?> previousBlock = null;
         for (int blockId : lir.codeEmittingOrder()) {
