@@ -123,6 +123,10 @@ public class ObjectEqualsSnippets implements Snippets {
                         if (fields[i].getType().equals(type)) {
                             // don't inline recursive comparisons
                             inlineComparison = false;
+                            offsets = new long[0];
+                            kinds = new JavaKind[0];
+                            identities = new LocationIdentity[0];
+                            stamps = new Stamp[0];
                             break;
                         } else if (fields[i].getJavaKind().isPrimitive() || fields[i].getJavaKind().isObject()) {
                             offsets[i] = fields[i].getOffset();
@@ -133,6 +137,10 @@ public class ObjectEqualsSnippets implements Snippets {
 
                         } else {
                             inlineComparison = false;
+                            offsets = new long[0];
+                            kinds = new JavaKind[0];
+                            identities = new LocationIdentity[0];
+                            stamps = new Stamp[0];
                             break;
                         }
 
