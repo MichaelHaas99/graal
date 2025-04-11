@@ -149,14 +149,14 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
 
             if (providers.getValhallaOptionsProvider().valhallaEnabled()) {
                 identityHashCodeSnippet = snippet(providers,
-                                IdentityHashCodeSnippets.class,
+                                HotSpotHashCodeSnippets.class,
                                 "valhallaIdentityHashCodeSnippet",
                                 null,
                                 receiver,
                                 locationIdentity);
             } else {
                 identityHashCodeSnippet = snippet(providers,
-                                IdentityHashCodeSnippets.class,
+                                HotSpotHashCodeSnippets.class,
                                 "identityHashCodeSnippet",
                                 null,
                                 receiver,
