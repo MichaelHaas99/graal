@@ -749,7 +749,8 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                  * FrameState with a VirtualObjectState is duplicated, therefore this case is not
                  * implemented yet.
                  */
-                GraalError.guarantee(pushedEscapeObjectState instanceof MaterializedObjectState, "A VirtualObjectState could have transitive dependencies");
+                // GraalError.guarantee(pushedEscapeObjectState instanceof MaterializedObjectState,
+                // "A VirtualObjectState could have transitive dependencies");
                 /*
                  * Found a new EscapeObjectState that needs to be added to the
                  * virtualObjectMappings.
@@ -763,15 +764,18 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                 }
                 result.add(pushedEscapeObjectState);
 
-                /*
-                 * The virtual object may be mapped to another virtual object. If this is the case,
-                 * we must ensure that that one is mapped too.
-                 */
-                MaterializedObjectState materializedObjectState = (MaterializedObjectState) pushedEscapeObjectState;
-                if (materializedObjectState.materializedValue() instanceof VirtualObjectNode) {
-                    VirtualObjectNode virtualMaterializedValue = (VirtualObjectNode) materializedObjectState.materializedValue();
-                    result = ensureHasVirtualObjectMapping(virtualMaterializedValue, pushedVirtualObjectMappings, result);
+                if (pushedEscapeObjectState instanceof MaterializedObjectState) {
+                    /*
+                     * The virtual object may be mapped to another virtual object. If this is the
+                     * case, we must ensure that that one is mapped too.
+                     */
+                    MaterializedObjectState materializedObjectState = (MaterializedObjectState) pushedEscapeObjectState;
+                    if (materializedObjectState.materializedValue() instanceof VirtualObjectNode) {
+                        VirtualObjectNode virtualMaterializedValue = (VirtualObjectNode) materializedObjectState.materializedValue();
+                        result = ensureHasVirtualObjectMapping(virtualMaterializedValue, pushedVirtualObjectMappings, result);
+                    }
                 }
+
 
                 return result;
             }

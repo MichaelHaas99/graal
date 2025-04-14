@@ -24,8 +24,6 @@
  */
 package jdk.graal.compiler.nodes.java;
 
-import java.util.List;
-
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
@@ -34,7 +32,6 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
-import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.BeginNode;
@@ -48,8 +45,6 @@ import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.AnchoringNode;
-import jdk.graal.compiler.nodes.spi.Lowerable;
-import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
@@ -66,15 +61,10 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo
-public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable, Lowerable {
+public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
     public static final NodeClass<MethodCallTargetNode> TYPE = NodeClass.create(MethodCallTargetNode.class);
     protected JavaTypeProfile typeProfile;
 
-    @Input NodeInputList<ValueNode> scalarizedArguments = new NodeInputList<>(this);
-
-    public List<ValueNode> getScalarizedArguments() {
-        return scalarizedArguments;
-    }
 
     public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp, JavaTypeProfile typeProfile) {
         this(TYPE, invokeKind, targetMethod, arguments, returnStamp, typeProfile);
@@ -375,27 +365,4 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         this.typeProfile = profile;
     }
 
-    @Override
-    public void lower(LoweringTool tool) {
-        if (tool.getValhallaOptionsProvider().callingConventionEnabled()) {
-            replaceArguments();
-        }
-        assert scalarizedArguments.isEmpty() : "no scalarized arguments expected";
-
-    }
-
-    /**
-     * Replaces the non-scalarized arguments with the scalarized-arguments as it is expected by the
-     * Valhalla Calling Convention. If there are no scalarized-arguments e.g. Valhalla is disabled,
-     * the {@link #scalarizedArguments} will be empty.
-     */
-    public void replaceArguments() {
-        if (scalarizedArguments.isEmpty()) {
-            return;
-        }
-
-        arguments.clear();
-        arguments.addAll(scalarizedArguments);
-        scalarizedArguments.clear();
-    }
 }

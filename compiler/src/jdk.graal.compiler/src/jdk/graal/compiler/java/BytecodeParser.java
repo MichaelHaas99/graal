@@ -355,7 +355,6 @@ import jdk.graal.compiler.nodes.ProfileData.BranchProbabilityData;
 import jdk.graal.compiler.nodes.ProfileData.ProfileSource;
 import jdk.graal.compiler.nodes.ProfileData.SwitchProbabilityData;
 import jdk.graal.compiler.nodes.ReturnNode;
-import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.StartNode;
 import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -2357,9 +2356,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
 
-        if (getValhallaOptionsProvider().callingConventionEnabled() && targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
-            InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
-        }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);
@@ -2380,12 +2376,8 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             invoke = append(createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge));
         }
 
-        if (getValhallaOptionsProvider().returnConventionEnabled() && callTarget.targetMethod().hasScalarizedReturn() && !fromMethodHandle) {
-            InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
-        } else {
-            frameState.pushReturn(resultType, invoke.asNode());
-            invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
-        }
+        frameState.pushReturn(resultType, invoke.asNode());
+        invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
 
         return invoke;
     }
@@ -3059,11 +3051,14 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         frameState.clearStack();
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
-            if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn() && graph.scalarizeReturn()) {
-                ReturnScalarizedNode.createAndAppend(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
-            } else {
-                append(new ReturnNode(realReturnVal));
-            }
+// if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn() &&
+// graph.scalarizeReturn()) {
+// ReturnScalarizedNode.createAndAppend(this, realReturnVal,
+// method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
+// } else {
+// append(new ReturnNode(realReturnVal));
+// }
+            append(new ReturnNode(realReturnVal));
         } else {
             if (returnDataList == null) {
                 returnDataList = new ArrayList<>();

@@ -28,10 +28,15 @@ import java.util.Optional;
 
 import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.nodes.GraphState;
+import jdk.graal.compiler.nodes.ReturnNode;
+import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.phases.BasePhase;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Replace the arguments of a {@link MethodCallTargetNode} by the scalarized arguments demanded from
@@ -50,12 +55,38 @@ public class ValhallaCallingConventionPhase extends BasePhase<CoreProviders> {
     @SuppressWarnings("try")
     @Override
     protected void run(StructuredGraph graph, CoreProviders context) {
-        if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
+        graph.getGraphState().setDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION);
+        if (context.getValhallaOptionsProvider().callingConventionEnabled() || context.getValhallaOptionsProvider().returnConventionEnabled()) {
             for (MethodCallTargetNode n : graph.getNodes(MethodCallTargetNode.TYPE)) {
                 try (DebugCloseable scope = n.graph().withNodeSourcePosition(n)) {
-                    n.replaceArguments();
+                    ResolvedJavaMethod targetMethod = n.targetMethod();
+                    if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
+                        if (targetMethod.hasScalarizedParameters() && !(n instanceof ResolvedMethodHandleCallTargetNode)) {
+                            InlineTypeUtil.scalarizeInvokeArgs(n, targetMethod);
+                        }
+                    }
+
+                    if (context.getValhallaOptionsProvider().returnConventionEnabled()) {
+                        if (n.targetMethod().hasScalarizedReturn()) {
+                            InlineTypeUtil.handleScalarizedReturnOnInvoke(n.invoke(), n.returnKind(), context.getMetaAccess());
+                        }
+                    }
+
                 }
             }
+
+            if (context.getValhallaOptionsProvider().returnConventionEnabled()) {
+                for (ReturnNode n : graph.getNodes(ReturnNode.TYPE)) {
+                    try (DebugCloseable scope = n.graph().withNodeSourcePosition(n)) {
+                        ResolvedJavaMethod targetMethod = graph.method();
+                        if (targetMethod.hasScalarizedReturn()) {
+                            ReturnScalarizedNode.replaceReturn(n);
+                        }
+                    }
+                }
+            }
+
+            // entryBCI == INVOCATION_ENTRY_BCI
         }
 
     }

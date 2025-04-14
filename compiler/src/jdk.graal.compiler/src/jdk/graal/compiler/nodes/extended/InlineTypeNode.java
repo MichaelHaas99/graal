@@ -20,6 +20,7 @@ import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicNode;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -35,6 +36,7 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -106,6 +108,16 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return nonNull;
     }
 
+    public void setOop(ValueNode oop) {
+        updateUsages(this.oop, oop);
+        this.oop = oop;
+    }
+
+    public void setNonNull(ValueNode nonNull) {
+        updateUsages(this.nonNull, nonNull);
+        this.nonNull = nonNull;
+    }
+
     public LogicNode createNullCheck() {
         assert !StampTool.isPointerNonNull(this) : "should only be called if node is not non-null";
         return graph().addOrUnique(new IntegerEqualsNode(nonNull, ConstantNode.forInt(0, graph())));
@@ -160,6 +172,38 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                         invoke.asNode(), fields.length + 1));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull));
+// b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
+// b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
+
+        return newInstance;
+    }
+
+    public static InlineTypeNode createFromInvoke(Invoke invoke, MetaAccessProvider metaAccess) {
+        StructuredGraph graph = invoke.asNode().graph();
+        ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(metaAccess);
+        InlineTypeNode newInstance = graph.add(new InlineTypeNode(returnType, null, new ValueNode[0], null));
+        invoke.asNode().replaceAtUsages(newInstance);
+
+        // can also represent an oop or a null pointer
+        ReadMultiValueNode oop = graph.addWithoutUnique(new ReadMultiValueNode(returnType, graph.getAssumptions(), invoke.asNode(), 0));
+
+        ResolvedJavaField[] fields = returnType.getInstanceFields(true);
+        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
+
+        for (int i = 0; i < fields.length; i++) {
+            fieldValues[i] = graph.addWithoutUnique(new ReadMultiValueNode(fields[i].getType(), graph.getAssumptions(), invoke.asNode(), i + 1));
+
+        }
+
+        ReadMultiValueNode nonNull = graph.addWithoutUnique(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
+                        invoke.asNode(), fields.length + 1));
+
+        // InlineTypeNode newInstance = graph.add(new InlineTypeNode(returnType, oop, fieldValues,
+        // nonNull));
+        graph.addAfterFixed((FixedWithNextNode) invoke.asFixedNode(), newInstance);
+        newInstance.setOop(oop);
+        newInstance.setNonNull(nonNull);
+        newInstance.fieldValues.addAll(List.of(fieldValues));
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 

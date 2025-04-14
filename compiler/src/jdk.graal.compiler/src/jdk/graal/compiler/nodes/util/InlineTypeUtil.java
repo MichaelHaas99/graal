@@ -26,6 +26,7 @@ import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
+import jdk.graal.compiler.nodes.StartNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
@@ -41,11 +42,13 @@ import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.WriteNode;
 import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -159,16 +162,16 @@ public class InlineTypeUtil {
         }
 
         List<ValueNode> arguments;
-        if (graph.getGraphState().isAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
+        if (graph.getGraphState().isDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION) || graph.getGraphState().isAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
             // directly operate on the call target arguments
-            assert callTargetNode.getScalarizedArguments().isEmpty() : "should be empty after Valhalla Calling Convention phase";
             arguments = callTargetNode.arguments();
         } else {
             // safe the arguments in an extra list
-            if (callTargetNode.getScalarizedArguments().isEmpty()) {
-                callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
-            }
-            arguments = callTargetNode.getScalarizedArguments();
+            return;
+// if (callTargetNode.getScalarizedArguments().isEmpty()) {
+// callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
+// }
+// arguments = callTargetNode.getScalarizedArguments();
 
         }
 
@@ -400,6 +403,39 @@ public class InlineTypeUtil {
 
         // push the InlineTypeNode as result
         b.push(resultType, result);
+    }
+
+    public static void handleScalarizedReturnOnInvoke(Invoke invoke, JavaKind resultType, MetaAccessProvider metaAccess) {
+        StructuredGraph graph = invoke.asNode().graph();
+        InlineTypeNode result = InlineTypeNode.createFromInvoke(invoke, metaAccess);
+
+        // create virtual object representing nullable scalarized inline object in the framestate
+        VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
+        virtual.setObjectId(0);
+        graph.add(virtual);
+
+        ValueNode[] newEntries = new ValueNode[result.getFieldValues().size()];
+
+        for (int i = 0; i < newEntries.length; i++) {
+            ValueNode entry = result.getFieldValues().get(i);
+            newEntries[i] = entry;
+        }
+
+        // create a framestate for invoke with virtual object
+        List<EscapeObjectState> mappings = new ArrayList<>();
+        if (invoke.stateAfter().virtualObjectMappings() != null) {
+            mappings.addAll(invoke.stateAfter().virtualObjectMappings());
+        }
+        mappings.add(graph.addOrUnique(new VirtualObjectState(virtual, newEntries, result.getNonNull())));
+        FrameState frameState = invoke.stateAfter().duplicateModified(JavaKind.Object, JavaKind.Object, virtual, mappings);
+        invoke.setStateAfter(frameState);
+
+        // push the InlineTypeNode as result
+        // invoke.asNode().replaceAtUsages(result);
+    }
+
+    public static void adaptStartNodeFrameState(StartNode startNode) {
+
     }
 
     /**
