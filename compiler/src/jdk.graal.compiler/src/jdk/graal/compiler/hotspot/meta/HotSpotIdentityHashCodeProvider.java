@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.hotspot.meta;
 
+import jdk.graal.compiler.core.common.LibGraalSupport;
 import jdk.graal.compiler.nodes.spi.IdentityHashCodeProvider;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.JavaConstant;
@@ -39,6 +40,12 @@ public class HotSpotIdentityHashCodeProvider implements IdentityHashCodeProvider
             /* System.identityHashCode is specified to return 0 when passed null. */
             return 0;
         }
-        return ((HotSpotObjectConstant) constant).getIdentityHashCode();
+        HotSpotObjectConstant objectConstant = (HotSpotObjectConstant) constant;
+        if (LibGraalSupport.inLibGraal() && objectConstant.objectIsInlineType()) {
+            // In IndirectHotSpotObjectConstantImpl::getIdentityHashCode we produce the hash out of
+            // the handle. This can only be used by the compiler itself, but not for emitted code.
+            return null;
+        }
+        return objectConstant.getIdentityHashCode();
     }
 }
