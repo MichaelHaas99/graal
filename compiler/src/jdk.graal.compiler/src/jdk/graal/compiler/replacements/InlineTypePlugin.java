@@ -294,6 +294,13 @@ public class InlineTypePlugin implements NodePlugin {
             }
             return true;
         }
+        if (field.isNullFreeInlineType()) {
+            value = genNullCheck(b, value);
+            StoreFieldNode storeFieldNode = new StoreFieldNode(object, field, b.maskSubWordValue(value, field.getJavaKind()));
+            b.append(storeFieldNode);
+            b.setStateAfter(storeFieldNode);
+            return true;
+        }
         return false;
     }
 
@@ -362,6 +369,18 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(condition);
 
         return b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+    }
+
+    @Override
+    public boolean handleStoreStaticField(GraphBuilderContext b, ResolvedJavaField field, ValueNode value) {
+        if (field.isNullFreeInlineType()) {
+            value = genNullCheck(b, value);
+            StoreFieldNode storeFieldNode = new StoreFieldNode(null, field, b.maskSubWordValue(value, field.getJavaKind()));
+            b.append(storeFieldNode);
+            b.setStateAfter(storeFieldNode);
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -533,7 +552,7 @@ public class InlineTypePlugin implements NodePlugin {
             trueBegin = b.append(new BeginNode());
             ifNode.setTrueSuccessor(trueBegin);
 
-            ValueNode nullCheckedValue = genNullCheck(b, value, trueBegin);
+            ValueNode nullCheckedValue = genNullCheck(b, value);
             if (isInlineTypeArray) {
 
                 // produce code that stores the flat element
@@ -624,10 +643,6 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value) {
-        return genNullCheck(b, value, null);
-    }
-
-    private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value, BeginNode begin) {
         return b.nullCheckedValue(value);
     }
 
