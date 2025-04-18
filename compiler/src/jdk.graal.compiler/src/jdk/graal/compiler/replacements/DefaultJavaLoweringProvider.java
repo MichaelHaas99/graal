@@ -1455,12 +1455,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
             LogicNode storeIsNull = graph.addOrUnique(IsNullNode.create(n.value()));
             IsNullFreeArrayNode arrayIsNullFree = graph.addOrUnique(new IsNullFreeArrayNode(array));
-            graph.addBeforeFixed(n, arrayIsNullFree);
-
-            LogicNode arrayIsNullFreeCondition = graph.addOrUnique(new IntegerEqualsNode(arrayIsNullFree, ConstantNode.forInt(1, graph)));
 
             // deoptimize if array is null-free and the store value is null
-            LogicNode negatedCondition = graph.addOrUnique(LogicNode.and(storeIsNull, arrayIsNullFreeCondition, BranchProbabilityData.unknown()));
+            LogicNode negatedCondition = graph.addOrUnique(LogicNode.and(storeIsNull, arrayIsNullFree, BranchProbabilityData.unknown()));
 
             LogicNode condition = graph.addOrUnique(LogicNegationNode.create(negatedCondition));
             if (condition.isTautology()) {

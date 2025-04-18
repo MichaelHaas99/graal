@@ -96,8 +96,6 @@ import jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil;
 import jdk.graal.compiler.hotspot.replacements.HotSpotSerialWriteBarrierSnippets;
 import jdk.graal.compiler.hotspot.replacements.HubGetClassNode;
 import jdk.graal.compiler.hotspot.replacements.InstanceOfSnippets;
-import jdk.graal.compiler.hotspot.replacements.IsFlatArraySnippets;
-import jdk.graal.compiler.hotspot.replacements.IsNullFreeArraySnippets;
 import jdk.graal.compiler.hotspot.replacements.KlassLayoutHelperNode;
 import jdk.graal.compiler.hotspot.replacements.LoadExceptionObjectSnippets;
 import jdk.graal.compiler.hotspot.replacements.LogSnippets;
@@ -110,6 +108,7 @@ import jdk.graal.compiler.hotspot.replacements.ReturnResultDeciderSnippets;
 import jdk.graal.compiler.hotspot.replacements.UnsafeCopyMemoryNode;
 import jdk.graal.compiler.hotspot.replacements.UnsafeSetMemoryNode;
 import jdk.graal.compiler.hotspot.replacements.UnsafeSnippets;
+import jdk.graal.compiler.hotspot.replacements.ValhallaArrayLayoutKindSnippets;
 import jdk.graal.compiler.hotspot.replacements.VirtualThreadUpdateJFRSnippets;
 import jdk.graal.compiler.hotspot.replacements.arraycopy.CheckcastArrayCopyCallNode;
 import jdk.graal.compiler.hotspot.replacements.arraycopy.GenericArrayCopyCallNode;
@@ -298,8 +297,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected HotSpotAllocationSnippets.Templates allocationSnippets;
     protected MonitorSnippets.Templates monitorSnippets;
     protected ObjectEqualsSnippets.Templates objectEqualsSnippets;
-    protected IsFlatArraySnippets.Templates isFlatArraySnippets;
-    protected IsNullFreeArraySnippets.Templates isNullFreeArraySnippets;
+    protected ValhallaArrayLayoutKindSnippets.Templates valhallaArrayLayoutKindSnippets;
     protected DelayedRawComparisonSnippets.Templates delayedRawcomparisonSnippets;
     protected HasIdentitySnippets.Templates hasIdentitySnippets;
     protected ReturnResultDeciderSnippets.Templates returnResultDeciderSnippets;
@@ -356,8 +354,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         allocationSnippets = allocationSnippetTemplates;
         monitorSnippets = new MonitorSnippets.Templates(options, runtime, providers, config);
         objectEqualsSnippets = new ObjectEqualsSnippets.Templates(options, providers);
-        isFlatArraySnippets = new IsFlatArraySnippets.Templates(options, providers, target);
-        isNullFreeArraySnippets = new IsNullFreeArraySnippets.Templates(options, providers, target);
+        valhallaArrayLayoutKindSnippets = new ValhallaArrayLayoutKindSnippets.Templates(options, providers, target);
         delayedRawcomparisonSnippets = new DelayedRawComparisonSnippets.Templates(options, providers);
         returnResultDeciderSnippets = new ReturnResultDeciderSnippets.Templates(options, providers);
         hasIdentitySnippets = new HasIdentitySnippets.Templates(options, providers);
@@ -826,10 +823,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
             return;
         }
-        ValueNode array = node.getValue();
-        array = createNullCheckedValue(array, node, tool);
-        node.setValue(array);
-        isFlatArraySnippets.lower(node, tool);
+        valhallaArrayLayoutKindSnippets.lower(node, tool);
 
     }
 
@@ -837,10 +831,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
             return;
         }
-        ValueNode array = node.getValue();
-        array = createNullCheckedValue(array, node, tool);
-        node.setValue(array);
-        isNullFreeArraySnippets.lower(node, tool);
+        valhallaArrayLayoutKindSnippets.lower(node, tool);
 
     }
 
