@@ -636,10 +636,9 @@ public class InlineTypePlugin implements NodePlugin {
 
     private IfNode genFlatArrayCheck(GraphBuilderContext b, ValueNode array, BeginNode trueBegin, BeginNode falseBegin) {
         IsFlatArrayNode isFlatArrayNode = b.add(new IsFlatArrayNode(array));
-        LogicNode condition = b.add(new IntegerEqualsNode(isFlatArrayNode, ConstantNode.forInt(1, b.getGraph())));
 
         // TODO: insert profiling data
-        return b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        return b.add(new IfNode(isFlatArrayNode, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
     private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value) {
