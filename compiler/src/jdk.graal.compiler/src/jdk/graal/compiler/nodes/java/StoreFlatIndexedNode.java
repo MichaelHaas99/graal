@@ -40,10 +40,11 @@ import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
+import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
-import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
+import jdk.graal.compiler.nodes.memory.MultiWrite;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
@@ -52,25 +53,36 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
  * The {@code StoreFlatIndexedNode} represents a write to a flat array element.
  */
 @NodeInfo(nameTemplate = "StoreFlatIndexedNode", cycles = CYCLES_8, size = SIZE_8)
-public final class StoreFlatIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, SingleMemoryKill {
+public final class StoreFlatIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MultiWrite {
 
     public static class StoreIndexedInfo {
 
-        private final int index;
-        private final JavaKind elementKind;
+        private final ResolvedJavaField field;
         private final int additionalOffset;
         private final int shift;
 
-        public StoreIndexedInfo(int index, JavaKind elementKind, int additionalOffset, int shift) {
-            this.index = index;
-            this.elementKind = elementKind;
+        public StoreIndexedInfo(ResolvedJavaField field, int additionalOffset, int shift) {
+            this.field = field;
             this.additionalOffset = additionalOffset;
             this.shift = shift;
+        }
+
+        public ResolvedJavaField getField() {
+            return field;
+        }
+
+        public int getAdditionalOffset() {
+            return additionalOffset;
+        }
+
+        public int getShift() {
+            return shift;
         }
     }
 
@@ -82,13 +94,8 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
 
     private final List<StoreIndexedInfo> storeIndexedInfos = new ArrayList<>();
 
-    public List<StoreIndexedNode> getWriteOperations() {
-        return storeIndexedInfos.stream().map(w -> {
-            StoreIndexedNode node = new StoreIndexedNode(array, index, getBoundsCheck(), getStoreCheck(), w.elementKind, values.get(w.index));
-            node.setAdditionalOffset(w.additionalOffset);
-            node.setShift(w.shift);
-            return node;
-        }).toList();
+    public List<StoreIndexedInfo> getStoreIndexedInfos() {
+        return storeIndexedInfos;
     }
 
     public List<ValueNode> getValues() {
@@ -116,8 +123,8 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
     }
 
     @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        return getLocationIdentity();
+    public LocationIdentity[] getKilledLocationIdentities() {
+        return storeIndexedInfos.stream().map(info -> NamedLocationIdentity.getFlatArrayLocation(info.getField())).toArray(LocationIdentity[]::new);
     }
 
     @Override
@@ -171,8 +178,9 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
         if (array().isNullConstant()) {
             return new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
         }
-        if (values.isEmpty())
+        if (values.isEmpty()) {
             return null;
+        }
         return this;
     }
 }

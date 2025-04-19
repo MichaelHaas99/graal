@@ -40,10 +40,11 @@ import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
+import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
+import jdk.graal.compiler.nodes.memory.MultiWrite;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
@@ -58,7 +59,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
  * The {@code StoreFlatFieldNode} represents a write to a flat instance field.
  */
 @NodeInfo(nameTemplate = "StoreFlatField")
-public final class StoreFlatFieldNode extends AccessFieldNode implements StateSplit, Virtualizable, Canonicalizable, SingleMemoryKill {
+public final class StoreFlatFieldNode extends AccessFieldNode implements StateSplit, Virtualizable, Canonicalizable, MultiWrite {
     public static final NodeClass<StoreFlatFieldNode> TYPE = NodeClass.create(StoreFlatFieldNode.class);
 
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
@@ -66,21 +67,21 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
 
     private final List<StoreFieldInfo> storeFieldInfos = new ArrayList<>();
 
+
     public static class StoreFieldInfo {
-        private final int index;
         private final ResolvedJavaField field;
 
-        public StoreFieldInfo(int index, ResolvedJavaField field) {
-            this.index = index;
+        public StoreFieldInfo(ResolvedJavaField field) {
             this.field = field;
+        }
+
+        public ResolvedJavaField getField() {
+            return field;
         }
     }
 
-    public List<StoreFieldNode> getWriteOperations() {
-        return storeFieldInfos.stream().map(w -> {
-            StoreFieldNode node = new StoreFieldNode(object, w.field, values.get(w.index));
-            return node;
-        }).toList();
+    public List<StoreFieldInfo> getStoreFieldInfos() {
+        return storeFieldInfos;
     }
 
     public List<ValueNode> getValues() {
@@ -118,8 +119,8 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
     }
 
     @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        return ordersMemoryAccesses() ? LocationIdentity.ANY_LOCATION : getLocationIdentity();
+    public LocationIdentity[] getKilledLocationIdentities() {
+        return storeFieldInfos.stream().map(info -> new FieldLocationIdentity(info.field, false)).toArray(LocationIdentity[]::new);
     }
 
     @Override
@@ -130,7 +131,7 @@ public final class StoreFlatFieldNode extends AccessFieldNode implements StateSp
                 VirtualInstanceNode virtual = (VirtualInstanceNode) alias;
                 int fieldIndex = virtual.fieldIndex(storeFieldInfos.get(i).field);
                 if (fieldIndex != -1) {
-                    tool.setVirtualEntry(virtual, fieldIndex, values.get(i));
+                    tool.setVirtualEntry(virtual, fieldIndex, tool.getAlias(values.get(i)));
                 } else {
                     return;
                 }
