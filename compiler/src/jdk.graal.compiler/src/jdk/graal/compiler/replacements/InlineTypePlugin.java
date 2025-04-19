@@ -52,8 +52,8 @@ import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
+import jdk.graal.compiler.nodes.java.StoreFlatElementNode;
 import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
-import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
@@ -603,7 +603,7 @@ public class InlineTypePlugin implements NodePlugin {
         ResolvedJavaField[] fields = elementType.getInstanceFields(true);
 
         List<ValueNode> readOperations = new ArrayList<>();
-        List<StoreFlatIndexedNode.StoreIndexedInfo> writeOperations = new ArrayList<>();
+        List<StoreFlatElementNode.StoreElementInfo> writeOperations = new ArrayList<>();
 
         // empty inline type will have no fields
         ValueNode returnValue = null;
@@ -624,12 +624,12 @@ public class InlineTypePlugin implements NodePlugin {
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
             int off = field.getOffset() - elementType.firstFieldOffset();
-            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(field.changeOffset(off), off, shift));
+            writeOperations.add(new StoreFlatElementNode.StoreElementInfo(field.changeOffset(off), off, shift));
 
         }
 
-        StoreFlatIndexedNode storeFlatIndexedNode = b.add(new StoreFlatIndexedNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations));
-        storeFlatIndexedNode.addValues(readOperations);
+        StoreFlatElementNode storeFlatElementNode = b.add(new StoreFlatElementNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations));
+        storeFlatElementNode.addValues(readOperations);
 
         return returnValue;
     }

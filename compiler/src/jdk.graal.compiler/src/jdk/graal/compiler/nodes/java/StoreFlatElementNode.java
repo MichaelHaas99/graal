@@ -56,18 +56,18 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
- * The {@code StoreFlatIndexedNode} represents a write to a flat array element.
+ * The {@code StoreFlatElementNode} represents a write to a flat array element.
  */
-@NodeInfo(nameTemplate = "StoreFlatIndexedNode", cycles = CYCLES_8, size = SIZE_8)
-public final class StoreFlatIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MultiWrite {
+@NodeInfo(nameTemplate = "StoreFlatElementNode", cycles = CYCLES_8, size = SIZE_8)
+public final class StoreFlatElementNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MultiWrite {
 
-    public static class StoreIndexedInfo {
+    public static class StoreElementInfo {
 
         private final ResolvedJavaField field;
         private final int additionalOffset;
         private final int shift;
 
-        public StoreIndexedInfo(ResolvedJavaField field, int additionalOffset, int shift) {
+        public StoreElementInfo(ResolvedJavaField field, int additionalOffset, int shift) {
             this.field = field;
             this.additionalOffset = additionalOffset;
             this.shift = shift;
@@ -86,16 +86,16 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
         }
     }
 
-    public static final NodeClass<StoreFlatIndexedNode> TYPE = NodeClass.create(StoreFlatIndexedNode.class);
+    public static final NodeClass<StoreFlatElementNode> TYPE = NodeClass.create(StoreFlatElementNode.class);
 
     @OptionalInput(InputType.Guard) private GuardingNode storeCheck;
     @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
     @OptionalInput(InputType.State) FrameState stateAfter;
 
-    private final List<StoreIndexedInfo> storeIndexedInfos = new ArrayList<>();
+    private final List<StoreElementInfo> storeElementInfos = new ArrayList<>();
 
-    public List<StoreIndexedInfo> getStoreIndexedInfos() {
-        return storeIndexedInfos;
+    public List<StoreElementInfo> getStoreIndexedInfos() {
+        return storeElementInfos;
     }
 
     public List<ValueNode> getValues() {
@@ -124,7 +124,7 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
 
     @Override
     public LocationIdentity[] getKilledLocationIdentities() {
-        return storeIndexedInfos.stream().map(info -> NamedLocationIdentity.getFlatArrayLocation(info.getField())).toArray(LocationIdentity[]::new);
+        return storeElementInfos.stream().map(info -> NamedLocationIdentity.getFlatArrayLocation(info.getField())).toArray(LocationIdentity[]::new);
     }
 
     @Override
@@ -132,11 +132,11 @@ public final class StoreFlatIndexedNode extends AccessIndexedNode implements Sta
         return true;
     }
 
-    public StoreFlatIndexedNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind,
-                    List<StoreIndexedInfo> writeOperations) {
+    public StoreFlatElementNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind,
+                    List<StoreElementInfo> writeOperations) {
         super(TYPE, StampFactory.forVoid(), array, index, boundsCheck, elementKind);
         this.storeCheck = storeCheck;
-        this.storeIndexedInfos.addAll(writeOperations);
+        this.storeElementInfos.addAll(writeOperations);
     }
 
     public LocationIdentity getKilledLocation() {

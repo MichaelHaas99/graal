@@ -202,8 +202,8 @@ import jdk.graal.compiler.nodes.java.NewInstanceWithExceptionNode;
 import jdk.graal.compiler.nodes.java.NewMultiArrayNode;
 import jdk.graal.compiler.nodes.java.NewMultiArrayWithExceptionNode;
 import jdk.graal.compiler.nodes.java.RegisterFinalizerNode;
+import jdk.graal.compiler.nodes.java.StoreFlatElementNode;
 import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
-import jdk.graal.compiler.nodes.java.StoreFlatIndexedNode;
 import jdk.graal.compiler.nodes.java.ValidateNewInstanceClassNode;
 import jdk.graal.compiler.nodes.memory.FloatingReadNode;
 import jdk.graal.compiler.nodes.memory.ReadNode;
@@ -646,8 +646,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerHasIdentity((HasIdentityNode) n, tool);
         } else if (n instanceof StoreFlatFieldNode) {
             lowerStoreFlatFieldNode((StoreFlatFieldNode) n, tool);
-        } else if (n instanceof StoreFlatIndexedNode) {
-            lowerStoreFlatIndexedNode((StoreFlatIndexedNode) n, tool);
+        } else if (n instanceof StoreFlatElementNode) {
+            lowerStoreFlatIndexedNode((StoreFlatElementNode) n, tool);
         } else {
             return false;
         }
@@ -889,29 +889,29 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
     }
 
-    public void lowerStoreFlatIndexedNode(StoreFlatIndexedNode storeFlatIndexed, LoweringTool tool) {
-        List<StoreFlatIndexedNode.StoreIndexedInfo> storeIndexedInfos = storeFlatIndexed.getStoreIndexedInfos();
+    public void lowerStoreFlatIndexedNode(StoreFlatElementNode storeFlatIndexed, LoweringTool tool) {
+        List<StoreFlatElementNode.StoreElementInfo> storeElementInfos = storeFlatIndexed.getStoreIndexedInfos();
         LocationIdentity[] killedLocations = storeFlatIndexed.getKilledLocationIdentities();
         StructuredGraph graph = storeFlatIndexed.graph();
         ValueNode array = storeFlatIndexed.array();
         assert StampTool.isPointerNonNull(array) : "store to flat array should include null check on array";
         ValueNode positiveIndex = storeFlatIndexed.index();
         GuardingNode boundsCheck = storeFlatIndexed.getBoundsCheck();
-        for (int i = 0; i < storeIndexedInfos.size(); i++) {
+        for (int i = 0; i < storeElementInfos.size(); i++) {
 
-            StoreFlatIndexedNode.StoreIndexedInfo storeIndexedInfo = storeIndexedInfos.get(i);
-            JavaKind storageKind = storeIndexedInfo.getField().getJavaKind();
+            StoreFlatElementNode.StoreElementInfo storeElementInfo = storeElementInfos.get(i);
+            JavaKind storageKind = storeElementInfo.getField().getJavaKind();
             ValueNode value = storeFlatIndexed.getValues().get(i);
 
-            int arrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Object) + storeIndexedInfo.getAdditionalOffset();
+            int arrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Object) + storeElementInfo.getAdditionalOffset();
 
             BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
-            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeIndexedInfo.getShift());
+            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeElementInfo.getShift());
             WriteNode memoryWrite = graph.add(new WriteNode(address, killedLocations[i], implicitStoreConvert(graph, storageKind, value),
                             barrierType, MemoryOrderMode.PLAIN));
             memoryWrite.setGuard(boundsCheck);
 
-            if (i != storeIndexedInfos.size() - 1) {
+            if (i != storeElementInfos.size() - 1) {
                 memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
                 graph.addBeforeFixed(storeFlatIndexed, memoryWrite);
             } else {
