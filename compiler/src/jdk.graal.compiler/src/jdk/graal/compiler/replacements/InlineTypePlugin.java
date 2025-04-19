@@ -343,7 +343,7 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder is directly embedded in other object, use the offset without the header
-            writeOperations.add(new StoreFlatFieldNode.StoreFieldInfo(i, innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
+            writeOperations.add(new StoreFlatFieldNode.StoreFieldInfo(innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);
@@ -624,7 +624,7 @@ public class InlineTypePlugin implements NodePlugin {
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
             int off = field.getOffset() - elementType.firstFieldOffset();
-            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(i, field.getJavaKind(), off, shift));
+            writeOperations.add(new StoreFlatIndexedNode.StoreIndexedInfo(field.changeOffset(off), off, shift));
 
         }
 
@@ -684,8 +684,9 @@ public class InlineTypePlugin implements NodePlugin {
     }
 
     private GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index, BeginNode begin) {
-        if (boundsCheck != null)
+        if (boundsCheck != null) {
             return boundsCheck;
+        }
         ValueNode length = b.add(ArrayLengthNode.create(array, b.getConstantReflection()));
         if (length instanceof FixedNode fixed && hasNoNext(begin)) {
             begin.setNext(fixed);

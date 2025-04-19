@@ -90,6 +90,7 @@ import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.MemoryMapNode;
 import jdk.graal.compiler.nodes.memory.MultiMemoryKill;
+import jdk.graal.compiler.nodes.memory.MultiWrite;
 import jdk.graal.compiler.nodes.memory.SideEffectFreeWriteNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
@@ -365,10 +366,13 @@ public abstract class LoweringPhase extends BasePhase<CoreProviders> {
                      * 5) Commit allocation nodes consume the their lock list to derive if it was a
                      * kill or not, after lowering the deleted node no longer has inputs TODO solve
                      * more generically?
+                     *
+                     * 6) MultWrite nodes have multiple kills and are lowered to multiple single
+                     * kill nodes, TODO check if they overlap
                      */
                     if (!(newNodeAfterLowering instanceof ForeignCall || newNodeAfterLowering instanceof UnreachableBeginNode || justLoweredNode instanceof WithExceptionNode ||
                                     newNodeAfterLowering instanceof MemoryMapNode || justLoweredNode instanceof CommitAllocationNode ||
-                                    newNodeAfterLowering instanceof SideEffectFreeWriteNode) &&
+                                    newNodeAfterLowering instanceof SideEffectFreeWriteNode || justLoweredNode instanceof MultiWrite) &&
                                     MemoryKill.isMemoryKill(newNodeAfterLowering)) {
 
                         // lowered to a kill verify the original node was a kill
@@ -423,7 +427,7 @@ public abstract class LoweringPhase extends BasePhase<CoreProviders> {
                         } else {
                             throw GraalError.shouldNotReachHere("Unknown memory kill " + newNodeAfterLowering); // ExcludeFromJacocoGeneratedReport
                         }
-                    } else if (newNodeAfterLowering instanceof MemoryAccess) {
+                    } else if (newNodeAfterLowering instanceof MemoryAccess && !(justLoweredNode instanceof MultiWrite)) {
                         // lowered to a memory access, verify high level node accesses same
                         // locations
                         MemoryAccess access = (MemoryAccess) newNodeAfterLowering;
