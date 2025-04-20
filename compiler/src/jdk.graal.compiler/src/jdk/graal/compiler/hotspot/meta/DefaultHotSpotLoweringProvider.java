@@ -1342,7 +1342,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (graph.getGuardsStage().allowsFloatingGuards()) {
             return;
         }
-        if (InlineTypeUtil.isAllocatedOrNull(graph, inlineTypeNode.getNonNull(), inlineTypeNode.getOop())) {
+        if (InlineTypeUtil.isAllocatedOrNull(graph, inlineTypeNode.getNonNull(), inlineTypeNode.getOop(), inlineTypeNode.isAllocatedOrNull())) {
             inlineTypeNode.replaceAtUsages(inlineTypeNode.getOop());
             graph.removeFixed(inlineTypeNode);
             return;
