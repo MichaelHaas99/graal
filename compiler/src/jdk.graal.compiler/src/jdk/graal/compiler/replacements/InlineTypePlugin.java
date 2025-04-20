@@ -2,12 +2,11 @@ package jdk.graal.compiler.replacements;
 
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
-import static jdk.graal.compiler.nodes.NamedLocationIdentity.OBJECT_ARRAY_LOCATION;
 import static jdk.graal.compiler.replacements.DefaultJavaLoweringProvider.POSITIVE_ARRAY_INDEX_STAMP;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
+import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,6 +42,7 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
+import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
@@ -433,6 +433,8 @@ public class InlineTypePlugin implements NodePlugin {
                 resultStamp = load.stamp(NodeView.DEFAULT);
                 instanceFlatArray = load;
                 trueBegin.setNext(load);
+                // add a membar for newly created inline objects
+                b.append(MembarNode.forInitialization());
             }
 
             EndNode trueEnd = b.add(new EndNode());
@@ -719,11 +721,12 @@ public class InlineTypePlugin implements NodePlugin {
         return inlineTypeNode;
     }
 
-    public static final HotSpotForeignCallDescriptor LOAD_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "loadUnknownInline", Object.class,
+    public static final HotSpotForeignCallDescriptor LOAD_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, any(), "loadUnknownInline", Object.class,
                     Object.class,
                     int.class);
 
-    public static final HotSpotForeignCallDescriptor STORE_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(LEAF, HAS_SIDE_EFFECT, OBJECT_ARRAY_LOCATION, "storeUnknownInline", void.class,
+    public static final HotSpotForeignCallDescriptor STORE_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, any(), "storeUnknownInline",
+                    void.class,
                     Object.class,
                     int.class, Object.class);
 }

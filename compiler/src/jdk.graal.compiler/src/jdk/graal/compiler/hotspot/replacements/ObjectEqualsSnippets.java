@@ -2,8 +2,7 @@ package jdk.graal.compiler.hotspot.replacements;
 
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
@@ -12,6 +11,7 @@ import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
+import static org.graalvm.word.LocationIdentity.any;
 
 import org.graalvm.word.LocationIdentity;
 
@@ -341,7 +341,9 @@ public class ObjectEqualsSnippets implements Snippets {
 
     }
 
-    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "substitutabilityCheck", boolean.class, Object.class,
+    // TODO: avoid a foreign call and emit an invoke see parse2.cpp Parse::do_acmp
+    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, any(), "substitutabilityCheck",
+                    boolean.class, Object.class,
                     Object.class);
 
     @Node.NodeIntrinsic(ForeignCallNode.class)
