@@ -69,16 +69,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     @OptionalInput ValueNode oop;
     @OptionalInput NodeInputList<ValueNode> fieldValues;
     @OptionalInput ValueNode nonNull;
+    private final boolean isAllocatedOrNull;
 
     private final ResolvedJavaType type;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull, boolean isAllocatedOrNull) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
         this.type = type;
         this.nonNull = nonNull;
         assert nonNull == null && oop == null || nonNull != null && oop != null : "both should be either null or not null";
+        this.isAllocatedOrNull = isAllocatedOrNull;
         inferStamp();
     }
 
@@ -106,6 +108,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return nonNull;
     }
 
+    public boolean isAllocatedOrNull() {
+        return isAllocatedOrNull;
+    }
+
     public LogicNode createNullCheck() {
         assert !StampTool.isPointerNonNull(this) : "should only be called if node is not non-null";
         return graph().addOrUnique(new IntegerEqualsNode(nonNull, ConstantNode.forInt(0, graph())));
@@ -127,11 +133,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
 
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oop, ValueNode nonNull) {
-        return new InlineTypeNode(type, oop, new ValueNode[type.getInstanceFields(true).length], nonNull);
+        return new InlineTypeNode(type, oop, new ValueNode[type.getInstanceFields(true).length], nonNull, false);
     }
 
     public static InlineTypeNode createNonNull(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues) {
-        return new InlineTypeNode(type, oop, fieldValues, null);
+        return new InlineTypeNode(type, oop, fieldValues, null, false);
     }
 
     public static InlineTypeNode createNonNullWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues) {
@@ -139,7 +145,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues, ValueNode nonNull) {
-        return new InlineTypeNode(type, ConstantNode.forConstant(JavaConstant.NULL_POINTER, null), fieldValues, nonNull);
+        return new InlineTypeNode(type, ConstantNode.forConstant(JavaConstant.NULL_POINTER, null), fieldValues, nonNull, false);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
@@ -159,7 +165,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ReadMultiValueNode nonNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false));
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
@@ -280,7 +286,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             }
 
             // create virtual object and hand over oop and non-null info
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, nonNull, false);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, nonNull, isAllocatedOrNull);
             tool.replaceWithVirtual(virtualObject);
         }
     }

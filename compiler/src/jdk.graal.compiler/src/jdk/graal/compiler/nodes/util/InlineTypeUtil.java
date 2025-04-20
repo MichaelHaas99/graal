@@ -418,11 +418,19 @@ public class InlineTypeUtil {
 
     }
 
+    public static boolean isAllocatedOrNull(StructuredGraph graph, ValueNode nonNull, ValueNode oop) {
+        return isAllocatedOrNull(graph, nonNull, oop, false);
+    }
+
     /**
      * Determines if it is known at compile time if a scalarized inline object is already allocated
-     * or null. E.g. this can be the case if the inline object is constant null.
+     * or null. E.g. this can be the case if the inline object is constant null or was made virtual
+     * again during parsing.
      */
-    public static boolean isAllocatedOrNull(StructuredGraph graph, ValueNode nonNull, ValueNode oop) {
+    public static boolean isAllocatedOrNull(StructuredGraph graph, ValueNode nonNull, ValueNode oop, boolean isAllocatedOrNull) {
+        if (isAllocatedOrNull) {
+            return true;
+        }
         return createIsAllocatedOrNullCheck(graph, nonNull, oop).isTautology();
     }
 
