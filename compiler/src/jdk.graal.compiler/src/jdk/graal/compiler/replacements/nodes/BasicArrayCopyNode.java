@@ -346,6 +346,15 @@ public abstract class BasicArrayCopyNode extends WithExceptionNode
                         return;
                     }
                     ResolvedJavaType sourceComponentType = sourceType.getComponentType();
+
+                    if (StampTool.canBeInlineTypeArray(srcAlias, tool.getValhallaOptionsProvider())) {
+                        // src array can be null-restricted or flat, go slow path for the moment
+                        // see TestNullableArrays::test30 which has a virtual dst array and maybe a
+                        // flat src array
+                        // TODO: implement fast path
+                        return;
+                    }
+
                     ResolvedJavaType destComponentType = destVirtual.type().getComponentType();
                     if (!sourceComponentType.equals(destComponentType)) {
                         return;
