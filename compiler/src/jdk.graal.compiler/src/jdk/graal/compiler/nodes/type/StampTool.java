@@ -289,8 +289,9 @@ public class StampTool {
      * @return true if this stamp represents a legal object stamp whose values can be an inline type
      */
     public static boolean canBeInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
-        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled()) {
             return false;
+        }
         if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
             return abstractObjectStamp.canBeInlineType();
         }
@@ -312,8 +313,9 @@ public class StampTool {
      *         non-null inline types
      */
     public static boolean isInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
-        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled()) {
             return false;
+        }
         if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
             return abstractObjectStamp.isInlineType();
         }
@@ -334,8 +336,9 @@ public class StampTool {
      *         inline types or null
      */
     public static boolean isNullableInlineType(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
-        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled()) {
             return false;
+        }
         if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
             return abstractObjectStamp.isNullableInlineType();
         }
@@ -357,8 +360,9 @@ public class StampTool {
      *         inline type as component type.
      */
     public static boolean canBeInlineTypeArray(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
-        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled()) {
             return false;
+        }
         if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
             return abstractObjectStamp.canBeInlineTypeArray();
         }
@@ -379,8 +383,9 @@ public class StampTool {
      *         arrays with an inline type as component type.
      */
     public static boolean isInlineTypeArray(Stamp stamp, ValhallaOptionsProvider valhallaOptionsProvider) {
-        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled())
+        if (valhallaOptionsProvider != null && !valhallaOptionsProvider.valhallaEnabled()) {
             return false;
+        }
         if (stamp instanceof AbstractObjectStamp abstractObjectStamp && stamp.hasValues()) {
             return abstractObjectStamp.isInlineTypeArray();
         }
