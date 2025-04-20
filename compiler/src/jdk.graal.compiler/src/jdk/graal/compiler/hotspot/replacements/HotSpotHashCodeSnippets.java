@@ -26,9 +26,8 @@ package jdk.graal.compiler.hotspot.replacements;
 
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
+import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.IDENTITY_HASHCODE;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.identityHashCode;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
@@ -45,6 +44,7 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUE
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
+import static org.graalvm.word.LocationIdentity.any;
 
 import org.graalvm.word.LocationIdentity;
 
@@ -133,7 +133,8 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
         return computeValhallaIdentityHashCode(thisObj, canBeInlineType, isInlineType);
     }
 
-    public static final HotSpotForeignCallDescriptor VALUE_OBJECT_HASH_CODE = new HotSpotForeignCallDescriptor(LEAF, NO_SIDE_EFFECT, NO_LOCATIONS, "valueObjectHashCode", int.class,
+    public static final HotSpotForeignCallDescriptor VALUE_OBJECT_HASH_CODE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, any(), "valueObjectHashCode",
+                    int.class,
                     Object.class);
 
     @Node.NodeIntrinsic(ForeignCallNode.class)
