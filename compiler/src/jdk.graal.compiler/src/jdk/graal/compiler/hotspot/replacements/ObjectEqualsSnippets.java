@@ -8,10 +8,10 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.lo
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
 import static jdk.graal.compiler.nodes.extended.HasIdentityNode.hasIdentity;
+import static jdk.graal.compiler.nodes.memory.MemoryKill.NO_LOCATION;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
-import static org.graalvm.word.LocationIdentity.any;
 
 import org.graalvm.word.LocationIdentity;
 
@@ -342,7 +342,7 @@ public class ObjectEqualsSnippets implements Snippets {
     }
 
     // TODO: avoid a foreign call and emit an invoke see parse2.cpp Parse::do_acmp
-    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, any(), "substitutabilityCheck",
+    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, NO_LOCATION, "substitutabilityCheck",
                     boolean.class, Object.class,
                     Object.class);
 
