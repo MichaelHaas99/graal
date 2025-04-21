@@ -58,7 +58,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 /**
  * The {@code StoreFlatElementNode} represents a write to a flat array element.
  */
-@NodeInfo(nameTemplate = "StoreFlatElementNode", cycles = CYCLES_8, size = SIZE_8)
+@NodeInfo(nameTemplate = "StoreFlatElement", cycles = CYCLES_8, size = SIZE_8)
 public final class StoreFlatElementNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MultiWrite {
 
     public static class StoreElementInfo {

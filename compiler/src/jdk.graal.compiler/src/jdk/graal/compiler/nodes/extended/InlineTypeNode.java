@@ -61,7 +61,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * loaded directly from the flat field.
  *
  */
-@NodeInfo(nameTemplate = "InlineTypeNode", cycles = CYCLES_8, cyclesRationale = "tlab alloc + header init", size = SIZE_8)
+@NodeInfo(nameTemplate = "InlineType", cycles = CYCLES_8, cyclesRationale = "tlab alloc + header init", size = SIZE_8)
 public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
