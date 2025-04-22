@@ -30,8 +30,10 @@ import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.LIKELY_PROBABILITY;
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
+import static jdk.graal.compiler.nodes.extended.IsFlatArrayNode.isFlatArray;
 import static jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates.findMethod;
 
 import org.graalvm.word.LocationIdentity;
@@ -87,6 +89,18 @@ public class HotSpotArraycopySnippets extends ArrayCopySnippets {
     @Override
     protected int heapWordSize() {
         return HotSpotReplacementsUtil.getHeapWordSize(INJECTED_VMCONFIG);
+    }
+
+    @Override
+    protected void doArraycopyExactStubCallSnippet(Object src, int srcPos, Object dest, int destPos, int length, JavaKind elementKind, LocationIdentity locationIdentity,
+                    @SuppressWarnings("unused") Counters counters) {
+        if (probability(NOT_FREQUENT_PROBABILITY, isFlatArray(src)) || probability(NOT_FREQUENT_PROBABILITY, isFlatArray(dest))) {
+            // e.g. copy values from flat array to object array, need to buffer the elements from
+            // src array first
+            System.arraycopy(src, srcPos, dest, destPos, length);
+            return;
+        }
+        ArrayCopyCallNode.arraycopy(src, srcPos, dest, destPos, length, elementKind, locationIdentity, heapWordSize());
     }
 
     @Override
