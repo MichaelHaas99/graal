@@ -478,5 +478,37 @@ public class TestSpecialCalls extends JTTTest {
         code.executeVarargs(false, new F());
     }
 
+    static X[] test19_orig = null;
+    public X[] test19() {
+        X[] va = new X[8];
+        for (int i = 1; i < va.length; ++i) {
+            va[i] = new X();
+        }
+        test19_orig = va;
+
+        return va.clone();
+    }
+
+    @Test
+    public void run23() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("test19"), null, true, true, getInitialOptions());
+    }
+
+    @Test
+    public void run24() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod(java.lang.classfile.instruction.ExceptionCatch.class, "of", java.lang.classfile.Label.class,java.lang.classfile.Label.class,java.lang.classfile.Label.class, java.util.Optional.class), null, true, true, getInitialOptions());
+    }
+
+    static final F equalsF1 = new F();
+    static final F equalsF2 = new F();
+
+    public static boolean equalsTest(){
+        return equalsF1 == equalsF2;
+    }
+
+    @Test
+    public void run25() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("equalsTest"), null, true, true, getInitialOptions());
+    }
 
 }
