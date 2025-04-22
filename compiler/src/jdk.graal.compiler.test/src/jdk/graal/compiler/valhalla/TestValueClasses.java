@@ -13,6 +13,7 @@ import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
 import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.InvalidInstalledCodeException;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -560,5 +561,22 @@ java.lang.NullPointerException: Cannot invoke "jdk.graal.compiler.nodes.ProfileD
         InstalledCode c = getCode(getResolvedJavaMethod("testFunc_Ref"), null, true, true, TRACE);
         c.executeVarargs();
         //c.executeVarargs(this);
+    }
+
+    static MyValueClass1[] test19_orig = null;
+
+    public MyValueClass1[] test19() {
+        MyValueClass1[] va = new MyValueClass1[8];
+        for (int i = 1; i < va.length; ++i) {
+            va[i] = MyValueClass1.createWithFieldsInline(rI, rL);
+        }
+        test19_orig = va;
+
+        return va.clone();
+    }
+
+    @Test
+    public void run14() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("test19"), null, true, true, getInitialOptions());
     }
 }
