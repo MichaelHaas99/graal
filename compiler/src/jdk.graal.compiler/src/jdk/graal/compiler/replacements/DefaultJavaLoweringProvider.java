@@ -585,7 +585,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         graph.replaceFixed(loadIndexed, memoryRead);
     }
 
-
     public void lowerStoreIndexedNode(StoreIndexedNode storeIndexed, LoweringTool tool) {
         int arrayBaseOffset = metaAccess.getArrayBaseOffset(storeIndexed.elementKind());
         lowerStoreIndexedNode(storeIndexed, tool, arrayBaseOffset);
@@ -962,57 +961,57 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 int entryCount = virtual.entryCount();
 
                 if (commit instanceof CommitAllocationOrReuseOopNode reuseAlloc && reuseAlloc.getNonNulls().get(objIndex) != null) {
-                        assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
+                    assert virtual instanceof VirtualInstanceNode : "inline type should be virtual instance";
 
-                        if (InlineTypeUtil.isAllocatedOrNull(graph, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex))) {
-                            // already allocated or null use this instance
-                            allocations[objIndex] = reuseAlloc.getOops().get(objIndex);
-                            continue;
-                        }
-
-                        NewInstanceNode newObject = graph.add(new NewInstanceNode(virtual.type(), true));
-                        recursiveInlineTypeLowerings.add(newObject);
-                        int valuePos = valuePositions[objIndex];
-                        List<WriteNode> writes = new ArrayList<>();
-                        for (int i = 0; i < entryCount; i++) {
-                            ValueNode value = commit.getValues().get(valuePos);
-                            if (value instanceof VirtualObjectNode) {
-                                value = allocations[commit.getVirtualObjects().indexOf(value)];
-                            }
-
-                            if (value == null) {
-                                omittedValues.set(valuePos);
-                            } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
-                                // Constant.illegal is always the defaultForKind, so it is skipped
-                                JavaKind valueKind = value.getStackKind();
-                                JavaKind storageKind = virtual.entryKind(tool.getMetaAccessExtensionProvider(), i);
-
-                                // Truffle requires some leniency in terms of what can be put where:
-                                assert valueKind.getStackKind() == storageKind.getStackKind() ||
-                                        (valueKind == JavaKind.Long || valueKind == JavaKind.Double || (valueKind == JavaKind.Int && virtual instanceof VirtualArrayNode) ||
-                                                (valueKind == JavaKind.Float && virtual instanceof VirtualArrayNode)) : Assertions.errorMessageContext("valueKind", valueKind,
-                                        "virtual",
-                                        virtual);
-                                AddressNode address = null;
-                                BarrierType barrierType = null;
-                                ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
-                                long offset = fieldOffset(field);
-                                if (offset >= 0) {
-                                    address = createOffsetAddress(graph, newObject, offset);
-                                    barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
-                                }
-                                if (address != null) {
-                                    WriteNode write = new WriteNode(address, LocationIdentity.init(), arrayImplicitStoreConvert(graph, storageKind, value, commit, virtual, valuePos), barrierType,
-                                            MemoryOrderMode.PLAIN);
-                                    writes.add(graph.add(write));
-                                }
-                            }
-                            valuePos++;
-                        }
-                        allocations[objIndex] = InlineTypeUtil.createAllocationDiamond(commit, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex), writes, false,
-                                        newObject,
-                                        virtual.type());
+                    if (InlineTypeUtil.isAllocatedOrNull(graph, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex))) {
+                        // already allocated or null use this instance
+                        allocations[objIndex] = reuseAlloc.getOops().get(objIndex);
                         continue;
+                    }
+
+                    NewInstanceNode newObject = graph.add(new NewInstanceNode(virtual.type(), true));
+                    recursiveInlineTypeLowerings.add(newObject);
+                    int valuePos = valuePositions[objIndex];
+                    List<WriteNode> writes = new ArrayList<>();
+                    for (int i = 0; i < entryCount; i++) {
+                        ValueNode value = commit.getValues().get(valuePos);
+                        if (value instanceof VirtualObjectNode) {
+                            value = allocations[commit.getVirtualObjects().indexOf(value)];
+                        }
+
+                        if (value == null) {
+                            omittedValues.set(valuePos);
+                        } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
+                            // Constant.illegal is always the defaultForKind, so it is skipped
+                            JavaKind valueKind = value.getStackKind();
+                            JavaKind storageKind = virtual.entryKind(tool.getMetaAccessExtensionProvider(), i);
+
+                            // Truffle requires some leniency in terms of what can be put where:
+                            assert valueKind.getStackKind() == storageKind.getStackKind() ||
+                                            (valueKind == JavaKind.Long || valueKind == JavaKind.Double || (valueKind == JavaKind.Int && virtual instanceof VirtualArrayNode) ||
+                                                            (valueKind == JavaKind.Float && virtual instanceof VirtualArrayNode)) : Assertions.errorMessageContext("valueKind", valueKind,
+                                                                            "virtual",
+                                                                            virtual);
+                            AddressNode address = null;
+                            BarrierType barrierType = null;
+                            ResolvedJavaField field = ((VirtualInstanceNode) virtual).field(i);
+                            long offset = fieldOffset(field);
+                            if (offset >= 0) {
+                                address = createOffsetAddress(graph, newObject, offset);
+                                barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
+                            }
+                            if (address != null) {
+                                WriteNode write = new WriteNode(address, LocationIdentity.init(), arrayImplicitStoreConvert(graph, storageKind, value, commit, virtual, valuePos), barrierType,
+                                                MemoryOrderMode.PLAIN);
+                                writes.add(graph.add(write));
+                            }
+                        }
+                        valuePos++;
+                    }
+                    allocations[objIndex] = InlineTypeUtil.createAllocationDiamond(commit, reuseAlloc.getNonNulls().get(objIndex), reuseAlloc.getOops().get(objIndex), writes, false,
+                                    newObject,
+                                    virtual.type());
+                    continue;
 
                 }
                 AbstractNewObjectNode newObject = createUninitializedObject(virtual, graph);
@@ -1065,7 +1064,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
 
-
         writeOmittedValues(commit, graph, allocations, omittedValues);
         finishAllocatedObjects(tool, commit, commit, allocations);
         graph.removeFixed(commit);
@@ -1099,7 +1097,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     protected NewArrayNode createUninitializedArray(VirtualArrayNode virtual, ValueNode length) {
         return new NewArrayNode(virtual.componentType(), length, true);
     }
-
 
     @SuppressWarnings("try")
     public void writeOmittedValues(CommitAllocationNode commit, StructuredGraph graph, ValueNode[] allocations, BitSet omittedValues) {
@@ -1217,12 +1214,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         FixedWithNextNode insertionPoint = insertAfter;
         StructuredGraph graph = commit.graph();
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
-            if (allocations[objIndex] instanceof AbstractNewObjectNode) {
-                PublishWritesNode publish = graph.add(new PublishWritesNode(allocations[objIndex]));
-                allocations[objIndex] = publish;
-                graph.addAfterFixed(insertionPoint, publish);
-                insertionPoint = publish;
-            }
+            PublishWritesNode publish = graph.add(new PublishWritesNode(allocations[objIndex]));
+            allocations[objIndex] = publish;
+            graph.addAfterFixed(insertionPoint, publish);
+            insertionPoint = publish;
         }
         /*
          * Note that the FrameState that is assigned to these MonitorEnterNodes isn't the correct
