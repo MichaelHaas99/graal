@@ -441,7 +441,7 @@ public class InlineTypePlugin implements NodePlugin {
             EndNode trueEnd = b.add(new EndNode());
 
             // false branch - no flat array
-            ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, boundsCheck, elementKind, b.getMetaAccess(), b.getConstantReflection()));
+            ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, falseBegin, elementKind, b.getMetaAccess(), b.getConstantReflection()));
             resultStamp = resultStamp.meet(instanceNonFlatArray.stamp(NodeView.DEFAULT));
             EndNode falseEnd = b.add(new EndNode());
             if (instanceNonFlatArray instanceof FixedNode fixedNode) {
@@ -487,10 +487,10 @@ public class InlineTypePlugin implements NodePlugin {
 
             LoadIndexedNode load;
             if (field.getJavaKind() == JavaKind.Object) {
-                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), array, index, boundsCheck,
+                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), array, index, begin,
                                 field.getJavaKind());
             } else {
-                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(field.getJavaKind()), array, index, boundsCheck, field.getJavaKind());
+                load = new LoadIndexedNode(LoadIndexedNode.TYPE, StampFactory.forKind(field.getJavaKind()), array, index, begin, field.getJavaKind());
             }
 
             // returned fields include a header offset of their holder, calculate the offset without
