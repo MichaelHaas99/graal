@@ -835,8 +835,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     protected void lowerDelayRawComparison(DelayedRawComparisonNode node, LoweringTool tool, StructuredGraph graph) {
-        if (!node.isAccessKindConstant())
+        if (!node.isAccessKindConstant()) {
             return;
+        }
         delayedRawcomparisonSnippets.lower(node, tool);
     }
 

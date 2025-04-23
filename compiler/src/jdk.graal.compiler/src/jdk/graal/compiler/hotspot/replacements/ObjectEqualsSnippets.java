@@ -127,11 +127,11 @@ public class ObjectEqualsSnippets implements Snippets {
                         ResolvedJavaField field = fields[i];
                         offsets[i] = field.getOffset();
                         kinds[i] = field.getJavaKind();
-                        offsets[i] = field.getOffset();
-                        kinds[i] = field.getJavaKind();
                         identities[i] = new FieldLocationIdentity(field, true);
                         stamps[i] = StampFactory.forDeclaredType(node.graph().getAssumptions(), field.getType(), false).getTrustedStamp();
                     }
+                } else {
+                    inlineComparison = false;
                 }
 
                 if (profile != null) {
