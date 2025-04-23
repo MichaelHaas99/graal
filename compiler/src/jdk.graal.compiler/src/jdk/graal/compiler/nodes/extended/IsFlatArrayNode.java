@@ -7,6 +7,7 @@ import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.Node.NodeIntrinsicFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.UnaryOpLogicNode;
@@ -35,6 +36,9 @@ public class IsFlatArrayNode extends UnaryOpLogicNode implements Lowerable, Virt
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (!tool.getValhallaOptionsProvider().useArrayFlattening()) {
+            return LogicConstantNode.contradiction();
+        }
         return this;
     }
 
@@ -47,8 +51,12 @@ public class IsFlatArrayNode extends UnaryOpLogicNode implements Lowerable, Virt
     public static native boolean isFlatArray(Object node);
 
     public static boolean intrinsify(GraphBuilderContext b, ValueNode object) {
-        IsFlatArrayNode isFlatArrayNode = b.add(new IsFlatArrayNode(object));
-        b.addPush(JavaKind.Int, ConditionalNode.create(isFlatArrayNode, NodeView.DEFAULT));
+        if (!b.getValhallaOptionsProvider().useArrayFlattening()) {
+            b.addPush(JavaKind.Int, ConstantNode.forInt(0));
+        } else {
+            IsFlatArrayNode isFlatArrayNode = b.add(new IsFlatArrayNode(object));
+            b.addPush(JavaKind.Int, ConditionalNode.create(isFlatArrayNode, NodeView.DEFAULT));
+        }
         return true;
     }
 

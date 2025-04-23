@@ -7,6 +7,7 @@ import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.Node.NodeIntrinsicFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.UnaryOpLogicNode;
@@ -35,6 +36,9 @@ public class IsNullFreeArrayNode extends UnaryOpLogicNode implements Lowerable, 
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (!tool.getValhallaOptionsProvider().valhallaEnabled()) {
+            return LogicConstantNode.contradiction();
+        }
         return this;
     }
 
@@ -47,8 +51,12 @@ public class IsNullFreeArrayNode extends UnaryOpLogicNode implements Lowerable, 
     public static native boolean isNullFreeArray(Object node);
 
     public static boolean intrinsify(GraphBuilderContext b, ValueNode object) {
-        IsNullFreeArrayNode isNullFreeArrayNode = b.add(new IsNullFreeArrayNode(object));
-        b.addPush(JavaKind.Int, ConditionalNode.create(isNullFreeArrayNode, NodeView.DEFAULT));
+        if (!b.getValhallaOptionsProvider().valhallaEnabled()) {
+            b.addPush(JavaKind.Int, ConstantNode.forInt(0));
+        } else {
+            IsNullFreeArrayNode isNullFreeArrayNode = b.add(new IsNullFreeArrayNode(object));
+            b.addPush(JavaKind.Int, ConditionalNode.create(isNullFreeArrayNode, NodeView.DEFAULT));
+        }
         return true;
     }
 
@@ -57,8 +65,6 @@ public class IsNullFreeArrayNode extends UnaryOpLogicNode implements Lowerable, 
         // we don't save stamp information of null-free arrays at the moment
         return getValue().stamp(NodeView.DEFAULT);
     }
-
-
 
     @Override
     public void virtualize(VirtualizerTool tool) {
