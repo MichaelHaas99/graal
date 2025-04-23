@@ -13,6 +13,8 @@ import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 
+import java.util.Arrays;
+
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.api.replacements.Snippet;
@@ -42,6 +44,7 @@ import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.InstanceOfSnippetsTemplates;
@@ -110,40 +113,24 @@ public class ObjectEqualsSnippets implements Snippets {
                 } else {
                     inlineComparison = false;
                 }
-                if (type != null) {
-                    ResolvedJavaField[] fields = type.getInstanceFields(true);
+                ResolvedJavaField[] fields = type == null ? null : type.getInstanceFields(true);
+
+                if (type != null && !InlineTypeUtil.isCircularInlineType(type) &&
+                                Arrays.stream(fields).allMatch(f -> f.getJavaKind().isPrimitive() || f.getJavaKind().isObject())) {
+
                     offsets = new long[fields.length];
                     kinds = new JavaKind[fields.length];
                     identities = new LocationIdentity[fields.length];
                     stamps = new Stamp[fields.length];
 
                     for (int i = 0; i < fields.length; i++) {
-                        offsets[i] = fields[i].getOffset();
-                        kinds[i] = fields[i].getJavaKind();
-                        if (fields[i].getType().equals(type)) {
-                            // don't inline recursive comparisons
-                            inlineComparison = false;
-                            offsets = new long[0];
-                            kinds = new JavaKind[0];
-                            identities = new LocationIdentity[0];
-                            stamps = new Stamp[0];
-                            break;
-                        } else if (fields[i].getJavaKind().isPrimitive() || fields[i].getJavaKind().isObject()) {
-                            offsets[i] = fields[i].getOffset();
-                            kinds[i] = fields[i].getJavaKind();
-                            // inline type objects are immutable
-                            identities[i] = new FieldLocationIdentity(fields[i], true);
-                            stamps[i] = StampFactory.forDeclaredType(node.graph().getAssumptions(), fields[i].getType(), false).getTrustedStamp();
-
-                        } else {
-                            inlineComparison = false;
-                            offsets = new long[0];
-                            kinds = new JavaKind[0];
-                            identities = new LocationIdentity[0];
-                            stamps = new Stamp[0];
-                            break;
-                        }
-
+                        ResolvedJavaField field = fields[i];
+                        offsets[i] = field.getOffset();
+                        kinds[i] = field.getJavaKind();
+                        offsets[i] = field.getOffset();
+                        kinds[i] = field.getJavaKind();
+                        identities[i] = new FieldLocationIdentity(field, true);
+                        stamps[i] = StampFactory.forDeclaredType(node.graph().getAssumptions(), field.getType(), false).getTrustedStamp();
                     }
                 }
 
@@ -305,7 +292,6 @@ public class ObjectEqualsSnippets implements Snippets {
         x = PiNode.piCastNonNull(x, anchorNode);
         y = PiNode.piCastNonNull(y, anchorNode);
 
-
         trace(trace, "check both operands for inline type bit");
         if (!xIsInlineType && hasIdentity(x) || !yIsInlineType && hasIdentity(y)) {
             return falseValue;
@@ -318,7 +304,6 @@ public class ObjectEqualsSnippets implements Snippets {
         if (xHub.notEqual(yHub)) {
             return falseValue;
         }
-
 
         if (inlineComparison) {
             // inline field comparison
@@ -337,7 +322,6 @@ public class ObjectEqualsSnippets implements Snippets {
             trace(trace, "call to library for substitutability check");
             return substitutabilityCheckStubC(SUBSTITUTABILITY_CHECK, x, y) ? trueValue : falseValue;
         }
-
 
     }
 

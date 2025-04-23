@@ -243,6 +243,9 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                 return LogicConstantNode.contradiction(graph);
             } else if (!xVirtual.hasIdentity() && !yVirtual.hasIdentity()) {
                 ResolvedJavaType type = xVirtual.type();
+                if (InlineTypeUtil.isCircularInlineType(type)) {
+                    return null;
+                }
                 if (type.equals(yVirtual.type())) {
                     MetaAccessProvider metaAccess = tool.getMetaAccess();
 
@@ -291,8 +294,9 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                             ValueNode yFieldNode = tool.getEntry(yVirtual, i);
 
                             // if fields reference the same node they are equal
-                            if (xFieldNode.equals(yFieldNode))
+                            if (xFieldNode.equals(yFieldNode)) {
                                 continue;
+                            }
 
                             LogicNode result = null;
                             if (xFieldNode instanceof VirtualObjectNode || yFieldNode instanceof VirtualObjectNode) {
@@ -318,8 +322,12 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 // graph), ConstantNode.forBoolean(true, graph));
 // tool.addNode(logx);
 // tool.addNode(logy);
+                                    ValueNode xAnchor = new FixedInlineTypeEqualityAnchorNode(xFieldNode);
+                                    tool.ensureAdded(xAnchor);
+                                    ValueNode yAnchor = new FixedInlineTypeEqualityAnchorNode(yFieldNode);
+                                    tool.ensureAdded(yAnchor);
                                     result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
-                                                    tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
+                                                    tool.getOptions(), xAnchor, yAnchor, NodeView.DEFAULT);
                                     // result = LogicConstantNode.tautology();
                                 } else if (xFieldNode.stamp(NodeView.DEFAULT).isFloatStamp()) {
                                     ValueNode normalizeNode = FloatNormalizeCompareNode.create(xFieldNode, yFieldNode, true, JavaKind.Int,

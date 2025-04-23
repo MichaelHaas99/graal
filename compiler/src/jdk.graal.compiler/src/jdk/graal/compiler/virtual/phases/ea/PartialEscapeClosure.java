@@ -1004,14 +1004,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         boolean ensureVirtual = true;
                         int[] sourceObjects = new int[states.length];
                         ValueNode uniqueMaterializedValue = startObj.isVirtual() ? null : startObj.getMaterializedValue();
+                        ResolvedJavaType type = StampTool.typeOrNull(virtualObjects.get(object), tool.getMetaAccess());
+                        assert type != null : "expected type to be non-null";
                         boolean allMaterialized = true;
-                        for (int i = 0; i < states.length; i++) {
-                            ObjectState objectState = states[i].getObjectState(object);
-                            if (objectState.isVirtual()) {
-                                allMaterialized = false;
-                                break;
+                        if (!InlineTypeUtil.isCircularInlineType(type)) {
+                            for (int i = 0; i < states.length; i++) {
+                                ObjectState objectState = states[i].getObjectState(object);
+                                if (objectState.isVirtual()) {
+                                    allMaterialized = false;
+                                    break;
+                                }
                             }
                         }
+
                         for (int i = 0; i < states.length; i++) {
                             ObjectState obj = states[i].getObjectState(object);
                             ensureVirtual &= obj.getEnsureVirtualized();
@@ -1353,8 +1358,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 VirtualObjectNode[] virtualizedEntry = new VirtualObjectNode[values.length];
                 // don't scalarize if we may land in a circle
                 ValueNode firstVirtual = virtualObjects.get(getObject.applyAsInt(0));
+                ResolvedJavaType type = StampTool.typeOrNull(firstVirtual, tool.getMetaAccess());
+                assert type != null : "expected type to be non-null";
                 if (scalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions()) && !(StampTool.isNullableInlineType(firstVirtual, tool.getValhallaOptionsProvider()) &&
-                                InlineTypeUtil.isCircularInlineType(firstVirtual.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess())))) {
+                                InlineTypeUtil.isCircularInlineType(type))) {
                     // try to keep virtual entries virtual by making entries with materialized
                     // inline objects
                     // virtual again, merge each virtual entry recursively.
@@ -1707,11 +1714,20 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
+                    if (!StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider())) {
+                        allMaterialized = true;
+                        break;
+                    }
+                    ResolvedJavaType type = StampTool.typeOrNull(alias, tool.getMetaAccess());
+                    assert type != null : "expected type to be non-null";
+                    if (InlineTypeUtil.isCircularInlineType(type)) {
+                        allMaterialized = true;
+                        break;
+                    }
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
                     if (objectState != null && objectState.isVirtual()) {
                         allMaterialized = false;
-                        break;
                     }
                 }
             }
