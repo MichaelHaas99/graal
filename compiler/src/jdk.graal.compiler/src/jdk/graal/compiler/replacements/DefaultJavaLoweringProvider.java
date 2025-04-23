@@ -1065,7 +1065,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
 
         writeOmittedValues(commit, graph, allocations, omittedValues);
-        finishAllocatedObjects(tool, commit, commit, allocations);
+        finishAllocatedObjects(tool, commit, commit, allocations, true);
         graph.removeFixed(commit);
 
         for (AbstractNewObjectNode recursiveLowering : recursiveLowerings) {
@@ -1211,13 +1211,22 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
     }
 
     public void finishAllocatedObjects(LoweringTool tool, FixedWithNextNode insertAfter, CommitAllocationNode commit, ValueNode[] allocations) {
+        finishAllocatedObjects(tool, insertAfter, commit, allocations, false);
+    }
+
+    public void finishAllocatedObjects(LoweringTool tool, FixedWithNextNode insertAfter, CommitAllocationNode commit, ValueNode[] allocations, boolean checkPublishWrite) {
         FixedWithNextNode insertionPoint = insertAfter;
         StructuredGraph graph = commit.graph();
+
+        // Inline type allocation diamonds only have a new instance on one branch and the publish
+        // write is already done
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
-            PublishWritesNode publish = graph.add(new PublishWritesNode(allocations[objIndex]));
-            allocations[objIndex] = publish;
-            graph.addAfterFixed(insertionPoint, publish);
-            insertionPoint = publish;
+            if (!checkPublishWrite || allocations[objIndex] instanceof AbstractNewObjectNode) {
+                PublishWritesNode publish = graph.add(new PublishWritesNode(allocations[objIndex]));
+                allocations[objIndex] = publish;
+                graph.addAfterFixed(insertionPoint, publish);
+                insertionPoint = publish;
+            }
         }
         /*
          * Note that the FrameState that is assigned to these MonitorEnterNodes isn't the correct
