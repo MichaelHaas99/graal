@@ -2,9 +2,10 @@ package jdk.graal.compiler.nodes.util;
 
 import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Stack;
+import java.util.Queue;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -621,19 +622,42 @@ public class InlineTypeUtil {
     }
 
     private static boolean isCircularInlineType(ResolvedJavaType type, List<ResolvedJavaType> visitedTypes) {
-        Stack<ResolvedJavaType> stack = new Stack<>();
-        stack.push(type);
-        while (!stack.isEmpty()) {
-            ResolvedJavaType t = stack.pop();
-            if (visitedTypes.contains(t) || type != t && (!t.isPrimitive() && !t.isIdentity() && (t.isAbstract() && t.isInterface()) || t.isJavaLangObject())) {
+        if (type.isIdentity() || type.isPrimitive()) {
+            return false;
+        }
+        Queue<ResolvedJavaType> queue = new ArrayDeque<>();
+        queue.add(type);
+        while (!queue.isEmpty()) {
+            ResolvedJavaType t = queue.remove();
+
+            if (t.isPrimitive()) {
+                // not interested in primitives
+                continue;
+            }
+
+            if (visitedTypes.contains(t)) {
+                // type was already visited
                 return true;
-            } else {
-                visitedTypes.add(t);
-                for (ResolvedJavaField field : t.getInstanceFields(true)) {
-                    ResolvedJavaType fieldType = field.getType().resolve(type);
-                    stack.push(fieldType);
+            }
+
+            if (type != t) {
+                // object type
+                if ((t.isInterface() || !t.isIdentity() && t.isAbstract()) || t.isJavaLangObject()) {
+                    // inline type could be assignable to type, but we can't analyze its fields at
+                    // compile time
+                    return true;
+                }
+                if (t.isIdentity()) {
+                    // not interested in non-inline types
+                    continue;
                 }
             }
+            visitedTypes.add(t);
+            for (ResolvedJavaField field : t.getInstanceFields(true)) {
+                ResolvedJavaType fieldType = field.getType().resolve(type);
+                queue.add(fieldType);
+            }
+
         }
         return false;
 
