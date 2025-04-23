@@ -34,6 +34,7 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUE
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static jdk.graal.compiler.nodes.extended.IsFlatArrayNode.isFlatArray;
+import static jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode.isNullFreeArray;
 import static jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates.findMethod;
 
 import org.graalvm.word.LocationIdentity;
@@ -94,7 +95,8 @@ public class HotSpotArraycopySnippets extends ArrayCopySnippets {
     @Override
     protected void doArraycopyExactStubCallSnippet(Object src, int srcPos, Object dest, int destPos, int length, JavaKind elementKind, LocationIdentity locationIdentity,
                     @SuppressWarnings("unused") Counters counters) {
-        if (probability(NOT_FREQUENT_PROBABILITY, isFlatArray(src)) || probability(NOT_FREQUENT_PROBABILITY, isFlatArray(dest))) {
+        if (probability(NOT_FREQUENT_PROBABILITY, isFlatArray(src)) || probability(NOT_FREQUENT_PROBABILITY, isFlatArray(dest)) ||
+                        !probability(NOT_FREQUENT_PROBABILITY, isNullFreeArray(dest)) && probability(NOT_FREQUENT_PROBABILITY, isNullFreeArray(dest))) {
             // e.g. copy values from flat array to object array, need to buffer the elements from
             // src array first
             System.arraycopy(src, srcPos, dest, destPos, length);

@@ -671,7 +671,8 @@ public abstract class ArrayCopySnippets implements Snippets {
                 ResolvedJavaType srcComponentType = srcType == null ? null : srcType.getComponentType();
                 ResolvedJavaType destComponentType = destType == null ? null : destType.getComponentType();
 
-                if (arraycopy.isExact()) {
+                // TODO: use fast paths for valhalla specific arrays
+                if (arraycopy.isExact() && !arraycopy.canBeInlineTypeArrayCopy(tool.getValhallaOptionsProvider())) {
                     // there is a sufficient type match - we don't need any additional type checks
                     snippetInfo = arraycopyExactStubCallSnippet;
                     arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
