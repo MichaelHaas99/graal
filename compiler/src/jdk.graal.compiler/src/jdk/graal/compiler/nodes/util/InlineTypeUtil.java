@@ -4,8 +4,10 @@ import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -363,13 +365,11 @@ public class InlineTypeUtil {
             // phi inputs set in after merge effects
         }
 
-
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
         merge.setNext(addBefore);
         return phis;
     }
-
 
     /**
      * This function handles the case that an {@link Invoke} returns a nullable scalarized inline
@@ -454,7 +454,6 @@ public class InlineTypeUtil {
                     ResolvedJavaType type) {
         StructuredGraph graph = addBefore.graph();
 
-
         LogicNode isAllocatedOrNull = createIsAllocatedOrNullCheck(graph, nonNull, oop);
 
         assert !isAllocatedOrNull.isTautology() : "should have been checked for tautology before";
@@ -464,7 +463,6 @@ public class InlineTypeUtil {
             assert type != null : "type for lowering inline type expected";
             newInstanceNode = graph.add(new NewInstanceNode(type, true));
         }
-
 
         if (isAllocatedOrNull.isContradiction()) {
             graph.addBeforeFixed(addBefore, newInstanceNode);
@@ -581,7 +579,6 @@ public class InlineTypeUtil {
         merge.setNext(addBefore);
     }
 
-
     public static class InlineTypeInfo {
         public InlineTypeInfo(ValueNode nonNull, ValueNode oop) {
             this.nonNull = nonNull;
@@ -605,7 +602,6 @@ public class InlineTypeUtil {
         }
     }
 
-
     public static boolean needsSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
         return StampTool.canBeInlineType(x, valhallaOptionsProvider) && StampTool.canBeInlineType(y, valhallaOptionsProvider);
     }
@@ -618,15 +614,18 @@ public class InlineTypeUtil {
      * @return true if a circle is possible
      */
     public static boolean isCircularInlineType(ResolvedJavaType type) {
-        return isCircularInlineType(type, new ArrayList<>());
+        return isCircularInlineType(type, new HashSet<>());
     }
 
-    private static boolean isCircularInlineType(ResolvedJavaType type, List<ResolvedJavaType> visitedTypes) {
+    private static boolean isCircularInlineType(ResolvedJavaType type, Set<ResolvedJavaType> visitedTypes) {
         if (type.isIdentity() || type.isPrimitive()) {
             return false;
         }
         Queue<ResolvedJavaType> queue = new ArrayDeque<>();
+        Queue<Integer> counters = new ArrayDeque<>();
         queue.add(type);
+        Set<ResolvedJavaType> newVisited = new HashSet<>();
+        int counter = 1;
         while (!queue.isEmpty()) {
             ResolvedJavaType t = queue.remove();
 
@@ -652,8 +651,23 @@ public class InlineTypeUtil {
                     continue;
                 }
             }
-            visitedTypes.add(t);
-            for (ResolvedJavaField field : t.getInstanceFields(true)) {
+
+            counter--;
+            if (counter == 0) {
+                newVisited.add(t);
+                visitedTypes.addAll(newVisited);
+                newVisited.clear();
+            } else {
+                newVisited.add(t);
+            }
+
+            ResolvedJavaField[] fields = t.getInstanceFields(true);
+            counters.add(fields.length);
+
+            if (counter == 0) {
+                counter = counters.remove();
+            }
+            for (ResolvedJavaField field : fields) {
                 ResolvedJavaType fieldType = field.getType().resolve(type);
                 queue.add(fieldType);
             }
