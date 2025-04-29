@@ -119,8 +119,6 @@ public class InlineTypePlugin implements NodePlugin {
                     merge.addForwardEnd(falseEnd);
                 }
 
-
-
             } else {
                 // field is flat and null-restricted
                 b.push(JavaKind.Object, genLoadFlatField(b, object, field));
@@ -364,7 +362,6 @@ public class InlineTypePlugin implements NodePlugin {
         b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-
     private IfNode genFieldNullCheck(GraphBuilderContext b, ValueNode fieldValue, BeginNode trueBegin, BeginNode falseBegin) {
         LogicNode condition = b.add(IsNullNode.create(fieldValue));
         b.add(condition);
@@ -546,8 +543,6 @@ public class InlineTypePlugin implements NodePlugin {
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
             IfNode ifNode = genFlatArrayCheck(b, array, trueBegin, falseBegin);
 
-
-
             // true branch - flat array
             EndNode trueEnd;
             // we store the value in a flat array we need to do a null check before loading the
@@ -606,7 +601,7 @@ public class InlineTypePlugin implements NodePlugin {
         ResolvedJavaField[] fields = elementType.getInstanceFields(true);
 
         List<ValueNode> readOperations = new ArrayList<>();
-        List<StoreFlatElementNode.StoreElementInfo> writeOperations = new ArrayList<>();
+        List<StoreFlatElementNode.SingleWriteOperation> writeOperations = new ArrayList<>();
 
         // empty inline type will have no fields
         ValueNode returnValue = null;
@@ -614,8 +609,6 @@ public class InlineTypePlugin implements NodePlugin {
         for (int i = 0; i < fields.length; i++) {
             ResolvedJavaField field = fields[i];
             assert !field.isFlat() : "the iteration over nested fields is handled by the loop itself";
-
-
 
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, field));
             readOperations.add(b.maskSubWordValue(load, field.getJavaKind()));
@@ -627,11 +620,11 @@ public class InlineTypePlugin implements NodePlugin {
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
             int off = field.getOffset() - elementType.firstFieldOffset();
-            writeOperations.add(new StoreFlatElementNode.StoreElementInfo(field.changeOffset(off), off, shift));
+            writeOperations.add(new StoreFlatElementNode.SingleWriteOperation(field.changeOffset(off), shift));
 
         }
 
-        StoreFlatElementNode storeFlatElementNode = b.add(new StoreFlatElementNode(array, index, boundsCheck, storeCheck, elementType.getJavaKind(), writeOperations));
+        StoreFlatElementNode storeFlatElementNode = b.add(new StoreFlatElementNode(array, index, boundsCheck, storeCheck, writeOperations));
         storeFlatElementNode.addValues(readOperations);
 
         return returnValue;

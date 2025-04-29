@@ -891,28 +891,28 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     public void lowerStoreFlatIndexedNode(StoreFlatElementNode storeFlatIndexed, LoweringTool tool) {
-        List<StoreFlatElementNode.StoreElementInfo> storeElementInfos = storeFlatIndexed.getStoreIndexedInfos();
+        List<StoreFlatElementNode.SingleWriteOperation> singleWriteOperations = storeFlatIndexed.getSingleWriteOperations();
         LocationIdentity[] killedLocations = storeFlatIndexed.getKilledLocationIdentities();
         StructuredGraph graph = storeFlatIndexed.graph();
         ValueNode array = storeFlatIndexed.array();
         assert StampTool.isPointerNonNull(array) : "store to flat array should include null check on array";
         ValueNode positiveIndex = storeFlatIndexed.index();
         GuardingNode boundsCheck = storeFlatIndexed.getBoundsCheck();
-        for (int i = 0; i < storeElementInfos.size(); i++) {
+        for (int i = 0; i < singleWriteOperations.size(); i++) {
 
-            StoreFlatElementNode.StoreElementInfo storeElementInfo = storeElementInfos.get(i);
-            JavaKind storageKind = storeElementInfo.getField().getJavaKind();
+            StoreFlatElementNode.SingleWriteOperation singleWriteOperation = singleWriteOperations.get(i);
+            JavaKind storageKind = singleWriteOperation.getField().getJavaKind();
             ValueNode value = storeFlatIndexed.getValues().get(i);
 
-            int arrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Object) + storeElementInfo.getAdditionalOffset();
+            int arrayBaseOffset = metaAccess.getArrayBaseOffset(JavaKind.Object) + singleWriteOperation.getOffset();
 
             BarrierType barrierType = barrierSet.arrayWriteBarrierType(storageKind);
-            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, storeElementInfo.getShift());
+            AddressNode address = createArrayAddress(graph, array, arrayBaseOffset, storageKind, positiveIndex, singleWriteOperation.getShift());
             WriteNode memoryWrite = graph.add(new WriteNode(address, killedLocations[i], implicitStoreConvert(graph, storageKind, value),
                             barrierType, MemoryOrderMode.PLAIN));
             memoryWrite.setGuard(boundsCheck);
 
-            if (i != storeElementInfos.size() - 1) {
+            if (i != singleWriteOperations.size() - 1) {
                 memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
                 graph.addBeforeFixed(storeFlatIndexed, memoryWrite);
             } else {

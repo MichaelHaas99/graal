@@ -32,7 +32,9 @@ import java.util.List;
 
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
@@ -50,26 +52,88 @@ import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
- * The {@code StoreFlatElementNode} represents a write to a flat array element.
+ * The {@code StoreFlatElementNode} performs a (maybe not atomic) store operation for a flat array
+ * element.
  */
 @NodeInfo(nameTemplate = "StoreFlatElement", cycles = CYCLES_8, size = SIZE_8)
-public final class StoreFlatElementNode extends AccessIndexedNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MultiWrite {
+public final class StoreFlatElementNode extends AccessArrayNode implements StateSplit, Lowerable, Virtualizable, Canonicalizable, MultiWrite {
 
-    public static class StoreElementInfo {
+    public static final NodeClass<StoreFlatElementNode> TYPE = NodeClass.create(StoreFlatElementNode.class);
+    @Input ValueNode index;
+    @OptionalInput(InputType.Guard) private GuardingNode boundsCheck;
+    private final JavaKind elementKind;
+    private LocationIdentity location;
+
+    @OptionalInput(InputType.Guard) private GuardingNode storeCheck;
+    @OptionalInput(InputType.State) FrameState stateAfter;
+    @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
+    private LocationIdentity[] killedLocations;
+    private final List<SingleWriteOperation> singleWriteOperations = new ArrayList<>();
+
+    public ValueNode index() {
+        return index;
+    }
+
+    /**
+     * Create an new StoreFlatElementNode.
+     *
+     * @param stamp the result kind of the access
+     * @param array the instruction producing the array
+     * @param index the instruction producing the index
+     * @param boundsCheck the explicit array bounds check already performed before the access, or
+     *            null if no check was performed yet
+     */
+    private StoreFlatElementNode(NodeClass<? extends StoreFlatElementNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck) {
+        super(c, stamp, array);
+        this.index = index;
+        this.boundsCheck = boundsCheck;
+        this.elementKind = JavaKind.Object;
+    }
+
+    public StoreFlatElementNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck,
+                    List<SingleWriteOperation> writeOperations) {
+        this(TYPE, StampFactory.forVoid(), array, index, boundsCheck);
+        this.location = LocationIdentity.any();
+        this.storeCheck = storeCheck;
+        this.singleWriteOperations.addAll(writeOperations);
+        this.killedLocations = singleWriteOperations.stream().map(info -> NamedLocationIdentity.getFlatArrayLocation(info.getField())).toArray(LocationIdentity[]::new);
+
+    }
+
+    public GuardingNode getBoundsCheck() {
+        return boundsCheck;
+    }
+
+    /**
+     * Gets the element type of the array.
+     *
+     * @return the element type
+     */
+    public JavaKind elementKind() {
+        return elementKind;
+    }
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        return location;
+    }
+
+    public static class SingleWriteOperation {
 
         private final ResolvedJavaField field;
-        private final int additionalOffset;
+        private final int offset;
         private final int shift;
 
-        public StoreElementInfo(ResolvedJavaField field, int additionalOffset, int shift) {
+        public SingleWriteOperation(ResolvedJavaField field, int shift) {
             this.field = field;
-            this.additionalOffset = additionalOffset;
+            this.offset = field.getOffset();
             this.shift = shift;
         }
 
@@ -77,8 +141,8 @@ public final class StoreFlatElementNode extends AccessIndexedNode implements Sta
             return field;
         }
 
-        public int getAdditionalOffset() {
-            return additionalOffset;
+        public int getOffset() {
+            return offset;
         }
 
         public int getShift() {
@@ -86,16 +150,8 @@ public final class StoreFlatElementNode extends AccessIndexedNode implements Sta
         }
     }
 
-    public static final NodeClass<StoreFlatElementNode> TYPE = NodeClass.create(StoreFlatElementNode.class);
-
-    @OptionalInput(InputType.Guard) private GuardingNode storeCheck;
-    @Input NodeInputList<ValueNode> values = new NodeInputList<>(this);
-    @OptionalInput(InputType.State) FrameState stateAfter;
-
-    private final List<StoreElementInfo> storeElementInfos = new ArrayList<>();
-
-    public List<StoreElementInfo> getStoreIndexedInfos() {
-        return storeElementInfos;
+    public List<SingleWriteOperation> getSingleWriteOperations() {
+        return singleWriteOperations;
     }
 
     public List<ValueNode> getValues() {
@@ -124,7 +180,7 @@ public final class StoreFlatElementNode extends AccessIndexedNode implements Sta
 
     @Override
     public LocationIdentity[] getKilledLocationIdentities() {
-        return storeElementInfos.stream().map(info -> NamedLocationIdentity.getFlatArrayLocation(info.getField())).toArray(LocationIdentity[]::new);
+        return killedLocations;
     }
 
     @Override
@@ -132,41 +188,14 @@ public final class StoreFlatElementNode extends AccessIndexedNode implements Sta
         return true;
     }
 
-    public StoreFlatElementNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind,
-                    List<StoreElementInfo> writeOperations) {
-        super(TYPE, StampFactory.forVoid(), array, index, boundsCheck, elementKind);
-        this.storeCheck = storeCheck;
-        this.storeElementInfos.addAll(writeOperations);
-    }
-
-    public LocationIdentity getKilledLocation() {
-        return getLocationIdentity();
-    }
-
-    // TODO: flat arrays can't be virtual yet so not necessary at the moment but in the future
     @Override
     public void virtualize(VirtualizerTool tool) {
-// ValueNode alias = tool.getAlias(array());
-// if (alias instanceof VirtualObjectNode) {
-// ValueNode indexValue = tool.getAlias(index());
-// int idx = indexValue.isConstant() ? indexValue.asJavaConstant().asInt() : -1;
-// VirtualArrayNode virtual = (VirtualArrayNode) alias;
-// if (idx >= 0 && idx < virtual.entryCount()) {
-// ResolvedJavaType componentType = virtual.type().getComponentType();
-// if (elementKind.isPrimitive() || StampTool.isPointerAlwaysNull(value) ||
-// componentType.isJavaLangObject() ||
-// (StampTool.typeReferenceOrNull(value) != null &&
-// componentType.isAssignableFrom(StampTool.typeOrNull(value)))) {
-// boolean success = tool.setVirtualEntry(virtual, idx, value(), elementKind(), 0);
-// if (success) {
-// tool.delete();
-// } else {
-// GraalError.guarantee(virtual.isVirtualByteArray(tool.getMetaAccessExtensionProvider()), "only
-// stores to virtual byte arrays can fail: %s", virtual);
-// }
-// }
-// }
-// }
+        ValueNode alias = tool.getAlias(array());
+        if (alias instanceof VirtualObjectNode) {
+            // TODO: flat arrays can't be virtual, but should be in the future
+            throw new GraalError("flat arrays shouldn't be virtual yet");
+        }
+
     }
 
     public FrameState getState() {
@@ -174,12 +203,15 @@ public final class StoreFlatElementNode extends AccessIndexedNode implements Sta
     }
 
     @Override
+    public boolean verifyNode() {
+        assertTrue(!values.isEmpty(), "must have at least one value to write");
+        return super.verifyNode();
+    }
+
+    @Override
     public Node canonical(CanonicalizerTool tool) {
         if (array().isNullConstant()) {
             return new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
-        }
-        if (values.isEmpty()) {
-            return null;
         }
         return this;
     }
