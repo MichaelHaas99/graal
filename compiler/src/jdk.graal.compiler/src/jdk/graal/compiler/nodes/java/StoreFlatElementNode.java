@@ -32,7 +32,6 @@ import java.util.List;
 
 import org.graalvm.word.LocationIdentity;
 
-import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
@@ -84,27 +83,21 @@ public final class StoreFlatElementNode extends AccessArrayNode implements State
     /**
      * Create an new StoreFlatElementNode.
      *
-     * @param stamp the result kind of the access
      * @param array the instruction producing the array
      * @param index the instruction producing the index
      * @param boundsCheck the explicit array bounds check already performed before the access, or
      *            null if no check was performed yet
      */
-    private StoreFlatElementNode(NodeClass<? extends StoreFlatElementNode> c, Stamp stamp, ValueNode array, ValueNode index, GuardingNode boundsCheck) {
-        super(c, stamp, array);
+    public StoreFlatElementNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck,
+                    List<SingleWriteOperation> writeOperations) {
+        super(TYPE, StampFactory.forVoid(), array);
         this.index = index;
         this.boundsCheck = boundsCheck;
         this.elementKind = JavaKind.Object;
-    }
-
-    public StoreFlatElementNode(ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck,
-                    List<SingleWriteOperation> writeOperations) {
-        this(TYPE, StampFactory.forVoid(), array, index, boundsCheck);
         this.location = LocationIdentity.any();
         this.storeCheck = storeCheck;
         this.singleWriteOperations.addAll(writeOperations);
         this.killedLocations = singleWriteOperations.stream().map(info -> NamedLocationIdentity.getFlatArrayLocation(info.getField())).toArray(LocationIdentity[]::new);
-
     }
 
     public GuardingNode getBoundsCheck() {

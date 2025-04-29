@@ -97,8 +97,8 @@ public final class StoreFlatFieldNode extends FixedWithNextNode implements State
      * @param memoryOrder specifies the memory ordering requirements of the access. This overrides
      *            the field volatile modifier.
      */
-    private StoreFlatFieldNode(NodeClass<? extends StoreFlatFieldNode> c, Stamp stamp, ValueNode object, ResolvedJavaField field, MemoryOrderMode memoryOrder, boolean immutable) {
-        super(c, stamp);
+    private StoreFlatFieldNode(Stamp stamp, ValueNode object, ResolvedJavaField field, MemoryOrderMode memoryOrder, boolean immutable) {
+        super(TYPE, stamp);
         assert !immutable || field.isFinal() : "immutable fields must also be final";
         assert !immutable || !field.isStatic() : "immutable fields must also be non-static";
         this.object = object;
@@ -108,10 +108,10 @@ public final class StoreFlatFieldNode extends FixedWithNextNode implements State
     }
 
     public StoreFlatFieldNode(ValueNode object, ResolvedJavaField field, List<SingleWriteOperation> writeOperations) {
-        this(TYPE, StampFactory.forVoid(), object, field, MemoryOrderMode.getMemoryOrder(field), false);
+        this(StampFactory.forVoid(), object, field, MemoryOrderMode.getMemoryOrder(field), false);
         this.singleWriteOperations.addAll(writeOperations);
         if (ordersMemoryAccesses()) {
-            killedLocations = new LocationIdentity[]{LocationIdentity.any()};
+            this.killedLocations = new LocationIdentity[]{LocationIdentity.any()};
         } else {
             this.killedLocations = singleWriteOperations.stream().map(info -> new FieldLocationIdentity(info.field, false)).toArray(LocationIdentity[]::new);
         }
