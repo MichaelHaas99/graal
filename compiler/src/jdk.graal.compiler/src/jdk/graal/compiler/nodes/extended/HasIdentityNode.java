@@ -16,6 +16,7 @@ import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.vm.ci.meta.JavaKind;
 
+// TODO: make floating
 @NodeInfo(cycles = CYCLES_8, size = SIZE_8)
 public class HasIdentityNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
     public static final NodeClass<HasIdentityNode> TYPE = NodeClass.create(HasIdentityNode.class);

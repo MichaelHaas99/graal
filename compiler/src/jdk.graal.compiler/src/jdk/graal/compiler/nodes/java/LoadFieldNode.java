@@ -165,6 +165,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
         if (self == null) {
             self = new LoadFieldNode(stamp, forObject, field, immutable);
         }
+        // TODO: check for InlineTypeNode and return field value
         return self;
     }
 

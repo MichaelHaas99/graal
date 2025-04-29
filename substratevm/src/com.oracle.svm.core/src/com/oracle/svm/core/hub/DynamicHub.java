@@ -1616,7 +1616,7 @@ public final class DynamicHub implements AnnotatedElement, java.lang.reflect.Typ
     }
 
     @Substitute
-    public boolean isIdentity(){
+    public boolean isIdentity() {
         // Before Valhalla all classes are identity classes
         return true;
     }
