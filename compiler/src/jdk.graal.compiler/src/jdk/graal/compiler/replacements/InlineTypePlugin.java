@@ -327,7 +327,7 @@ public class InlineTypePlugin implements NodePlugin {
         ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
 
         List<ValueNode> readOperations = new ArrayList<>();
-        List<StoreFlatFieldNode.StoreFieldInfo> writeOperations = new ArrayList<>();
+        List<StoreFlatFieldNode.SingleWriteOperation> writeOperations = new ArrayList<>();
 
         for (int i = 0; i < innerFields.length; i++) {
             ResolvedJavaField innerField = innerFields[i];
@@ -342,7 +342,7 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder is directly embedded in other object, use the offset without the header
-            writeOperations.add(new StoreFlatFieldNode.StoreFieldInfo(innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
+            writeOperations.add(new StoreFlatFieldNode.SingleWriteOperation(innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);

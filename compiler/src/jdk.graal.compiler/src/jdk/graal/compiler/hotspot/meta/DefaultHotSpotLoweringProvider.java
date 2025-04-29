@@ -122,7 +122,6 @@ import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeadEndNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
-import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
@@ -647,7 +646,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         } else if (n instanceof StoreFlatFieldNode) {
             lowerStoreFlatFieldNode((StoreFlatFieldNode) n, tool);
         } else if (n instanceof StoreFlatElementNode) {
-            lowerStoreFlatIndexedNode((StoreFlatElementNode) n, tool);
+            lowerStoreFlatElementNode((StoreFlatElementNode) n, tool);
         } else {
             return false;
         }
@@ -853,13 +852,12 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     protected void lowerStoreFlatFieldNode(StoreFlatFieldNode storeFlatField, LoweringTool tool) {
-        List<StoreFlatFieldNode.StoreFieldInfo> storeFieldInfos = storeFlatField.getStoreFieldInfos();
-        LocationIdentity[] killedLocations = storeFlatField.getKilledLocationIdentities();
+        List<StoreFlatFieldNode.SingleWriteOperation> singleWriteOperations = storeFlatField.getSingleWriteOperations();
         StructuredGraph graph = storeFlatField.graph();
-        for (int i = 0; i < storeFieldInfos.size(); i++) {
+        for (int i = 0; i < singleWriteOperations.size(); i++) {
 
-            StoreFlatFieldNode.StoreFieldInfo storeFieldInfo = storeFieldInfos.get(i);
-            ResolvedJavaField field = storeFieldInfo.getField();
+            StoreFlatFieldNode.SingleWriteOperation singleWriteOperation = singleWriteOperations.get(i);
+            ResolvedJavaField field = singleWriteOperation.getField();
             ValueNode object = storeFlatField.object();
             assert StampTool.isPointerNonNull(object) : "store to null-restricted flat field should include null check";
 
@@ -867,11 +865,11 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
             AddressNode address = createFieldAddress(graph, object, field);
             BarrierType barrierType = barrierSet.fieldWriteBarrierType(field, getStorageKind(field));
-            WriteNode memoryWrite = new WriteNode(address, overrideFieldLocationIdentity((FieldLocationIdentity) killedLocations[i]), value, barrierType, MemoryOrderMode.getMemoryOrder(field));
+            WriteNode memoryWrite = new WriteNode(address, storeFlatField.getKilledLocation(i), value, barrierType, storeFlatField.getMemoryOrder());
 
             memoryWrite = graph.add(memoryWrite);
 
-            if (i != storeFieldInfos.size() - 1) {
+            if (i != singleWriteOperations.size() - 1) {
                 // assign invalid framestate because writes don't exist in bytecode
                 memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
                 graph.addBeforeFixed(storeFlatField, memoryWrite);
@@ -890,7 +888,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
     }
 
-    public void lowerStoreFlatIndexedNode(StoreFlatElementNode storeFlatIndexed, LoweringTool tool) {
+    public void lowerStoreFlatElementNode(StoreFlatElementNode storeFlatIndexed, LoweringTool tool) {
         List<StoreFlatElementNode.SingleWriteOperation> singleWriteOperations = storeFlatIndexed.getSingleWriteOperations();
         LocationIdentity[] killedLocations = storeFlatIndexed.getKilledLocationIdentities();
         StructuredGraph graph = storeFlatIndexed.graph();

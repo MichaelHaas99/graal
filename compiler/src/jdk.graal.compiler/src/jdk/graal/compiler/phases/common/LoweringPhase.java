@@ -427,7 +427,7 @@ public abstract class LoweringPhase extends BasePhase<CoreProviders> {
                         } else {
                             throw GraalError.shouldNotReachHere("Unknown memory kill " + newNodeAfterLowering); // ExcludeFromJacocoGeneratedReport
                         }
-                    } else if (newNodeAfterLowering instanceof MemoryAccess && !(justLoweredNode instanceof MultiWrite)) {
+                    } else if (newNodeAfterLowering instanceof MemoryAccess) {
                         // lowered to a memory access, verify high level node accesses same
                         // locations
                         MemoryAccess access = (MemoryAccess) newNodeAfterLowering;
