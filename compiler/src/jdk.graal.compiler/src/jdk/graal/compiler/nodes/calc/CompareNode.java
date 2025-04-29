@@ -178,7 +178,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                                 return null;
                             }
                         }
-                        return duplicateModified(convertX.getValue(), convertY.getValue(), unorderedIsTrue, view);
+                        return duplicateModified(convertX.getValue(), convertY.getValue(), unorderedIsTrue, view, valhallaOptionsProvider);
                     }
                 }
             }
@@ -191,7 +191,8 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
         }
 
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                        CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
+                        CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view,
+                        ValhallaOptionsProvider valhallaOptionsProvider) {
             if (nonConstant instanceof ConditionalNode) {
                 Condition realCondition = condition.asCondition();
                 if (mirrored) {
@@ -251,15 +252,20 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                     ConstantNode newConstant = canonicalConvertConstant(constantReflection, metaAccess, condition, convert, constant, view);
                     if (newConstant != null) {
                         if (mirrored) {
-                            return duplicateModified(newConstant, convert.getValue(), unorderedIsTrue, view);
+                            return duplicateModified(newConstant, convert.getValue(), unorderedIsTrue, view, valhallaOptionsProvider);
                         } else {
-                            return duplicateModified(convert.getValue(), newConstant, unorderedIsTrue, view);
+                            return duplicateModified(convert.getValue(), newConstant, unorderedIsTrue, view, valhallaOptionsProvider);
                         }
                     }
                 }
             }
 
             return null;
+        }
+
+        protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
+                        CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
+            return canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view, null);
         }
 
         private static boolean isConstantConversionSupported(ConvertNode convert, NodeView view, Integer smallestCompareWidth) {
@@ -326,6 +332,10 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
          * an instance of the same class as the node it is being duplicated from.
          */
         protected abstract LogicNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view);
+
+        protected LogicNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view, ValhallaOptionsProvider valhallaOptionsProvider) {
+            return duplicateModified(newX, newY, unorderedIsTrue, view);
+        };
     }
 
     public static LogicNode createCompareNode(StructuredGraph graph, CanonicalCondition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {

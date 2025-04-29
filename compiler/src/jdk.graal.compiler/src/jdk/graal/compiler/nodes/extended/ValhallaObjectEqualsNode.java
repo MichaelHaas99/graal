@@ -6,12 +6,17 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.calc.CanonicalCondition;
+import jdk.graal.compiler.core.common.type.AbstractPointerStamp;
+import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.core.common.type.TypeReference;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -21,15 +26,22 @@ import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.calc.PointerEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
+import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.hotspot.ACmpDataAccessor;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Determines if two objects are equal with Valhalla semantics. The node needs to be fixed, because
@@ -42,7 +54,7 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
     @Input protected ValueNode x;
     @Input protected ValueNode y;
 
-    private static final ObjectEqualsNode.ObjectEqualsOp OP = new ObjectEqualsNode.ObjectEqualsOp();
+    private static final ValhallaObjectEqualsOp OP = new ValhallaObjectEqualsOp();
 
     public ValueNode getX() {
         return x;
@@ -84,6 +96,7 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
         if (result != null) {
             return result;
         }
+
         result = CompareNode.tryConstantFold(CanonicalCondition.EQ, x, y, b.getConstantReflection(), false);
         if (result != null) {
             return result;
@@ -107,7 +120,7 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
     public Node canonical(CanonicalizerTool tool) {
         NodeView view = NodeView.from(tool);
 
-        LogicNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, getX(), getY(), view,
+        LogicNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, x, y, view,
                         tool.getValhallaOptionsProvider());
         if (value != null) {
             return new ConditionalNode(value, ConstantNode.forInt(1), ConstantNode.forInt(0));
@@ -116,6 +129,36 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
             return new ConditionalNode(new ObjectEqualsNode(x, y), ConstantNode.forInt(1), ConstantNode.forInt(0));
         }
         return this;
+    }
+
+    public static class ValhallaObjectEqualsOp extends PointerEqualsNode.PointerEqualsOp {
+
+        @Override
+        protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
+                        CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
+            ResolvedJavaType type = constantReflection.asJavaType(constant);
+            if (type != null && nonConstant instanceof GetClassNode getClassNode) {
+                ValueNode object = getClassNode.getObject();
+                assert ((ObjectStamp) object.stamp(view)).nonNull() : "getClassNode %s object %s should have a non-null stamp, got: %s".formatted(getClassNode, object, object.stamp(view));
+                if (!type.isPrimitive() && (type.isConcrete() || type.isArray())) {
+                    return InstanceOfNode.create(TypeReference.createExactTrusted(type), object);
+                }
+                return LogicConstantNode.forBoolean(false);
+            }
+            return super.canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view);
+        }
+
+        @Override
+        protected LogicNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view, ValhallaOptionsProvider valhallaOptionsProvider) {
+            if (InlineTypeUtil.mayNeedSubstitutabilityCheck(newX, newY, valhallaOptionsProvider)) {
+                return null;
+            } else if (newX.stamp(view) instanceof ObjectStamp && newY.stamp(view) instanceof ObjectStamp) {
+                return ObjectEqualsNode.create(newX, newY, view);
+            } else if (newX.stamp(view) instanceof AbstractPointerStamp && newY.stamp(view) instanceof AbstractPointerStamp) {
+                return PointerEqualsNode.create(newX, newY, view);
+            }
+            throw GraalError.shouldNotReachHereUnexpectedValue(newX.stamp(view) + " " + newY.stamp(view)); // ExcludeFromJacocoGeneratedReport
+        }
     }
 
     @Override

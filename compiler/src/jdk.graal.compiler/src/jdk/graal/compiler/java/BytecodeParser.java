@@ -4298,7 +4298,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             case EQ:
                 if (a.getStackKind() == JavaKind.Object) {
                     LogicNode node;
-                    if (InlineTypeUtil.mayNeedSubstitutabilityCheck(a, b, getValhallaOptionsProvider())) {
+                    if (getValhallaOptionsProvider().valhallaEnabled()) {
                         node = ValhallaObjectEqualsNode.create(this, a, b, NodeView.DEFAULT, getProfileForObjectEquals());
                     } else {
                         node = genObjectEquals(a, b);
