@@ -147,7 +147,6 @@ import jdk.graal.compiler.nodes.calc.IntegerDivRemNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.calc.LeftShiftNode;
 import jdk.graal.compiler.nodes.calc.NarrowNode;
-import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.calc.RemNode;
 import jdk.graal.compiler.nodes.calc.SignedDivNode;
 import jdk.graal.compiler.nodes.calc.SignedFloatingIntegerDivNode;
@@ -174,6 +173,7 @@ import jdk.graal.compiler.nodes.extended.OSRMonitorEnterNode;
 import jdk.graal.compiler.nodes.extended.OSRStartNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.StoreHubNode;
+import jdk.graal.compiler.nodes.extended.ValhallaObjectEqualsNode;
 import jdk.graal.compiler.nodes.gc.G1ArrayRangePostWriteBarrierNode;
 import jdk.graal.compiler.nodes.gc.G1ArrayRangePreWriteBarrierNode;
 import jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode;
@@ -544,11 +544,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 monitorSnippets.lower((MonitorExitNode) n, registers, tool);
             }
-        } else if (n instanceof ObjectEqualsNode objectEqualsNode) {
-            objectEqualsNode.reevaluateSubstituabilityCheck(tool.getValhallaOptionsProvider());
-            if (objectEqualsNode.substitutabilityCheck() && graph.getGuardsStage().areDeoptsFixed()) {
-                objectEqualsSnippets.lower(objectEqualsNode, tool);
-            }
+        } else if (n instanceof ValhallaObjectEqualsNode objectEqualsNode) {
+            // TODO: probably better to not rely on a snippet
+            objectEqualsSnippets.lower(objectEqualsNode, tool);
         } else if (n instanceof ArrayCopyNode) {
             arraycopySnippets.lower((ArrayCopyNode) n, tool);
         } else if (n instanceof GenericArrayCopyCallNode arraycopy) {

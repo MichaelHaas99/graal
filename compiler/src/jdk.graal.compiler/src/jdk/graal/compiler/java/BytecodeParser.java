@@ -394,7 +394,6 @@ import jdk.graal.compiler.nodes.extended.AnchoringNode;
 import jdk.graal.compiler.nodes.extended.BranchProbabilityNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
-import jdk.graal.compiler.nodes.extended.FixedInlineTypeEqualityAnchorNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.HasIdentityNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
@@ -402,6 +401,7 @@ import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.StateSplitProxyNode;
+import jdk.graal.compiler.nodes.extended.ValhallaObjectEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GeneratedInvocationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -4297,14 +4297,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         switch (cond) {
             case EQ:
                 if (a.getStackKind() == JavaKind.Object) {
-                    if (getValhallaOptionsProvider().valhallaEnabled()) {
-                        a = append(new FixedInlineTypeEqualityAnchorNode(a));
-                        b = append(new FixedInlineTypeEqualityAnchorNode(b));
-                    }
-
-                    LogicNode node = genObjectEquals(a, b);
-                    if (node instanceof ObjectEqualsNode) {
-                        ((ObjectEqualsNode) node).setProfile(getProfileForObjectEquals());
+                    LogicNode node;
+                    if (InlineTypeUtil.mayNeedSubstitutabilityCheck(a, b, getValhallaOptionsProvider())) {
+                        node = ValhallaObjectEqualsNode.create(this, a, b, NodeView.DEFAULT, getProfileForObjectEquals());
+                    } else {
+                        node = genObjectEquals(a, b);
                     }
                     return node;
                 } else {

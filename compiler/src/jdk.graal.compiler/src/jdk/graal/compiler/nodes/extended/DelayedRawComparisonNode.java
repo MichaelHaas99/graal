@@ -12,7 +12,6 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.hotspot.SnippetObjectConstant;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -101,9 +100,9 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
         assert locationIdentity.isJavaConstant() : "locationIdentity must be a constant";
         JavaConstant constant = locationIdentity.asJavaConstant();
         if (constant instanceof HotSpotObjectConstant) {
-            return ((HotSpotObjectConstant) constant).asObject(FieldLocationIdentity.class);
+            return ((HotSpotObjectConstant) constant).asObject(LocationIdentity.class);
         } else if (constant instanceof SnippetObjectConstant) {
-            return ((SnippetObjectConstant) constant).asObject(FieldLocationIdentity.class);
+            return ((SnippetObjectConstant) constant).asObject(LocationIdentity.class);
         }
         throw new GraalError("unexpected constant type: " + constant);
     }

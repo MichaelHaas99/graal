@@ -602,7 +602,7 @@ public class InlineTypeUtil {
         }
     }
 
-    public static boolean needsSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
+    public static boolean mayNeedSubstitutabilityCheck(ValueNode x, ValueNode y, ValhallaOptionsProvider valhallaOptionsProvider) {
         return StampTool.canBeInlineType(x, valhallaOptionsProvider) && StampTool.canBeInlineType(y, valhallaOptionsProvider);
     }
 
