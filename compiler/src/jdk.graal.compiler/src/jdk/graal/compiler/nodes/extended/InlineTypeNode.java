@@ -18,6 +18,7 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -244,8 +245,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!virtualize)
+        if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE)) {
             return;
+        }
+        if (!virtualize) {
+            return;
+        }
 
         if (tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
