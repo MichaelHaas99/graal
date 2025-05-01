@@ -133,13 +133,31 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             }
             LogicNode result;
             if (forX.isConstant()) {
-                if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forX.asConstant(), forY, true, unorderedIsTrue, view)) != null) {
-                    return result;
+                if (valhallaOptionsProvider == null) {
+                    if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forX.asConstant(), forY, true, unorderedIsTrue,
+                                    view)) != null) {
+                        return result;
+                    }
+                } else {
+                    if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forX.asConstant(), forY, true, unorderedIsTrue, view,
+                                    valhallaOptionsProvider, forX)) != null) {
+                        return result;
+                    }
                 }
+
             } else if (forY.isConstant()) {
-                if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forY.asConstant(), forX, false, unorderedIsTrue, view)) != null) {
-                    return result;
+                if (valhallaOptionsProvider == null) {
+                    if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forY.asConstant(), forX, false, unorderedIsTrue,
+                                    view)) != null) {
+                        return result;
+                    }
+                } else {
+                    if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forY.asConstant(), forX, false, unorderedIsTrue, view,
+                                    valhallaOptionsProvider, forY)) != null) {
+                        return result;
+                    }
                 }
+
             } else if (forX instanceof ConvertNode && forY instanceof ConvertNode) {
                 ConvertNode convertX = (ConvertNode) forX;
                 ConvertNode convertY = (ConvertNode) forY;
@@ -192,7 +210,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
 
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view,
-                        ValhallaOptionsProvider valhallaOptionsProvider) {
+                        ValhallaOptionsProvider valhallaOptionsProvider, ValueNode constantValue) {
             if (nonConstant instanceof ConditionalNode) {
                 Condition realCondition = condition.asCondition();
                 if (mirrored) {
@@ -265,7 +283,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
 
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
-            return canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view, null);
+            return canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view, null, null);
         }
 
         private static boolean isConstantConversionSupported(ConvertNode convert, NodeView view, Integer smallestCompareWidth) {

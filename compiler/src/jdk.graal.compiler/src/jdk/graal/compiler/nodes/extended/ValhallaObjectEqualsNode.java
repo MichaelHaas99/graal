@@ -10,6 +10,7 @@ import jdk.graal.compiler.core.common.type.AbstractPointerStamp;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
+import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
@@ -26,6 +27,7 @@ import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.ObjectEqualsNode;
 import jdk.graal.compiler.nodes.calc.PointerEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -35,6 +37,7 @@ import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
+import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.meta.Constant;
@@ -46,7 +49,8 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 /**
  * Determines if two objects are equal with Valhalla semantics. The node needs to be fixed, because
  * we may perform a substitutability check. The substitutability check compares the field values of
- * two inline objects recursively, which is therefore a memory access.
+ * two inline objects recursively, which is therefore a memory access. It becomes floating if no
+ * substitutability check needs to be performed.
  */
 @NodeInfo(cycles = CYCLES_UNKNOWN, cyclesRationale = "We don't know statically the size of the inlined comparison.", size = SIZE_UNKNOWN, sizeRationale = "We don't know statically how much code for the inlined comparison will be generated")
 public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lowerable, Canonicalizable, MemoryAccess, Virtualizable {
@@ -135,7 +139,8 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
 
         @Override
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                        CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view) {
+                        CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view,
+                        ValhallaOptionsProvider valhallaOptionsProvider, ValueNode constantValue) {
             ResolvedJavaType type = constantReflection.asJavaType(constant);
             if (type != null && nonConstant instanceof GetClassNode getClassNode) {
                 ValueNode object = getClassNode.getObject();
@@ -145,7 +150,16 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
                 }
                 return LogicConstantNode.forBoolean(false);
             }
-            return super.canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view);
+
+            if (!InlineTypeUtil.mayNeedSubstitutabilityCheck(constantValue, nonConstant, valhallaOptionsProvider) &&
+                            (nonConstant instanceof AbstractNewObjectNode || nonConstant instanceof AllocatedObjectNode)) {
+                // guard against class hierarchy changes
+                assert !(nonConstant instanceof BoxNode) : Assertions.errorMessageContext("nonConstant", nonConstant);
+                // a constant can never be equals to a new object
+                return LogicConstantNode.forBoolean(false);
+            }
+            return super.canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue, view,
+                            valhallaOptionsProvider, constantValue);
         }
 
         @Override
