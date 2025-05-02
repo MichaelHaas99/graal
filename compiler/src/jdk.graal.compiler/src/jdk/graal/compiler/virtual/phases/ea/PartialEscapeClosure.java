@@ -1420,13 +1420,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             } else if (entry instanceof VirtualInstanceNode virtualInstanceNode) {
                                 tempVirtual = virtualizeFromInlineObject(states[i].getObjectState(virtualInstanceNode.getObjectId()).getMaterializedValue(), states, i,
                                                 StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])),
-                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, merge, null));
-                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, merge, tempVirtual);
+                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, null));
+                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, tempVirtual);
 
                             } else {
                                 tempVirtual = virtualizeFromInlineObject(entry, states, i, StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])),
-                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, merge, null));
-                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, merge, tempVirtual);
+                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, null));
+                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, tempVirtual);
 
                             }
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
@@ -1445,6 +1445,25 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             isAllocatedOrNull &= states[j].getObjectState(tempSourceObjects[j]).isAllocatedOrNull();
                         }
                         tempState.setAllocatedOrNull(isAllocatedOrNull);
+
+                        // search the cache for a virtual object, otherwise copy the one set during
+                        // iteration to create a new one for the new state
+                        VirtualInstanceNode tempVirtual = (VirtualInstanceNode) getEntryMergeObject(resultObject, -1, valueIndex, -1, scalarizationDepth,
+                                        merge, null);
+                        if (tempVirtual == null) {
+                            // nothing found in cache, copy and put it in cache, similar to the
+                            // function getValueObjectVirtual
+                            tempVirtual = (VirtualInstanceNode) virtualObjects.get(tempResult).duplicate();
+                            getEntryMergeObject(resultObject, -1, valueIndex, -1, scalarizationDepth, merge, tempVirtual);
+                        }
+                        if (tempVirtual.getObjectId() == -1) {
+                            int id = virtualObjects.size();
+                            virtualObjects.add(tempVirtual);
+                            tempVirtual.setObjectId(id);
+                        }
+                        mergeEffects.addFloatingNode(tempVirtual, "mergeEntryValueObjectNode");
+                        tempResult = tempVirtual.getObjectId();
+
                         newState.addObject(tempResult, tempState);
                         virtualizedEntry[valueIndex] = virtualObjects.get(tempResult);
                         mergeObjectStates(tempResult, tempSourceObjects, states, scalarizationDepth + 1);
@@ -1453,12 +1472,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
 
                 PhiNode[] phis;
-                if (scalarizationDepth > 0) {
-                    // avoid cache for recursive call
-                    phis = new ValuePhiNode[virtual.entryCount() + additionalPhisCount];
-                } else {
-                    phis = getValuePhis(virtual, virtual.entryCount() + additionalPhisCount);
-                }
+                phis = getValuePhis(virtual, virtual.entryCount() + additionalPhisCount);
                 int valueIndex = 0;
                 while (valueIndex < values.length) {
                     for (int i = 1; i < states.length; i++) {
@@ -1486,8 +1500,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                     valueIndex++;
                 }
-
-
 
                 PhiNode[] additionalPhis = Arrays.copyOfRange(phis, values.length, phis.length);
                 ValueNode oop = states[0].getObjectState(getObject.applyAsInt(0)).getOop();
@@ -1924,20 +1936,24 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         int resultObject,
                         int object,
                         int entry,
+                        int state,
+                        int scalarizationDepth,
                         AbstractMergeNode merge) {
 
         }
 
-        protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
+        // TODO: probably not all values needed to produce a key
+        protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
             if (entryMergeCache != null) {
-                return getEntryMergeObjectCached(resultObject, object, entry, merge, currentResultObject);
+                return getEntryMergeObjectCached(resultObject, object, entry, state, scalarizationDepth, merge, currentResultObject);
             } else {
                 return currentResultObject;
             }
         }
 
-        private VirtualObjectNode getEntryMergeObjectCached(int resultObject, int object, int entry, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
-            EntryMergeCacheKey key = new EntryMergeCacheKey(resultObject, object, entry, merge);
+        private VirtualObjectNode getEntryMergeObjectCached(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode merge,
+                        VirtualObjectNode currentResultObject) {
+            EntryMergeCacheKey key = new EntryMergeCacheKey(resultObject, object, entry, state, scalarizationDepth, merge);
             VirtualObjectNode result = entryMergeCache.get(key);
             if (result == null) {
                 entryMergeCache.put(key, currentResultObject);
