@@ -864,6 +864,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private EconomicMap<ValueNode, ValuePhiNode[]> valuePhis;
         private EconomicMap<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals;
         private final boolean needsCaching;
+        protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
+        protected EconomicMap<PartialEscapeClosure.MergeProcessor.EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -1944,7 +1946,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         // TODO: probably not all values needed to produce a key
         protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
-            if (entryMergeCache != null) {
+            if (needsCaching) {
                 return getEntryMergeObjectCached(resultObject, object, entry, state, scalarizationDepth, merge, currentResultObject);
             } else {
                 return currentResultObject;
@@ -1953,6 +1955,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         private VirtualObjectNode getEntryMergeObjectCached(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode merge,
                         VirtualObjectNode currentResultObject) {
+            if (entryMergeCache == null) {
+                entryMergeCache = EconomicMap.create(Equivalence.DEFAULT);
+            }
             EntryMergeCacheKey key = new EntryMergeCacheKey(resultObject, object, entry, state, scalarizationDepth, merge);
             VirtualObjectNode result = entryMergeCache.get(key);
             if (result == null) {
@@ -1966,7 +1971,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         protected VirtualObjectNode getPhiResultObject(PhiNode phi, VirtualObjectNode currentResultObject) {
-            if (phiResultCache != null && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
+            if (needsCaching && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
                 return getPhiResultObjectCached(phi, currentResultObject);
             } else {
                 return currentResultObject;
@@ -1974,6 +1979,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         private VirtualObjectNode getPhiResultObjectCached(PhiNode phi, VirtualObjectNode currentResultObject) {
+            if (phiResultCache == null) {
+                phiResultCache = EconomicMap.create(Equivalence.IDENTITY);
+            }
             VirtualObjectNode result = phiResultCache.get(phi);
             if (result == null) {
                 phiResultCache.put(phi, currentResultObject);
