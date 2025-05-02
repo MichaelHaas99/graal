@@ -719,14 +719,15 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         // e.g. see if (return_value_is_used()) { in ad_x86.cpp
 
         if (oop != null) {
-            ValueKind<?> kind = result.getValueKind();
-            Variable scratch = gen.emitMove(result);
-            Value nullValue = gen.emitConstant((LIRKind) kind, JavaConstant.NULL_POINTER);
-            ConstantValue intOne = new ConstantValue(kind,
+            ValueKind<?> longKind = getLIRGeneratorTool().getValueKind(JavaKind.Long);
+            Variable scratch = getLIRGeneratorTool().emitMove(longKind, result);
+            ValueKind<?> referenceKind = result.getValueKind();
+            Value nullValue = gen.emitConstant((LIRKind) referenceKind, JavaConstant.NULL_POINTER);
+            ConstantValue longOne = new ConstantValue(longKind,
                             JavaConstant.forLong(1));
 
             // returnRegister = (returnRegister contains klassPointer)? null : returnRegister
-            Variable temp = gen.emitConditionalMove(kind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, intOne), intOne, Condition.EQ, false, nullValue, result);
+            Variable temp = gen.emitConditionalMove(longKind.getPlatformKind(), gen.getArithmetic().emitAnd(scratch, longOne), longOne, Condition.EQ, false, nullValue, result);
             setResult(x.asNode(), temp);
         } else {
             setResult(x.asNode(), gen.emitMove(result));
