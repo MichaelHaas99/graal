@@ -740,7 +740,20 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         for (int i = 0; i < fieldValues.length; i++) {
             assert isLegal(results[fieldValues[i].getIndex()]) : "expected legal Value for scalarized inline type";
-            setResult(fieldValues[i], gen.emitMove(results[fieldValues[i].getIndex()]));
+            if (fieldValues[i].stamp(NodeView.DEFAULT).isObjectStamp()) {
+                // in case the returned inline object is null, zero out the oop field
+                ValueKind<?> referenceKind = result.getValueKind();
+                Value nullValue = gen.emitConstant((LIRKind) referenceKind, JavaConstant.NULL_POINTER);
+                ValueKind<?> intKind = gen.getValueKind(JavaKind.Int);
+                ConstantValue intOne = new ConstantValue(intKind,
+                                JavaConstant.forInt(1));
+                // alternative to zero out the register would be : (nonNull << wordSize) & register
+                setResult(fieldValues[i], gen.emitConditionalMove(intKind.getPlatformKind(), gen.getArithmetic().emitAnd(operand(nonNull), intOne), intOne, Condition.EQ, false,
+                                results[fieldValues[i].getIndex()], nullValue));
+            } else {
+                setResult(fieldValues[i], gen.emitMove(results[fieldValues[i].getIndex()]));
+            }
+
         }
 
         if (x instanceof InvokeWithExceptionNode) {
