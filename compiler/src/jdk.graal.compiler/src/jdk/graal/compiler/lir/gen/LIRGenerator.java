@@ -50,6 +50,7 @@ import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.debug.TTY;
 import jdk.graal.compiler.graph.NodeSourcePosition;
+import jdk.graal.compiler.hotspot.HotSpotForeignCallLinkage;
 import jdk.graal.compiler.lir.ConstantValue;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.LIRFrameState;
@@ -66,6 +67,7 @@ import jdk.graal.compiler.options.Option;
 import jdk.graal.compiler.options.OptionKey;
 import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
@@ -501,12 +503,51 @@ public abstract class LIRGenerator extends CoreProvidersDelegate implements LIRG
         res.getFrameMapBuilder().callsMethod(linkageCc);
         assert linkageCc.getArgumentCount() == args.length : "argument count mismatch";
         Value[] argLocations = new Value[args.length];
-        for (int i = 0; i < args.length; i++) {
-            Value arg = args[i];
-            AllocatableValue loc = linkageCc.getArgument(i);
-            emitMove(loc, arg);
-            argLocations[i] = loc;
+
+        // TODO: refactor, probably move to subclasses
+        if (linkage.getDescriptor().getName().contains(MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF.getName())) {
+            // Normally arguments are moved into registers according to the Java calling convention
+            // before we jump to the stub, which is what we want to avoid here.
+            // Register contents could be overwritten if the Java calling and Valhalla return
+            // convention intersect.
+            // E.g. in x64 the register rsi (j_arg0) is the last one used in the Valhalla return
+            // convention, but the first one according to the Java calling convention.
+            // see CallNode::calling_convention in src/hotspot/share/opto/callnode.cpp and
+            // StubGenerator::generate_return_value_stub in
+            // src/hotspot/cpu/x86/stubGenerator_x86_64.cpp
+            if (((HotSpotForeignCallLinkage) linkage).isCompiledStub()) {
+                // Registers shouldn't be overwritten, we have just returned from a call, which may
+                // return an inline object scalarized and now want to jump to the stub.
+                // arg[0] lies in the first return register, keep it there
+                assert args.length == 1 : "argument count mismatch";
+                Value arg = args[0];
+                AllocatableValue loc = getRegisterConfig().getReturnRegister(JavaKind.Object).asValue(getValueKind(JavaKind.Object));
+                emitMove(loc, arg);
+                argLocations[0] = loc;
+            } else {
+                assert args.length == 2 : "argument count mismatch";
+                Value arg = args[0];
+                AllocatableValue loc = linkageCc.getArgument(0);
+                emitMove(loc, arg);
+                argLocations[0] = loc;
+
+                // All registers are already saved, we are in the stub now move the value of j_arg0
+                // to c_rarg1
+                arg = getRegisterConfig().getReturnRegister(JavaKind.Object).asValue(getValueKind(JavaKind.Object));
+                loc = linkageCc.getArgument(1);
+                emitMove(loc, arg);
+                argLocations[1] = loc;
+            }
+
+        } else {
+            for (int i = 0; i < args.length; i++) {
+                Value arg = args[i];
+                AllocatableValue loc = linkageCc.getArgument(i);
+                emitMove(loc, arg);
+                argLocations[i] = loc;
+            }
         }
+
 
         res.setForeignCall(true);
         emitForeignCallOp(linkage, targetAddress, linkageCc.getReturn(), argLocations, linkage.getTemporaries(), state);
