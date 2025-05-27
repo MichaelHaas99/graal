@@ -1365,8 +1365,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 if (scalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions()) && !(StampTool.isNullableInlineType(firstVirtual, tool.getValhallaOptionsProvider()) &&
                                 InlineTypeUtil.isCircularInlineType(type))) {
                     // try to keep virtual entries virtual by making entries with materialized
-                    // inline objects
-                    // virtual again, merge each virtual entry recursively.
+                    // inline objects virtual again, merge each virtual entry recursively.
                     boolean[] virtualizeInfo = new boolean[values.length];
                     ResolvedJavaType[] types = new ResolvedJavaType[values.length];
                     // iterate over each entry
@@ -1405,7 +1404,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         virtualizeInfo[valueIndex] = virtualize;
                     }
 
-                    for (int valueIndex = 0; valueIndex < values.length; valueIndex++) {
+                    outer: for (int valueIndex = 0; valueIndex < values.length; valueIndex++) {
                         if (!virtualizeInfo[valueIndex]) {
                             continue;
                         }
@@ -1419,6 +1418,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             VirtualInstanceNode tempVirtual;
                             if (entry instanceof VirtualInstanceNode virtualInstanceNode && states[i].getObjectState(virtualInstanceNode.getObjectId()).isVirtual()) {
                                 tempVirtual = virtualInstanceNode;
+                            } else if (!virtualizeFromInlineObject) {
+                                continue outer;
                             } else if (entry instanceof VirtualInstanceNode virtualInstanceNode) {
                                 tempVirtual = virtualizeFromInlineObject(states[i].getObjectState(virtualInstanceNode.getObjectId()).getMaterializedValue(), states, i,
                                                 StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])),
