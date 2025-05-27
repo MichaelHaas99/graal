@@ -28,6 +28,7 @@ import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideE
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
 import static jdk.graal.compiler.core.target.Backend.ARITHMETIC_DREM;
 import static jdk.graal.compiler.core.target.Backend.ARITHMETIC_FREM;
+import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfigAccess.VALHALLA_JDK;
 import static jdk.graal.compiler.hotspot.HotSpotBackend.BASE64_DECODE_BLOCK;
 import static jdk.graal.compiler.hotspot.HotSpotBackend.BASE64_ENCODE_BLOCK;
 import static jdk.graal.compiler.hotspot.HotSpotBackend.BIGINTEGER_LEFT_SHIFT_WORKER;
@@ -544,8 +545,10 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         link(new IllegalArgumentExceptionArgumentIsNotAnArrayStub(options, providers,
                         registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY),
                                         SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
-        link(new IdentityExceptionStub(options, providers,
-                        registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.IDENTITY), SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
+        if (VALHALLA_JDK) {
+            link(new IdentityExceptionStub(options, providers,
+                            registerStubCall(exceptionRuntimeCalls.get(BytecodeExceptionKind.IDENTITY), SAFEPOINT, HAS_SIDE_EFFECT, DESTROYS_ALL_CALLER_SAVE_REGISTERS, any())));
+        }
 
         link(new LookUpSecondarySupersTableStub(options, providers,
                         registerStubCall(LOOKUP_SECONDARY_SUPERS_TABLE_SLOW_PATH, DESTROYS_ALL_CALLER_SAVE_REGISTERS)));
@@ -554,11 +557,13 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
         linkForeignCall(options, providers, createDescriptor(REGISTER_FINALIZER, SAFEPOINT, HAS_SIDE_EFFECT, any()), c.registerFinalizerAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, MONITORENTER, c.monitorenterAddress, PREPEND_THREAD);
         linkForeignCall(options, providers, MONITOREXIT, c.monitorexitAddress, PREPEND_THREAD);
-        linkForeignCall(options, providers, SUBSTITUTABILITY_CHECK, c.substitutabilityCheckAddress, PREPEND_THREAD);
-        linkForeignCall(options, providers, VALUE_OBJECT_HASH_CODE, c.valueObjectHashCodeAddress, PREPEND_THREAD);
-        linkForeignCall(options, providers, LOAD_UNKNOWN_INLINE, c.loadUnknownInlineAddress, PREPEND_THREAD);
-        linkForeignCall(options, providers, STORE_UNKNOWN_INLINE, c.storeUnknownInlineAddress, PREPEND_THREAD);
-        linkForeignCall(options, providers, STORE_INLINE_TYPE_FIELDS_TO_BUF, c.storeInlineTypeFieldsToBuf, PREPEND_THREAD);
+        if (VALHALLA_JDK) {
+            linkForeignCall(options, providers, SUBSTITUTABILITY_CHECK, c.substitutabilityCheckAddress, PREPEND_THREAD);
+            linkForeignCall(options, providers, VALUE_OBJECT_HASH_CODE, c.valueObjectHashCodeAddress, PREPEND_THREAD);
+            linkForeignCall(options, providers, LOAD_UNKNOWN_INLINE, c.loadUnknownInlineAddress, PREPEND_THREAD);
+            linkForeignCall(options, providers, STORE_UNKNOWN_INLINE, c.storeUnknownInlineAddress, PREPEND_THREAD);
+            linkForeignCall(options, providers, STORE_INLINE_TYPE_FIELDS_TO_BUF, c.storeInlineTypeFieldsToBuf, PREPEND_THREAD);
+        }
         registerForeignCall(NOTIFY, c.notifyAddress, NativeCall);
         registerForeignCall(NOTIFY_ALL, c.notifyAllAddress, NativeCall);
 

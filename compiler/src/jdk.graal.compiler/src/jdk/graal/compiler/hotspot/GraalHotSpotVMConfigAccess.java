@@ -116,11 +116,23 @@ public class GraalHotSpotVMConfigAccess {
     public static final JVMCIVersionCheck.Version JVMCI_VERSION;
     public static final boolean JVMCI;
     public static final boolean JDK_PRERELEASE;
+    public static final boolean VALHALLA_JDK;
     static {
         String vmVersion = getSavedProperty("java.vm.version");
         JVMCI_VERSION = JVMCIVersionCheck.Version.parse(vmVersion);
         JDK_PRERELEASE = vmVersion.contains("SNAPSHOT") || vmVersion.contains("-dev");
         JVMCI = JVMCI_VERSION != null;
+
+        boolean valhallaJdk;
+
+        try {
+            Class.forName("java.lang.IdentityException");
+            valhallaJdk = true;
+        } catch (ClassNotFoundException e) {
+            valhallaJdk = false;
+        }
+
+        VALHALLA_JDK = valhallaJdk;
     }
 
     private final List<String> missing = new ArrayList<>();

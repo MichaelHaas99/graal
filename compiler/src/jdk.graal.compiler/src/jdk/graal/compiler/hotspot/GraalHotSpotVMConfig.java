@@ -135,12 +135,12 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final boolean printInlining = getFlag("PrintInlining", Boolean.class);
     public final boolean inline = getFlag("Inline", Boolean.class);
 
-    public final boolean valhallaEnabled = access.getFlag("EnableValhalla", Boolean.class);
-    public final boolean returnConventionEnabled = access.getFlag("InlineTypeReturnedAsFields", Boolean.class);
-    public final boolean callingConventionEnabled = access.getFlag("InlineTypePassFieldsAsArgs", Boolean.class);
-    public final boolean useArrayFlattening = access.getFlag("UseArrayFlattening", Boolean.class);
-    public final boolean useFieldFlattening = access.getFlag("UseFieldFlattening", Boolean.class);
-    public final boolean useACmpProfile = access.getFlag("UseACmpProfile", Boolean.class);
+    public final boolean valhallaEnabled = getFlag("EnableValhalla", Boolean.class, false, VALHALLA_JDK);
+    public final boolean returnConventionEnabled = getFlag("InlineTypeReturnedAsFields", Boolean.class, false, VALHALLA_JDK);
+    public final boolean callingConventionEnabled = getFlag("InlineTypePassFieldsAsArgs", Boolean.class, false, VALHALLA_JDK);
+    public final boolean useArrayFlattening = getFlag("UseArrayFlattening", Boolean.class, false, VALHALLA_JDK);
+    public final boolean useFieldFlattening = getFlag("UseFieldFlattening", Boolean.class, false, VALHALLA_JDK);
+    public final boolean useACmpProfile = getFlag("UseACmpProfile", Boolean.class, false, VALHALLA_JDK);
 
     // There are 3 available locking modes:
     // LM_MONITOR uses only heavy monitors for locking;
@@ -255,21 +255,21 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int klassAccessFlagsOffset = getFieldOffset("Klass::_access_flags", Integer.class, "AccessFlags");
     public final int klassMiscFlagsOffset = getFieldOffset("Klass::_misc_flags._flags", Integer.class, "u1", 0, JDK >= 24);
     public final int klassLayoutHelperOffset = getFieldOffset("Klass::_layout_helper", Integer.class, "jint");
-    public final int klassProtoTypeHeaderOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord");
-    public final int klassKind = getFieldOffset("Klass::_kind", Integer.class, "Klass::KlassKind const");
-    public final int klassFlatArrayKlassKind = getConstant("Klass::FlatArrayKlassKind", Integer.class);
-    public final long flatArrayPattern = getConstant("markWord::null_free_flat_array_pattern", Long.class);
-    public final long flatArrayMaskInPlace = getConstant("markWord::flat_array_mask_in_place", Long.class);
-    public final long nullFreeArrayPattern = getConstant("markWord::null_free_array_pattern", Long.class);
-    public final long nullFreeArrayMaskInPlace = getConstant("markWord::null_free_array_mask_in_place", Long.class);
+    public final int klassProtoTypeHeaderOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord", -1, VALHALLA_JDK);
+    public final int klassKind = getFieldOffset("Klass::_kind", Integer.class, "Klass::KlassKind const", -1, VALHALLA_JDK);
+    public final int klassFlatArrayKlassKind = getConstant("Klass::FlatArrayKlassKind", Integer.class, -1, VALHALLA_JDK);
+    public final long flatArrayPattern = getConstant("markWord::null_free_flat_array_pattern", Long.class, -1L, VALHALLA_JDK);
+    public final long flatArrayMaskInPlace = getConstant("markWord::flat_array_mask_in_place", Long.class, -1L, VALHALLA_JDK);
+    public final long nullFreeArrayPattern = getConstant("markWord::null_free_array_pattern", Long.class, -1L, VALHALLA_JDK);
+    public final long nullFreeArrayMaskInPlace = getConstant("markWord::null_free_array_mask_in_place", Long.class, -1L, VALHALLA_JDK);
 
     public final int klassLayoutHelperNeutralValue = getConstant("Klass::_lh_neutral_value", Integer.class);
     public final int layoutHelperLog2ElementSizeShift = getConstant("Klass::_lh_log2_element_size_shift", Integer.class);
     public final int layoutHelperLog2ElementSizeMask = getConstant("Klass::_lh_log2_element_size_mask", Integer.class);
     public final int layoutHelperHeaderSizeShift = getConstant("Klass::_lh_header_size_shift", Integer.class);
     public final int layoutHelperHeaderSizeMask = getConstant("Klass::_lh_header_size_mask", Integer.class);
-    public final int layoutHelperNullFreeShift = getConstant("Klass::_lh_null_free_shift", Integer.class);
-    public final int layoutHelperNullFreeMask = getConstant("Klass::_lh_null_free_mask", Integer.class);
+    public final int layoutHelperNullFreeShift = getConstant("Klass::_lh_null_free_shift", Integer.class, -1, VALHALLA_JDK);
+    public final int layoutHelperNullFreeMask = getConstant("Klass::_lh_null_free_mask", Integer.class, -1, VALHALLA_JDK);
 
     public final int instanceKlassInitStateOffset = getFieldOffset("InstanceKlass::_init_state", Integer.class, "InstanceKlass::ClassState");
     public final int instanceKlassInitThreadOffset = getFieldOffset("InstanceKlass::_init_thread", Integer.class, "JavaThread*");
@@ -303,7 +303,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int jvmAccIsValueBasedClass = JDK >= 24 ? getConstant("KlassFlags::_misc_is_value_based_class", Integer.class) : getConstant("JVM_ACC_IS_VALUE_BASED_CLASS", Integer.class);
     public final int jvmAccHasFinalizer = JDK >= 24 ? getConstant("KlassFlags::_misc_has_finalizer", Integer.class) : getConstant("JVM_ACC_HAS_FINALIZER", Integer.class);
 
-    public final int jvmAccIsIdentityClass = getConstant("JVM_ACC_IDENTITY", Integer.class);
+    public final int jvmAccIsIdentityClass = getConstant("JVM_ACC_IDENTITY", Integer.class, -1, VALHALLA_JDK);
 
     public final int jvmciCompileStateCanPostOnExceptionsOffset = getFieldOffset("JVMCICompileState::_jvmti_can_post_on_exceptions", Integer.class, "jbyte");
     public final int jvmciCompileStateCanPopFrameOffset = getFieldOffset("JVMCICompileState::_jvmti_can_pop_frame", Integer.class, "jbyte");
@@ -415,9 +415,9 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     // Identity hash code value when uninitialized.
     public final int uninitializedIdentityHashCodeValue = getConstant("markWord::no_hash", Integer.class);
 
-    public final int inlineTypeMaskInPlace = getConstant("markWord::inline_type_mask_in_place", Integer.class);
-    public final int inlineTypePattern = getConstant("markWord::inline_type_pattern", Integer.class);
-    public final int inlineTypeBitInPlace = getConstant("markWord::inline_type_bit_in_place", Integer.class);
+    public final int inlineTypeMaskInPlace = getConstant("markWord::inline_type_mask_in_place", Integer.class, -1, VALHALLA_JDK);
+    public final int inlineTypePattern = getConstant("markWord::inline_type_pattern", Integer.class, -1, VALHALLA_JDK);
+    public final int inlineTypeBitInPlace = getConstant("markWord::inline_type_bit_in_place", Integer.class, -1, VALHALLA_JDK);
 
     // This field has no type in vmStructs.cpp
     public final int objectMonitorOwner = getFieldOffset("ObjectMonitor::_owner", Integer.class, JDK > 21 ? "int64_t" : null);
@@ -432,7 +432,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int methodCompiledEntryOffset = getFieldOffset("Method::_from_compiled_entry",
                     Integer.class, "address");
     // used for virtual calls with scalarized parameters
-    public final int methodCompiledROEntryOffset = getFieldOffset("Method::_from_compiled_inline_ro_entry", Integer.class, "address");
+    public final int methodCompiledROEntryOffset = getFieldOffset("Method::_from_compiled_inline_ro_entry", Integer.class, "address", -1, VALHALLA_JDK);
 
     public final int compilationLevelFullOptimization = getConstant("CompLevel_full_optimization", Integer.class);
 
@@ -605,11 +605,11 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final long monitorexitAddress = getAddress("JVMCIRuntime::monitorexit");
     public final long notifyAddress = getAddress("JVMCIRuntime::object_notify");
     public final long notifyAllAddress = getAddress("JVMCIRuntime::object_notifyAll");
-    public final long substitutabilityCheckAddress = getAddress("JVMCIRuntime::substitutability_check");
-    public final long valueObjectHashCodeAddress = getAddress("JVMCIRuntime::value_object_hashCode");
-    public final long loadUnknownInlineAddress = getAddress("JVMCIRuntime::load_unknown_inline");
-    public final long storeUnknownInlineAddress = getAddress("JVMCIRuntime::store_unknown_inline");
-    public final long storeInlineTypeFieldsToBuf = getAddress("SharedRuntime::store_inline_type_fields_to_buf");
+    public final long substitutabilityCheckAddress = getAddress("JVMCIRuntime::substitutability_check", -1L, VALHALLA_JDK);
+    public final long valueObjectHashCodeAddress = getAddress("JVMCIRuntime::value_object_hashCode", -1L, VALHALLA_JDK);
+    public final long loadUnknownInlineAddress = getAddress("JVMCIRuntime::load_unknown_inline", -1L, VALHALLA_JDK);
+    public final long storeUnknownInlineAddress = getAddress("JVMCIRuntime::store_unknown_inline", -1L, VALHALLA_JDK);
+    public final long storeInlineTypeFieldsToBuf = getAddress("SharedRuntime::store_inline_type_fields_to_buf", -1L, VALHALLA_JDK);
 
     // This flag indicates that support for loom is enabled.
     public final boolean continuationsEnabled = getFieldValue("CompilerToVM::Data::continuations_enabled", Boolean.class, "bool");
@@ -690,7 +690,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final long throwAndPostJvmtiExceptionAddress = getAddress("JVMCIRuntime::throw_and_post_jvmti_exception");
     public final long throwKlassExternalNameExceptionAddress = getAddress("JVMCIRuntime::throw_klass_external_name_exception");
     public final long throwClassCastExceptionAddress = getAddress("JVMCIRuntime::throw_class_cast_exception");
-    public final long throwIdentityExceptionAddress = getAddress("JVMCIRuntime::throw_identity_exception");
+    public final long throwIdentityExceptionAddress = getAddress("JVMCIRuntime::throw_identity_exception", -1L, VALHALLA_JDK);
     public final long logPrimitiveAddress = getAddress("JVMCIRuntime::log_primitive");
     public final long logObjectAddress = getAddress("JVMCIRuntime::log_object");
     public final long logPrintfAddress = getAddress("JVMCIRuntime::log_printf");
