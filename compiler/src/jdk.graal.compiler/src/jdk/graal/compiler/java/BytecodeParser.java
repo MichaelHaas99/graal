@@ -5028,7 +5028,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     ResolvedJavaType singleType = profile.asSingleType();
                     if (singleType != null && checkedType.getType().isAssignableFrom(singleType)) {
                         LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
-                        if (singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                        if (getValhallaOptionsProvider().valhallaEnabled() && singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                             // also check against the flat array class
                             LogicNode flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
                             typeCheck = append(LogicNode.or(typeCheck, flatArrayTypeCheck, BranchProbabilityData.unknown()));
@@ -5048,7 +5048,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         boolean nonNull = ((ObjectStamp) object.stamp(NodeView.DEFAULT)).nonNull();
         if (castNode == null) {
             LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, null));
-            if (resolvedType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+            if (getValhallaOptionsProvider().valhallaEnabled() && resolvedType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                 // also check against the flat array class
                 TypeReference flatArrayCheckedType = TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray());
                 LogicNode flatArrayTypeCheck = append(createInstanceOfAllowNull(flatArrayCheckedType, object, null));
@@ -5104,7 +5104,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 ResolvedJavaType singleType = profile.asSingleType();
                 if (singleType != null) {
                     LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
-                    if (singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                    if (getValhallaOptionsProvider().valhallaEnabled() && singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                         // also check against the flat array class
                         flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
                         typeCheck = append(LogicNode.or(typeCheck, flatArrayTypeCheck, BranchProbabilityData.unknown()));
@@ -5126,7 +5126,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
         if (instanceOfNode == null) {
             instanceOfNode = createInstanceOf(checkedType, object, null);
-            if (checkedType.getType() instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+            if (getValhallaOptionsProvider().valhallaEnabled() && checkedType.getType() instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
                 // also check against the flat array class
                 flatArrayTypeCheck = append(createInstanceOf(TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray()), object, null));
             }
