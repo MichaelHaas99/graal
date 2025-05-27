@@ -243,6 +243,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 
@@ -982,10 +983,11 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 }
             }
             JavaType[] signature;
-            if (callTarget.targetMethod().hasScalarizedParameters()) {
-                signature = callTarget.targetMethod().getScalarizedParameters(!callTarget.invokeKind().isIndirect());
+            ResolvedJavaMethod method = callTarget.targetMethod();
+            if (method.hasScalarizedParameters() && !method.hasCallingConventionMismatch()) {
+                signature = method.getScalarizedParameters(!callTarget.invokeKind().isIndirect());
             } else {
-                signature = callTarget.targetMethod().getSignature().toParameterTypes(callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
+                signature = method.getSignature().toParameterTypes(callTarget.isStatic() ? null : method.getDeclaringClass());
             }
 
             LoweredCallTargetNode loweredCallTarget = null;
@@ -1002,7 +1004,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     // compiled code entry as HotSpot does not guarantee they are final
                     // values.
                     int methodCompiledEntryOffset;
-                    if (hsMethod.hasScalarizedParameters()) {
+                    if (hsMethod.hasScalarizedParameters() && !hsMethod.hasCallingConventionMismatch()) {
                         methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledROEntryOffset;
                     } else {
                         methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledEntryOffset;

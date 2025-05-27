@@ -147,12 +147,14 @@ public class InlineTypeUtil {
      * @param nothingScalarizedYet determines if no arguments of the old method were scalarized yet
      */
     public static void handleDevirtualizationOnCallTarget(MethodCallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
-        if (oldMethod.hasScalarizedParameters() && !newMethod.hasScalarizedParameters()) {
+        if (oldMethod.hasScalarizedParameters() && !oldMethod.hasCallingConventionMismatch() && !newMethod.hasScalarizedParameters()) {
             throw new GraalError("method parameters scalarization mismatch between" + oldMethod + " and " + newMethod);
         }
-        if (!newMethod.hasScalarizedParameters() || callTargetNode instanceof ResolvedMethodHandleCallTargetNode) {
+        if (!newMethod.hasScalarizedParameters() || oldMethod == newMethod && oldMethod.hasCallingConventionMismatch() || callTargetNode instanceof ResolvedMethodHandleCallTargetNode) {
             return;
         }
+
+        nothingScalarizedYet |= oldMethod.hasCallingConventionMismatch();
 
         StructuredGraph graph = callTargetNode.graph();
         int parameterLength = oldMethod.getSignature().getParameterCount(!oldMethod.isStatic());

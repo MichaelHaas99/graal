@@ -2357,7 +2357,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
 
-        if (getValhallaOptionsProvider().callingConventionEnabled() && targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
+        if (getValhallaOptionsProvider().callingConventionEnabled() && !targetMethod.hasCallingConventionMismatch() && targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
         }
 
@@ -3060,6 +3060,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
             if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn() && graph.scalarizeReturn()) {
+                // TODO: not allowed to directly resolve e.g. use maybeEagerlyResolve instead. But
+                // this avoids return convention mismatches at the moment.
+                // ResolvedJavaMethod.hasScalarizedReturn should also not resolve it.
                 ReturnScalarizedNode.createAndAppend(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
             } else {
                 append(new ReturnNode(realReturnVal));
