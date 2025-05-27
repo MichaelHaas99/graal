@@ -1,5 +1,10 @@
 package jdk.graal.compiler.valhalla;
 
+import java.lang.classfile.Label;
+import java.lang.classfile.instruction.ExceptionCatch;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -8,6 +13,7 @@ import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.core.phases.HighTier;
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
 import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
+import jdk.internal.misc.Unsafe;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
@@ -976,6 +982,348 @@ public class TestLWorld extends JTTTest {
         resetCache();
 
         InstalledCode c = getCode(getResolvedJavaMethod("test5"), null, true, true, getInitialOptions());
+    }
+
+    @Test
+    public void run39() throws  Throwable{
+        resetCache();
+
+        InstalledCode c = getCode(getResolvedJavaMethod(MyValue1.class, "createWithFieldsInline"), null, true, true, getInitialOptions());
+    }
+
+    public static long test11(int x, long y) {
+        MyValue1 v = MyValue1.createWithFieldsInline(x, y);
+        for (int i = 0; i < 10; ++i) {
+            v = MyValue1.createWithFieldsInline(v.x + 1, v.y + 1);
+        }
+        return v.hash();
+    }
+
+    // Leaf method not inlined but returned type is known
+    @NullRestricted
+    final MyValue3 test2_vt = MyValue3.create();
+
+    @DontInline
+    MyValue3 test2_target() {
+        return test2_vt;
+    }
+
+    static final MethodHandle test2_mh;
+
+    static {
+        try {
+            test2_mh = MethodHandles.lookup().findVirtual(TestLWorld.class, "test2_target", MethodType.methodType(MyValue3.class));
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    ;
+
+    public MyValue3 test2() throws Throwable {
+        return (MyValue3)test2_mh.invokeExact(this);
+    }
+
+    @Test
+    public void run40() throws  Throwable{
+        resetCache();
+
+        InstalledCode c = getCode(getResolvedJavaMethod( "test11"), null, true, true, getInitialOptions());
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class MyValue3Inline {
+        float f7;
+        double f8;
+
+        @ForceInline
+        public MyValue3Inline(float f7, double f8) {
+            this.f7 = f7;
+            this.f8 = f8;
+        }
+
+        @ForceInline
+        static MyValue3Inline setF7(MyValue3Inline v, float f7) {
+            return new MyValue3Inline(f7, v.f8);
+        }
+
+        @ForceInline
+        static MyValue3Inline setF8(MyValue3Inline v, double f8) {
+            return new MyValue3Inline(v.f7, f8);
+        }
+
+        @ForceInline
+        public static MyValue3Inline createDefault() {
+            return new MyValue3Inline(0, 0);
+        }
+
+        @ForceInline
+        public static MyValue3Inline createWithFieldsInline(float f7, double f8) {
+            MyValue3Inline v = createDefault();
+            v = setF7(v, f7);
+            v = setF8(v, f8);
+            return v;
+        }
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class MyValue3 extends MyAbstract {
+        char c;
+        byte bb;
+        short s;
+        int i;
+        long l;
+        Object o;
+        float f1;
+        double f2;
+        float f3;
+        double f4;
+        float f5;
+        double f6;
+        @NullRestricted
+        MyValue3Inline v1;
+
+        @ForceInline
+        public MyValue3(char c, byte bb, short s, int i, long l, Object o,
+                        float f1, double f2, float f3, double f4, float f5, double f6,
+                        MyValue3Inline v1) {
+            this.c = c;
+            this.bb = bb;
+            this.s = s;
+            this.i = i;
+            this.l = l;
+            this.o = o;
+            this.f1 = f1;
+            this.f2 = f2;
+            this.f3 = f3;
+            this.f4 = f4;
+            this.f5 = f5;
+            this.f6 = f6;
+            this.v1 = v1;
+        }
+
+        @ForceInline
+        static MyValue3 setC(MyValue3 v, char c) {
+            return new MyValue3(c, v.bb, v.s, v.i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setBB(MyValue3 v, byte bb) {
+            return new MyValue3(v.c, bb, v.s, v.i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setS(MyValue3 v, short s) {
+            return new MyValue3(v.c, v.bb, s, v.i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setI(MyValue3 v, int i) {
+            return new MyValue3(v.c, v.bb, v.s, i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setL(MyValue3 v, long l) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setO(MyValue3 v, Object o) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setF1(MyValue3 v, float f1) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, f1, v.f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setF2(MyValue3 v, double f2) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, v.f1, f2, v.f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setF3(MyValue3 v, float f3) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, v.f1, v.f2, f3, v.f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setF4(MyValue3 v, double f4) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, v.f1, v.f2, v.f3, f4, v.f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setF5(MyValue3 v, float f5) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, f5, v.f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setF6(MyValue3 v, double f6) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, f6, v.v1);
+        }
+
+        @ForceInline
+        static MyValue3 setV1(MyValue3 v, MyValue3Inline v1) {
+            return new MyValue3(v.c, v.bb, v.s, v.i, v.l, v.o, v.f1, v.f2, v.f3, v.f4, v.f5, v.f6, v1);
+        }
+
+        @ForceInline
+        public static MyValue3 createDefault() {
+            return new MyValue3((char) 0, (byte) 0, (short) 0, 0, 0, null, 0, 0, 0, 0, 0, 0, MyValue3Inline.createDefault());
+        }
+
+        @ForceInline
+        public static MyValue3 create() {
+            MyValue3 v = createDefault();
+            v = setC(v, (char) 3);
+            v = setBB(v, (byte) 4);
+            v = setS(v, (short) 5);
+            v = setI(v, 6);
+            v = setL(v, 7);
+            v = setO(v, new Object());
+            v = setF1(v, 8.0f);
+            v = setF2(v, 9.0);
+            v = setF3(v, 10.0f);
+            v = setF4(v, 11.0);
+            v = setF5(v, 12.0f);
+            v = setF6(v, 13.0);
+            v = setV1(v, MyValue3Inline.createWithFieldsInline(14.0f, 15.0));
+            return v;
+        }
+
+        @DontInline
+        public static MyValue3 createDontInline() {
+            return create();
+        }
+
+        @ForceInline
+        public static MyValue3 copy(MyValue3 other) {
+            MyValue3 v = createDefault();
+            v = setC(v, other.c);
+            v = setBB(v, other.bb);
+            v = setS(v, other.s);
+            v = setI(v, other.i);
+            v = setL(v, other.l);
+            v = setO(v, other.o);
+            v = setF1(v, other.f1);
+            v = setF2(v, other.f2);
+            v = setF3(v, other.f3);
+            v = setF4(v, other.f4);
+            v = setF5(v, other.f5);
+            v = setF6(v, other.f6);
+            v = setV1(v, other.v1);
+            return v;
+        }
+        @ForceInline
+        public long hash() {
+            return c +
+                    bb +
+                    s +
+                    i +
+                    l +
+                    o.hashCode() +
+                    Float.hashCode(f1) +
+                    Double.hashCode(f2) +
+                    Float.hashCode(f3) +
+                    Double.hashCode(f4) +
+                    Float.hashCode(f5) +
+                    Double.hashCode(f6) +
+                    Float.hashCode(v1.f7) +
+                    Double.hashCode(v1.f8);
+        }
+    }
+
+    public MyValue3 testMethodHandle() throws Throwable {
+        return (MyValue3)test2_mh.invokeExact(this);
+    }
+
+
+    @Test
+    public void run41() throws  Throwable{
+        resetCache();
+        MyValue1.createDefaultInline();
+        getCode(getResolvedJavaMethod( "test2_target"), null, true, true, getInitialOptions());
+        InstalledCode c = getCode(getResolvedJavaMethod( "testMethodHandle"), null, true, true, getInitialOptions());
+        c.executeVarargs(this);
+    }
+
+    public static int test28_intrinsic(MyValue1 v) {
+        return UNSAFE.getUnsafe().getByte(v, 108);
+    }
+
+    @Test
+    public void run42() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test28_intrinsic"), null, true, true, WITHOUT_PEA);
+    }
+
+    static class TestRawLoad{
+        private int v = -870; // 1111110011011001
+    }
+
+    public static void testRawLoad() throws NoSuchFieldException {
+        TestRawLoad t = new TestRawLoad();
+        Field vField = TestRawLoad.class.getDeclaredField("v");
+        Unsafe U = UNSAFE.getUnsafe();
+        System.out.println(U.getByte(t, 12));
+    }
+
+    @Test
+    public void run43() throws  Throwable{
+        resetCache();
+        testRawLoad();
+        // 1111111111011001
+        getCode(getResolvedJavaMethod( "testRawLoad"), null, true, true, WITHOUT_PEA).executeVarargs();
+        // 1111110011011001
+        getCode(getResolvedJavaMethod( "testRawLoad"), null, true, true, getInitialOptions()).executeVarargs();
+    }
+
+    public static void testRawStore() throws NoSuchFieldException {
+        TestRawLoad t = new TestRawLoad();
+        Field vField = TestRawLoad.class.getDeclaredField("v");
+        Unsafe U = UNSAFE.getUnsafe();
+        U.putByte(t, 12, (byte)-870);
+        System.out.println(t.v);
+    }
+
+    @Test
+    public void run45() throws  Throwable{
+        resetCache();
+        testRawStore();
+       // System.out.println();
+        //System.out.println();
+        // 1111111111011001
+        getCode(getResolvedJavaMethod( "testRawStore"), null, true, true, WITHOUT_PEA).executeVarargs();
+        // 1111110011011001
+        getCode(getResolvedJavaMethod( "testRawStore"), null, true, true, getInitialOptions()).executeVarargs();
+    }
+
+    public static int test6(MyValue1 v) {
+        return v.hashCode();
+    }
+
+    @Test
+    public void run44() throws  Throwable{
+        resetCache();
+        MyValue1 v = MyValue1.createWithFieldsInline(rI, rL);
+        System.out.println(test6(v));
+        getCode(getResolvedJavaMethod( "test6"), null, true, true, getInitialOptions()).executeVarargs(v);
+    }
+
+    public static java.util.Optional<java.lang.Integer> test7(java.util.Optional<java.lang.Integer> v, Label a) {
+        ExceptionCatch.of(null, null, null, null);
+        return v;
+    }
+
+    @Test
+    public void run46() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test7"), null, true, true, getInitialOptions());
+        getCode(getResolvedJavaMethod( ExceptionCatch.class, "of", Label.class, Label.class, Label.class, java.util.Optional.class), null, true, true, getInitialOptions());
     }
 
 

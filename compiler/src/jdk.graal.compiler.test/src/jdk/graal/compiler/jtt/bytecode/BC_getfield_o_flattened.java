@@ -107,8 +107,8 @@ public class BC_getfield_o_flattened extends JTTTest {
         }
     }
 
-    public static long test(MyValue1 object) {
-        return object.v1.v.l;
+    public static MyValue2 test(MyValue1 object) {
+        return object.v1;
     }
 
     private static final OptionValues WITHOUT_PEA = new OptionValues(getInitialOptions(), GraalOptions.PartialEscapeAnalysis, false);

@@ -131,5 +131,75 @@ public class TestFlatArrayBenchmark extends JTTTest {
         InstalledCode code = getCode(getResolvedJavaMethod("test2"), null, true, true, getInitialOptions());
     }
 
+    public static void testArrayStore(Object[] array){
+        array[0] = new Object();
+    }
+
+    @Test
+    public void run4() throws InvalidInstalledCodeException {
+        try{
+            testArrayStore(new Integer[3]);
+        } catch (Exception e) {
+
+        }
+        InstalledCode code = getCode(getResolvedJavaMethod("testArrayStore"), null, true, true, getInitialOptions());
+    }
+
+    public static Integer[] testArrayCopy(Integer[] array){
+        Integer[] copy = (Integer[])ValueClass.newNullRestrictedArray(Integer.class, array.length);
+        System.arraycopy(array, 0, array, 0, array.length);
+        return copy;
+    }
+
+    @Test
+    public void run5() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("testArrayCopy"), null, true, true, getInitialOptions());
+    }
+
+    public static value class Line {
+        @NullRestricted
+        Point p1;
+        @NullRestricted
+        Point p2;
+
+        public Line(Point p1, Point p2) {
+            this.p1 = p1;
+            this.p2 = p2;
+        }
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    public static value class Point {
+        int x;
+        int y;
+
+        public Point(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    static final int N = 100;
+    static Line[] lineArray = new Line[N];
+
+
+    public static int findDuplicates() {
+        int count = 0;
+        for (int i = 0; i < lineArray.length; i++) {
+            for (int j = 0; j < lineArray.length; j++) {
+                if (lineArray[i] == lineArray[j]) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    @Test
+    public void run6() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("findDuplicates"), null, true, true, getInitialOptions());
+    }
+
 
 }

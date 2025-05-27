@@ -401,16 +401,24 @@ public class TestSpecialCalls extends JTTTest {
     }
 
     static value class X{
+        int i = 0;
         Y y = new Y();
+        long s = 0;
+        X3 x3 = new X2();
     }
     static value class Y{
         Z z = new Z();
     }
 
     static value class Z{
+        X1 x2 = new X2();
         X x = new X();
         Object o = new Object();
     }
+
+    interface X1{}
+    static class X2 extends X3 implements X1{}
+    static abstract class X3{}
 
     @Test
     public void run19() throws InvalidInstalledCodeException {
@@ -509,6 +517,21 @@ public class TestSpecialCalls extends JTTTest {
     @Test
     public void run25() throws InvalidInstalledCodeException {
         InstalledCode code = getCode(getResolvedJavaMethod("equalsTest"), null, true, true, getInitialOptions());
+    }
+
+    static class U{
+        int x = 3;
+    }
+
+    static final U u = new U();
+
+    static int constantFolding(){
+        return u.x;
+    }
+
+    @Test
+    public void run26() throws InvalidInstalledCodeException {
+        InstalledCode code = getCode(getResolvedJavaMethod("constantFolding"), null, true, true, getInitialOptions());
     }
 
 }
