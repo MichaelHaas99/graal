@@ -28,6 +28,7 @@ import static jdk.graal.compiler.asm.Assembler.guaranteeDifferentRegisters;
 import static jdk.graal.compiler.core.common.GraalOptions.AssemblyGCBarriersSlowPathOnly;
 import static jdk.graal.compiler.core.common.GraalOptions.VerifyAssemblyGCBarriers;
 import static jdk.graal.compiler.core.common.GraalOptions.ZapStackOnMethodEntry;
+import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfigAccess.VALHALLA_JDK;
 import static jdk.vm.ci.amd64.AMD64.r10;
 import static jdk.vm.ci.amd64.AMD64.r11;
 import static jdk.vm.ci.amd64.AMD64.r13;
@@ -1389,10 +1390,15 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 // case (1)
 
                 // no additional entry points needed
-                emitEntry(installedCodeOwner, crb, asm, regConfig,
-                                HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null, HotSpotMarkId.INLINE_ENTRY);
+                if (VALHALLA_JDK) {
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null, HotSpotMarkId.INLINE_ENTRY);
+                    unverifiedInlineSet = true;
+                } else {
+                    emitEntry(installedCodeOwner, crb, asm, regConfig,
+                                    HotSpotMarkId.UNVERIFIED_ENTRY, false, false, null);
+                }
                 unverifiedSet = true;
-                unverifiedInlineSet = true;
             }
         }
 
@@ -1405,15 +1411,18 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (!unverifiedSet) {
                 crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
             }
-            if (!unverifiedInlineSet) {
-                crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+            if (VALHALLA_JDK) {
+                if (!unverifiedInlineSet) {
+                    crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+                }
+                if (!verifiedInlineSet) {
+                    crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+                }
+                if (!verifiedInlineROSet) {
+                    crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                }
             }
-            if (!verifiedInlineSet) {
-                crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY);
-            }
-            if (!verifiedInlineROSet) {
-                crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
-            }
+
             // record the normal entry point
             crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
             crb.frameContext.enter(crb, 0, true);

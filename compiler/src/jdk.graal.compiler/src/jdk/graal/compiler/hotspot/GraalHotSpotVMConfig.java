@@ -757,6 +757,10 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
             String key = "CodeInstaller::" + markId.name();
             Long result = constants.get(key);
             if (result == null) {
+                if (!VALHALLA_JDK && markId.needsValhallaJDK()) {
+                    // The mark id won't be used at all unless we run on the Valhalla JDK.
+                    continue;
+                }
                 if (markId.getArch() != null && !osArch.equals(markId.getArch())) {
                     continue;
                 }

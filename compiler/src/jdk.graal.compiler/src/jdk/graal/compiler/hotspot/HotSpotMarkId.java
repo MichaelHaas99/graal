@@ -34,10 +34,10 @@ import jdk.graal.compiler.debug.GraalError;
  */
 public enum HotSpotMarkId implements CompilationResult.MarkId {
     VERIFIED_ENTRY,
-    VERIFIED_INLINE_ENTRY,
-    VERIFIED_INLINE_ENTRY_RO,
+    VERIFIED_INLINE_ENTRY(true),
+    VERIFIED_INLINE_ENTRY_RO(true),
     UNVERIFIED_ENTRY,
-    INLINE_ENTRY,
+    INLINE_ENTRY(true),
     OSR_ENTRY,
     EXCEPTION_HANDLER_ENTRY,
     DEOPT_HANDLER_ENTRY,
@@ -76,14 +76,21 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
 
     private Integer value;
     private final String arch;
+    private boolean needsValhallaJDK;
 
     HotSpotMarkId() {
         this(null);
     }
 
+    HotSpotMarkId(boolean needsValhallaJDK) {
+        this(null);
+        this.needsValhallaJDK = needsValhallaJDK;
+    }
+
     HotSpotMarkId(String arch) {
         this.value = null;
         this.arch = arch;
+        this.needsValhallaJDK = false;
     }
 
     void setValue(Integer value) {
@@ -96,6 +103,10 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
 
     public String getArch() {
         return arch;
+    }
+
+    public boolean needsValhallaJDK() {
+        return needsValhallaJDK;
     }
 
     @Override
