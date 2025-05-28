@@ -193,7 +193,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
-            int off = innerField.getOffset() - fieldType.firstFieldOffset();
+            int off = innerField.getOffset() - fieldType.payloadOffset();
 
             // holder is directly embedded in other object, use the offset without the header
             loads[i] = b.add(
@@ -335,7 +335,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
-            int off = innerField.getOffset() - fieldType.firstFieldOffset();
+            int off = innerField.getOffset() - fieldType.payloadOffset();
 
             // holder has a header, use the offset with the header
             ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
@@ -492,7 +492,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
-            int off = field.getOffset() - componentType.firstFieldOffset();
+            int off = field.getOffset() - componentType.payloadOffset();
             load.setAdditionalOffset(off);
             load.setShift(shift);
             load.setLocation(field.changeOffset(off).setOuterDeclaringClass(componentType));
@@ -619,7 +619,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // returned fields include a header offset of their holder, calculate the offset without
             // the header
-            int off = field.getOffset() - elementType.firstFieldOffset();
+            int off = field.getOffset() - elementType.payloadOffset();
             writeOperations.add(new StoreFlatElementNode.SingleWriteOperation(field.changeOffset(off), shift));
 
         }
