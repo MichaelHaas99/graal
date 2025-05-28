@@ -436,7 +436,7 @@ public class GraphEncoder {
              */
             int parameterCount;
             if (graph.method().hasScalarizedParameters()) {
-                parameterCount = graph.method().getScalarizedParameters(true).length;
+                parameterCount = graph.method().getScalarizedParameters(true).size();
             } else {
                 parameterCount = graph.method().getSignature().getParameterCount(!graph.method().isStatic());
             }

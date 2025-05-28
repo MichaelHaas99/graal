@@ -985,7 +985,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             JavaType[] signature;
             ResolvedJavaMethod method = callTarget.targetMethod();
             if (method.hasScalarizedParameters() && !method.hasCallingConventionMismatch()) {
-                signature = method.getScalarizedParameters(!callTarget.invokeKind().isIndirect());
+                signature = method.getScalarizedParameters(!callTarget.invokeKind().isIndirect()).toArray(new JavaType[0]);
             } else {
                 signature = method.getSignature().toParameterTypes(callTarget.isStatic() ? null : method.getDeclaringClass());
             }

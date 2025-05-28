@@ -76,18 +76,18 @@ public class TestCallingConvention2 extends JTTTest {
         ResolvedJavaMethod method = getResolvedJavaMethod("test");
         method.getScalarizedParameter(0, true);
         Assert.assertTrue(method.hasScalarizedParameters());
-        Assert.assertTrue(method.isScalarizedParameter(0));
+        Assert.assertTrue(method.isScalarizedParameter(0, false));
         Assert.assertTrue(method.hasScalarizedReturn());
         Assert.assertFalse(method.hasScalarizedReceiver());
-        System.out.println(Arrays.toString(method.getScalarizedReturn()));
-        System.out.println(Arrays.toString(method.getScalarizedParameters(true)));
+        System.out.println(method.getScalarizedReturn());
+        System.out.println(method.getScalarizedParameters(true));
     }
 
     @Test
     public void run1() throws Throwable {
         ResolvedJavaMethod method = getResolvedJavaMethod(MyValue1.class, "test");
         Assert.assertTrue(method.hasScalarizedParameters());
-        Assert.assertTrue(method.isScalarizedParameter(0));
+        Assert.assertTrue(method.isScalarizedParameter(0, false));
         Assert.assertTrue(method.hasScalarizedReturn());
         Assert.assertTrue(method.hasScalarizedReceiver());
         //System.out.println();
@@ -333,7 +333,7 @@ public class TestCallingConvention2 extends JTTTest {
         builder.append("\n");
         if(method.hasScalarizedReceiver()){
             builder.append("scalarized receiver:\n");
-            builder.append(ArrayToString(method.getScalarizedReceiver()));
+            builder.append(method.getScalarizedReceiver());
         }else{
             builder.append("non-scalarized receiver:\n");
             builder.append(method.getDeclaringClass());
@@ -341,8 +341,8 @@ public class TestCallingConvention2 extends JTTTest {
         builder.append("\n");
         builder.append("parameters: \n");
         for(int i=0; i<method.getSignature().getParameterCount(false); i++){
-            if(method.isScalarizedParameter(i)){
-                builder.append(ArrayToString(method.getScalarizedParameter(i)));
+            if(method.isScalarizedParameter(i, false)){
+                builder.append(method.getScalarizedParameter(i, false));
             }else{
                 builder.append(method.getSignature().getParameterType(i, method.getDeclaringClass()));
             }
@@ -350,7 +350,7 @@ public class TestCallingConvention2 extends JTTTest {
         }
         if(method.hasScalarizedReturn()){
             builder.append("scalarized return:\n");
-            builder.append(ArrayToString(method.getScalarizedReturn()));
+            builder.append(method.getScalarizedReturn());
         }else{
             builder.append("non-scalarized return:\n");
             builder.append(method.getDeclaringClass());

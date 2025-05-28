@@ -104,7 +104,7 @@ public class InlineTypeUtil {
         int currentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {
             if (targetMethod.isScalarizedParameter(i, true)) {
-                int scalarizedParametersLen = targetMethod.getScalarizedParameter(i, true).length;
+                int scalarizedParametersLen = targetMethod.getScalarizedParameter(i, true).size();
                 InlineTypeNode inlineTypeNode;
                 if (targetMethod.isParameterNullFree(i, true)) {
                     inlineTypeNode = InlineTypeNode.createNonNullWithoutOop(getParameterType(targetMethod, i, true),
@@ -190,7 +190,7 @@ public class InlineTypeUtil {
                 argumentIndex++;
             } else {
                 if (oldMethod.isScalarizedParameter(signatureIndex, true) && !nothingScalarizedYet) {
-                    int length = oldMethod.getScalarizedParameter(signatureIndex, true).length;
+                    int length = oldMethod.getScalarizedParameter(signatureIndex, true).size();
                     scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
                     argumentIndex += length;
                 } else {
@@ -244,14 +244,13 @@ public class InlineTypeUtil {
 
     /**
      *
-     * See
-     * {@link #createScalarizationCFG(FixedNode, ValueNode, ResolvedJavaField[], boolean, boolean)}
+     * See {@link #createScalarizationCFG(FixedNode, ValueNode, List, boolean, boolean)}
      */
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields) {
-        return createScalarizationCFG(addBefore, object, fields, false, false);
+        return createScalarizationCFG(addBefore, object, List.of(fields), false, false);
     }
 
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null, null, null, null);
     }
@@ -270,31 +269,31 @@ public class InlineTypeUtil {
      * @param phis specify phis that should be used for the diamond
      * @return The field values of the object
      */
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields, boolean assumeObjectNonNull,
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode) {
         StructuredGraph graph = addBefore.graph();
         LogicNode nonNull = graph.addOrUniqueWithInputs(LogicNegationNode.create(IsNullNode.create(object)));
         if (phis == null) {
             if (assumeObjectNonNull || nonNull.isTautology()) {
                 assert StampTool.isPointerNonNull(object) : "no diamond should be created, insert a null check";
-                ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+                ValueNode[] loads = new ValueNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
                 if (includeNonNullPhi) {
                     loads[0] = ConstantNode.forByte((byte) 1, graph);
                 }
-                for (int i = 0; i < fields.length; i++) {
-                    LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields[i]));
+                for (int i = 0; i < fields.size(); i++) {
+                    LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields.get(i)));
                     loads[i + (includeNonNullPhi ? 1 : 0)] = load;
                     graph.addBeforeFixed(addBefore, load);
                 }
                 return loads;
             }
             if (nonNull.isContradiction()) {
-                ValueNode[] loads = new ValueNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+                ValueNode[] loads = new ValueNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
                 if (includeNonNullPhi) {
                     loads[0] = ConstantNode.forByte((byte) 0, graph);
                 }
-                for (int i = 0; i < fields.length; i++) {
-                    ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
+                for (int i = 0; i < fields.size(); i++) {
+                    ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(i).getJavaKind()));
                     loads[i + (includeNonNullPhi ? 1 : 0)] = load;
                 }
                 return loads;
@@ -310,17 +309,17 @@ public class InlineTypeUtil {
         // get a valid framestate for the merge node
         FrameState framestate = GraphUtil.findLastFrameState(ifNode);
 
-        ValueNode[] loads = new ValueNode[fields.length];
-        ValueNode[] consts = new ValueNode[fields.length];
+        ValueNode[] loads = new ValueNode[fields.size()];
+        ValueNode[] consts = new ValueNode[fields.size()];
 
         // true branch - inline object is non-null, load the field values
 
         ValueNode nonNullObject = graph.addOrUnique(PiNode.create(object, objectNonNull(), trueBegin));
         FixedWithNextNode previous = trueBegin;
-        for (int i = 0; i < fields.length; i++) {
+        for (int i = 0; i < fields.size(); i++) {
             LoadFieldNode load;
             if (nonNullValues == null) {
-                load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields[i]));
+                load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields.get(i)));
             } else {
                 load = graph.add(nonNullValues[i]);
                 load.setObject(nonNullObject);
@@ -335,10 +334,10 @@ public class InlineTypeUtil {
 
         // false branch - inline object is null, use default values of fields
 
-        for (int i = 0; i < fields.length; i++) {
+        for (int i = 0; i < fields.size(); i++) {
             ConstantNode load;
             if (nullValues == null) {
-                load = graph.addOrUnique(ConstantNode.defaultForKind(fields[i].getJavaKind()));
+                load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(i).getJavaKind()));
             } else {
                 load = graph.addWithoutUnique(nullValues[i]);
             }
@@ -354,14 +353,14 @@ public class InlineTypeUtil {
 
         // produces phi nodes
         if (phis == null) {
-            phis = new ValuePhiNode[fields.length + (includeNonNullPhi ? 1 : 0)];
+            phis = new ValuePhiNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
             if (includeNonNullPhi) {
                 phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Int), merge, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph)));
 
             }
-            for (int i = 0; i < fields.length; i++) {
+            for (int i = 0; i < fields.size(); i++) {
                 phis[i + (includeNonNullPhi ? 1 : 0)] = graph.addOrUnique(
-                                new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields[i].getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
+                        new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields.get(i).getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
             }
         } else {
             // phi inputs set in after merge effects

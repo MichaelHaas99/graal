@@ -2102,7 +2102,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                     @Override
                     void apply(StructuredGraph graph) {
-                        InlineTypeUtil.createScalarizationCFG(block.getEndNode(), node, fields, false, true, phis, nonNullValues, nullValues, mergeNode);
+                        InlineTypeUtil.createScalarizationCFG(block.getEndNode(), node, List.of(fields), false, true, phis, nonNullValues, nullValues, mergeNode);
                     }
                 });
                 bEffects.add(new EffectList.SimpleEffect("set phi inputs") {

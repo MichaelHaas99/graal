@@ -40,6 +40,7 @@ import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import java.util.Arrays;
+import java.util.List;
 
 import jdk.graal.compiler.asm.BranchTargetOutOfBoundsException;
 import jdk.graal.compiler.asm.Label;
@@ -446,12 +447,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         // VIEP: nothing scalarized yet
         // VIEP_RO: everything except receiver already scalarized
-        JavaType[] currentParameterTypes = receiverOnly ? rootMethod.getScalarizedParameters(false)
+        JavaType[] currentParameterTypes = receiverOnly ? rootMethod.getScalarizedParameters(false).toArray(new JavaType[0])
                         : rootMethod.getSignature().toParameterTypes(rootMethod.isStatic() ? null : rootMethod.getDeclaringClass());
         CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
 
         // VEP: the parameters that are expected
-        JavaType[] expectedParameterTypes = rootMethod.getScalarizedParameters(true);
+        JavaType[] expectedParameterTypes = rootMethod.getScalarizedParameters(true).toArray(new JavaType[0]);
         CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
 
         int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
@@ -518,7 +519,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
                     done &= unpackInlineHelper(rootMethod, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
 
-                    toIndex -= rootMethod.getScalarizedParameter(signatureIndex, true).length;
+                    toIndex -= rootMethod.getScalarizedParameter(signatureIndex, true).size();
                     fromIndex--;
                     if (fromIndex == -1 && signatureIndex != 0) {
                         assert receiverOnly : "sanity";
@@ -527,11 +528,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 } else if (isScalarized && receiverOnly) {
                     // for receiverOnly all parameters (not including receiver) already scalarized,
                     // just move them
-                    JavaType[] types = rootMethod.getScalarizedParameter(signatureIndex, true);
-                    for (int j = 0; j < types.length; j++) {
+                    List<JavaType> types = rootMethod.getScalarizedParameter(signatureIndex, true);
+                    for (int j = 0; j < types.size(); j++) {
                         AllocatableValue fromArgument = currentArguments[fromIndex];
                         AllocatableValue toArgument = expectedArguments[toIndex];
-                        done &= moveHelper(asm, fromArgument, toArgument, types[types.length - j - 1].getJavaKind(), state);
+                        done &= moveHelper(asm, fromArgument, toArgument, types.get(types.size() - j - 1).getJavaKind(), state);
 
                         toIndex += step;
                         fromIndex += step;
@@ -569,9 +570,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         int fromValueIndex = argumentToStateIndex(fromValue);
 
-        JavaType[] types = rootMethod.getScalarizedParameter(signatureIndex, true);
+        List<JavaType> types = rootMethod.getScalarizedParameter(signatureIndex, true);
 
-        ResolvedJavaField[] fields = rootMethod.getScalarizedParameterFields(signatureIndex, true);
+        List<ResolvedJavaField> fields = rootMethod.getScalarizedParameterFields(signatureIndex, true);
         boolean done = true;
         boolean markDone = true;
         AllocatableValue toValue = null;
@@ -579,8 +580,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         // receiver is non-null
         boolean nullCheck = !rootMethod.isParameterNullFree(signatureIndex, true);
 
-        for (int i = 0; i < types.length; i++) {
-            JavaKind kind = types[types.length - i - 1].getJavaKind();
+        for (int i = 0; i < types.size(); i++) {
+            JavaKind kind = types.get(types.size() - i - 1).getJavaKind();
             toValue = toValues[toIndex - i];
             assert !ValueUtil.isIllegal(toValue) : "destination must be valid";
             int toValueIndex = argumentToStateIndex(toValue);
@@ -611,7 +612,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     asm.jcc(ConditionFlag.Zero, labelIsNull);
                 }
             }
-            if (i == types.length - 1 && nullCheck) {
+            if (i == types.size() - 1 && nullCheck) {
                 if (ValueUtil.isStackSlot(toValue)) {
                     AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
                     asm.movq(address, 1);
@@ -621,11 +622,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 continue;
             }
 
-            AMD64Address fromAddress = new AMD64Address(fromReg, fields[fields.length - i - 1].getOffset());
+            AMD64Address fromAddress = new AMD64Address(fromReg, fields.get(fields.size() - i - 1).getOffset());
             if (!isXMMRegister(toValue)) {
                 Register dst = ValueUtil.isStackSlot(toValue) ? tmp2 : ValueUtil.asRegister(toValue);
                 if (kind == JavaKind.Object) {
-                    loadHeapOop(crb, asm, dst, fromAddress, fields[fields.length - i - 1]);
+                    loadHeapOop(crb, asm, dst, fromAddress, fields.get(fields.size() - i - 1));
                 } else {
                     boolean isSigned = kind != JavaKind.Char && kind != JavaKind.Boolean;
                     loadSizedValue(asm, dst, fromAddress, kind.getByteCount(), isSigned);
@@ -648,9 +649,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 asm.bind(labelIsNull);
                 // Set NonNull field to zero to signal that the argument is null.
                 // Also set all oop fields to zero to make the GC happy.
-                for (int i = 0; i < types.length; i++) {
-                    JavaKind kind = types[types.length - i - 1].getJavaKind();
-                    if (i == types.length - 1 && nullCheck || kind == JavaKind.Object) {
+                for (int i = 0; i < types.size(); i++) {
+                    JavaKind kind = types.get(types.size() - i - 1).getJavaKind();
+                    if (i == types.size() - 1 && nullCheck || kind == JavaKind.Object) {
                         toValue = toValues[toIndex - i];
                         if (ValueUtil.isStackSlot(toValue)) {
                             AMD64Address address = new AMD64Address(rsp, stackSlotToOffset((StackSlot) toValue));
@@ -1096,8 +1097,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * @return size of Args + RA + Padding
      */
     public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
-        JavaType[] parameterTypes = rootMethod.getScalarizedParameters(true);
-        CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
+        List<JavaType> parameterTypes = rootMethod.getScalarizedParameters(true);
+        CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes.toArray(new JavaType[0]), this);
 
         int RAsize = crb.target.arch.getReturnAddressSize();
         int spInc = (cc.getStackSize() + RAsize);

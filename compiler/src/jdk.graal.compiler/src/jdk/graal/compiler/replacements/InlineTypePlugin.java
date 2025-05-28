@@ -709,7 +709,7 @@ public class InlineTypePlugin implements NodePlugin {
 
     public ValueNode virtualizeFromInlineObject(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, FixedNode addBefore) {
         StructuredGraph graph = b.getGraph();
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(addBefore, object, type.getInstanceFields(true), false, true);
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(addBefore, object, List.of(type.getInstanceFields(true)), false, true);
         InlineTypeNode inlineTypeNode = graph.add(new InlineTypeNode(type, object, Arrays.copyOfRange(phis, 1, phis.length), phis[0], true));
         graph.addBeforeFixed(addBefore, inlineTypeNode);
         return inlineTypeNode;

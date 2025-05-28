@@ -672,9 +672,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     }
 
     @Override
-    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull, JavaType[] types) {
+    public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull, List<JavaType> types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
-        Value[] results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
+        List<Value> results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
 
         CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),
@@ -692,7 +692,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
         Value result = invokeCc.getReturn();
         // TODO: actually wrong to say the scalarized return values are temps
-        emitInvoke(callTarget, parameters, callState, result, results);
+        emitInvoke(callTarget, parameters, callState, result, results.toArray(new Value[0]));
 
         // assign the read multi value nodes a result see
         // CallDynamicJavaDirectNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra_)
@@ -734,12 +734,12 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         }
 
         if (oop != null) {
-            assert isLegal(results[oop.getIndex()]) : "expected legal Value for oop";
+            assert isLegal(results.get(oop.getIndex())) : "expected legal Value for oop";
             setResult(oop, operand(x.asNode()));
         }
 
         for (int i = 0; i < fieldValues.length; i++) {
-            assert isLegal(results[fieldValues[i].getIndex()]) : "expected legal Value for scalarized inline type";
+            assert isLegal(results.get(fieldValues[i].getIndex())) : "expected legal Value for scalarized inline type";
             if (fieldValues[i].stamp(NodeView.DEFAULT).isObjectStamp()) {
                 // in case the returned inline object is null, zero out the oop field
                 ValueKind<?> referenceKind = result.getValueKind();
@@ -749,9 +749,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
                                 JavaConstant.forInt(1));
                 // alternative to zero out the register would be : (nonNull << wordSize) & register
                 setResult(fieldValues[i], gen.emitConditionalMove(intKind.getPlatformKind(), gen.getArithmetic().emitAnd(operand(nonNull), intOne), intOne, Condition.EQ, false,
-                                results[fieldValues[i].getIndex()], nullValue));
+                                results.get(fieldValues[i].getIndex()), nullValue));
             } else {
-                setResult(fieldValues[i], gen.emitMove(results[fieldValues[i].getIndex()]));
+                setResult(fieldValues[i], gen.emitMove(results.get(fieldValues[i].getIndex())));
             }
 
         }
