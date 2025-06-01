@@ -2380,13 +2380,23 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             invoke = append(createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge));
         }
 
-        if (getValhallaOptionsProvider().returnConventionEnabled() && callTarget.targetMethod().hasScalarizedReturn() && !fromMethodHandle) {
-            InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
-        } else {
-            frameState.pushReturn(resultType, invoke.asNode());
-            invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
-        }
+        if (getValhallaOptionsProvider().returnConventionEnabled() && resultType == JavaKind.Object && !fromMethodHandle) {
+            ResolvedJavaMethod targetMethod = callTarget.targetMethod();
+            JavaType returnType = maybeEagerlyResolve(targetMethod.getSignature().getReturnType(method.getDeclaringClass()), targetMethod.getDeclaringClass());
+            // check if the return type is already resolved
+            if (!typeIsResolved(returnType)) {
+                // could be an inline type which can be returned scalarized we bailout, see
+                // ciTypeFlow::StateVector::do_invoke
+                throw new RetryableBailoutException("Return type is unresolved and may be an inline type.");
+            }
 
+            if (targetMethod.hasScalarizedReturn()) {
+                InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
+                return invoke;
+            }
+        }
+        frameState.pushReturn(resultType, invoke.asNode());
+        invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
         return invoke;
     }
 
@@ -3060,10 +3070,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
             if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn() && graph.scalarizeReturn()) {
-                // TODO: not allowed to directly resolve e.g. use maybeEagerlyResolve instead. But
-                // this avoids return convention mismatches at the moment.
-                // ResolvedJavaMethod.hasScalarizedReturn should also not resolve it.
-                ReturnScalarizedNode.createAndAppend(this, realReturnVal, method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass()));
+                // return type was already resolved in Hotspot
+                // see Method::load_signature_classes in compileBroker.cpp
+                JavaType returnType = maybeEagerlyResolve(method.getSignature().getReturnType(method.getDeclaringClass()), method.getDeclaringClass());
+                assert typeIsResolved(returnType) : "expected type to be resolved";
+                ReturnScalarizedNode.createAndAppend(this, realReturnVal, (ResolvedJavaType) returnType);
             } else {
                 append(new ReturnNode(realReturnVal));
             }
@@ -3074,6 +3085,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             returnDataList.add(new ReturnToCallerData(realReturnVal, lastInstr));
             lastInstr = null;
         }
+
     }
 
     private ValueNode processReturnValue(ValueNode value, JavaKind kind) {
