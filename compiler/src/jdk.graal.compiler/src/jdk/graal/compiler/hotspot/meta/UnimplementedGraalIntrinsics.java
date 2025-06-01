@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.hotspot.GraalHotSpotVMConfigAccess;
 import jdk.graal.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import jdk.graal.compiler.serviceprovider.JavaVersionUtil;
 import jdk.vm.ci.aarch64.AArch64;
@@ -102,20 +103,30 @@ public final class UnimplementedGraalIntrinsics {
         );
 
         if (jdk >= 24) {
-            add(toBeInvestigated, // @formatter:off
-                    // TODO: implement unsafe accesses
-                    "jdk/internal/misc/Unsafe.finishPrivateBuffer(Ljava/lang/Object;)Ljava/lang/Object;",
-                    "jdk/internal/misc/Unsafe.getValue(Ljava/lang/Object;JLjava/lang/Class;)Ljava/lang/Object;",
-                    "jdk/internal/misc/Unsafe.isFlatArray(Ljava/lang/Class;)Z",
-                    "jdk/internal/misc/Unsafe.makePrivateBuffer(Ljava/lang/Object;)Ljava/lang/Object;",
-                    "jdk/internal/misc/Unsafe.putValue(Ljava/lang/Object;JLjava/lang/Class;Ljava/lang/Object;)V",
-                    "jdk/internal/value/ValueClass.newNullRestrictedArray(Ljava/lang/Class;I)[Ljava/lang/Object;",
+            if (GraalHotSpotVMConfigAccess.VALHALLA_JDK) {
+                add(toBeInvestigated, // @formatter:off
+                        // TODO: implement unsafe accesses
+                        "jdk/internal/misc/Unsafe.finishPrivateBuffer(Ljava/lang/Object;)Ljava/lang/Object;",
+                        "jdk/internal/misc/Unsafe.getValue(Ljava/lang/Object;JLjava/lang/Class;)Ljava/lang/Object;",
+                        "jdk/internal/misc/Unsafe.isFlatArray(Ljava/lang/Class;)Z",
+                        "jdk/internal/misc/Unsafe.makePrivateBuffer(Ljava/lang/Object;)Ljava/lang/Object;",
+                        "jdk/internal/misc/Unsafe.putValue(Ljava/lang/Object;JLjava/lang/Class;Ljava/lang/Object;)V",
+                        "jdk/internal/value/ValueClass.newNullRestrictedArray(Ljava/lang/Class;I)[Ljava/lang/Object;",
 
-                    "jdk/internal/vm/vector/VectorSupport.selectFromOp(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$VectorMask;Ljdk/internal/vm/vector/VectorSupport$VectorSelectFromOp;)Ljdk/internal/vm/vector/VectorSupport$Vector;",
+                        "jdk/internal/vm/vector/VectorSupport.selectFromOp(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$VectorMask;Ljdk/internal/vm/vector/VectorSupport$VectorSelectFromOp;)Ljdk/internal/vm/vector/VectorSupport$Vector;",
                         "jdk/internal/vm/vector/VectorSupport.selectFromTwoVectorOp(Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$SelectFromTwoVector;)Ljdk/internal/vm/vector/VectorSupport$Vector;"
 
                         // @formatter:on
-            );
+                );
+            } else {
+                add(toBeInvestigated, // @formatter:off
+                        "jdk/internal/vm/vector/VectorSupport.selectFromOp(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$VectorMask;Ljdk/internal/vm/vector/VectorSupport$VectorSelectFromOp;)Ljdk/internal/vm/vector/VectorSupport$Vector;",
+                        "jdk/internal/vm/vector/VectorSupport.selectFromTwoVectorOp(Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$SelectFromTwoVector;)Ljdk/internal/vm/vector/VectorSupport$Vector;"
+
+                        // @formatter:on
+                );
+            }
+
         }
         add(ignore,
                         // These are dead
