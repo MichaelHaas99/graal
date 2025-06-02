@@ -197,7 +197,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // holder is directly embedded in other object, use the offset without the header
             loads[i] = b.add(
-                            LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
+                            LoadFieldNode.create(b.getAssumptions(), object, innerField.changeOffset(srcOff + off).setContainerClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
 
         // create InlineTypeNode
@@ -342,7 +342,7 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder is directly embedded in other object, use the offset without the header
-            writeOperations.add(new StoreFlatFieldNode.SingleWriteOperation(innerField.changeOffset(destOff + off).setOuterDeclaringClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
+            writeOperations.add(new StoreFlatFieldNode.SingleWriteOperation(innerField.changeOffset(destOff + off).setContainerClass((HotSpotResolvedObjectType) field.getDeclaringClass())));
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);
@@ -495,7 +495,7 @@ public class InlineTypePlugin implements NodePlugin {
             int off = field.getOffset() - componentType.payloadOffset();
             load.setAdditionalOffset(off);
             load.setShift(shift);
-            load.setLocation(field.changeOffset(off).setOuterDeclaringClass(componentType));
+            load.setLocation(field.changeOffset(off).setContainerClass(componentType));
             loads[i] = b.add(load);
 
         }
