@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package jdk.graal.compiler.serviceprovider;
+package com.oracle.svm.core.jdk;
 
-import java.lang.Runtime.Version;
+import java.util.function.BooleanSupplier;
+
+import jdk.graal.compiler.serviceprovider.JavaVersionUtil;
 
 /**
- * Interface to query which JDK version Graal is running on.
+ * Denotes if we are running on the Valhalla JDK.
  */
-public final class JavaVersionUtil {
-
-    /**
-     * The value of calling {@link Version#feature()} on {@link Runtime#version()}.
-     */
-    public static final int JAVA_SPEC = Runtime.version().feature();
-
-    public static final boolean VALHALLA_JDK;
-
-    static {
-        if (Runtime.version().optional().isPresent()) {
-            VALHALLA_JDK = Runtime.version().optional().get().contains("valhalla");
-        } else {
-            VALHALLA_JDK = false;
-        }
-    }
-
-    private JavaVersionUtil() {
+public class ValhallaJDK implements BooleanSupplier {
+    @Override
+    public boolean getAsBoolean() {
+        return JavaVersionUtil.VALHALLA_JDK;
     }
 }

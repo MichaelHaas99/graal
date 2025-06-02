@@ -115,6 +115,7 @@ import com.oracle.svm.core.jdk.JDK21OrEarlier;
 import com.oracle.svm.core.jdk.JDKLatest;
 import com.oracle.svm.core.jdk.ProtectionDomainSupport;
 import com.oracle.svm.core.jdk.Resources;
+import com.oracle.svm.core.jdk.ValhallaJDK;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.reflect.MissingReflectionRegistrationUtils;
 import com.oracle.svm.core.reflect.RuntimeMetadataDecoder;
@@ -1616,12 +1617,14 @@ public final class DynamicHub implements AnnotatedElement, java.lang.reflect.Typ
     }
 
     @Substitute
+    @TargetElement(onlyWith = ValhallaJDK.class)
     public boolean isIdentity() {
         // Before Valhalla all classes are identity classes
         return true;
     }
 
     @Substitute
+    @TargetElement(onlyWith = ValhallaJDK.class)
     public boolean isValue() {
         return false;
     }
