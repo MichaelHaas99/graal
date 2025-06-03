@@ -59,6 +59,7 @@ import jdk.graal.compiler.phases.tiers.LowTierContext;
 import jdk.graal.compiler.phases.tiers.MidTierContext;
 import jdk.graal.compiler.phases.tiers.Suites;
 import jdk.graal.compiler.runtime.RuntimeProvider;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -149,7 +150,7 @@ public class JTTTest extends GraalCompilerTest {
 
         testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
         // TODO: adapt for valhalla calling convention
-        if (args.length > 0 && !method.hasScalarizedParameters()) {
+        if (args.length > 0 && !GraalValhallaServices.hasScalarizedParameters(method)) {
             this.argsToBind = args;
             testAgainstExpected(options, method, expect, shouldNotDeopt, receiver, args);
             this.argsToBind = null;
