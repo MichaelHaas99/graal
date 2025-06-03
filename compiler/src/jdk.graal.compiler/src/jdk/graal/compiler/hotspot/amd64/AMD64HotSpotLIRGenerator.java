@@ -85,6 +85,7 @@ import jdk.graal.compiler.lir.gen.BarrierSetLIRGeneratorTool;
 import jdk.graal.compiler.lir.gen.LIRGenerationResult;
 import jdk.graal.compiler.lir.gen.MoveFactory;
 import jdk.graal.compiler.lir.gen.MoveFactory.BackupSlotProvider;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
 import jdk.vm.ci.amd64.AMD64Kind;
@@ -475,6 +476,44 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         }
 
         return result;
+    }
+
+    @Override
+    protected boolean handleScalarizedReturn(ForeignCallLinkage linkage, Value[] argLocations, Value... args) {
+        CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
+        if (linkage.getDescriptor().getName().contains(MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF.getName())) {
+            // E.g. in x64 the register rsi (j_arg0) is the last one used in the Valhalla return
+            // convention, but the first one according to the Java calling convention.
+            // see CallNode::calling_convention in src/hotspot/share/opto/callnode.cpp and
+            // StubGenerator::generate_return_value_stub in
+            // src/hotspot/cpu/x86/stubGenerator_x86_64.cpp
+            if (((HotSpotForeignCallLinkage) linkage).isCompiledStub()) {
+                // Registers shouldn't be overwritten, we have just returned from a call, which may
+                // return an inline object scalarized and now want to jump to the stub.
+                // arg[0] lies in the first return register, keep it there
+                assert args.length == 1 : "argument count mismatch";
+                Value arg = args[0];
+                AllocatableValue loc = getRegisterConfig().getReturnRegister(JavaKind.Object).asValue(getValueKind(JavaKind.Object));
+                emitMove(loc, arg);
+                argLocations[0] = loc;
+            } else {
+                assert args.length == 2 : "argument count mismatch";
+                Value arg = args[0];
+                AllocatableValue loc = linkageCc.getArgument(0);
+                emitMove(loc, arg);
+                argLocations[0] = loc;
+
+                // All registers are already saved, we are in the stub now move the value of j_arg0
+                // to c_rarg1
+                arg = getRegisterConfig().getReturnRegister(JavaKind.Object).asValue(getValueKind(JavaKind.Object));
+                loc = linkageCc.getArgument(1);
+                emitMove(loc, arg);
+                argLocations[1] = loc;
+            }
+            return true;
+
+        }
+        return false;
     }
 
     @Override
