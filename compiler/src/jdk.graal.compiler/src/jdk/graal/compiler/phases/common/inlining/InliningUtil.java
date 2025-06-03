@@ -113,7 +113,6 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.phases.common.inlining.info.InlineInfo;
 import jdk.graal.compiler.phases.common.util.EconomicSetNodeEventListener;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
-import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
@@ -518,7 +517,10 @@ public class InliningUtil extends ValueMergeUtil {
         if (invoke.next() instanceof InlineTypeNode inlineTypeNode && GraalValhallaServices.hasScalarizedReturn(inlineeMethod)) {
             inlineTypeNode.removeOnInlining();
         }
-        if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF) {
+
+        FixedNode next = invoke.next();
+        if (InlineTypeUtil.foreignCallAllocatesInlineType(next)) {
+            ForeignCallNode foreignCallNode = (ForeignCallNode) next;
             foreignCallNode.replaceAtUsages(invoke.asNode());
             assert foreignCallNode.next() instanceof MembarNode : "store inline type fields to buf foreign call should be followed by membar";
             MembarNode membar = (MembarNode) foreignCallNode.next();

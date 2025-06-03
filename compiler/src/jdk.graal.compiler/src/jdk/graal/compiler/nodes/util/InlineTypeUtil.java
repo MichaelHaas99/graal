@@ -9,9 +9,12 @@ import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
+import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
+import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.BeginNode;
 import jdk.graal.compiler.nodes.CallTargetNode;
 import jdk.graal.compiler.nodes.ConstantNode;
@@ -34,6 +37,7 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.PublishWritesNode;
@@ -47,6 +51,7 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
+import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaKind;
@@ -680,5 +685,17 @@ public class InlineTypeUtil {
         }
         return false;
 
+    }
+
+    public static boolean foreignCallAllocatesInlineType(ForeignCallLinkage foreignCall) {
+        return foreignCallAllocatesInlineType(foreignCall.getDescriptor());
+    }
+
+    public static boolean foreignCallAllocatesInlineType(Node foreignCall) {
+        return foreignCall instanceof ForeignCallNode foreignCallNode && foreignCallAllocatesInlineType(foreignCallNode.getDescriptor());
+    }
+
+    private static boolean foreignCallAllocatesInlineType(ForeignCallDescriptor foreignCall) {
+        return foreignCall.getSignature().getName().contains(MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO.getName());
     }
 }

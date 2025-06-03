@@ -25,15 +25,12 @@
 package jdk.graal.compiler.replacements;
 
 import static jdk.graal.compiler.core.common.GraalOptions.MaximumRecursiveInlining;
-import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
-import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
-import static jdk.graal.compiler.nodes.memory.MemoryKill.NO_LOCATION;
 
+import jdk.graal.compiler.core.common.spi.ForeignCallSignature;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampPair;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.NodeInputList;
-import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.nodes.CallTargetNode;
 import jdk.graal.compiler.nodes.CallTargetNode.InvokeKind;
 import jdk.graal.compiler.nodes.FrameState;
@@ -189,15 +186,14 @@ public class MethodHandlePlugin implements NodePlugin {
         return false;
     }
 
-    public static final HotSpotForeignCallDescriptor STORE_INLINE_TYPE_FIELDS_TO_BUF = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATION,
-                    "storeInlineTypeFieldsToBuf",
+    public static final ForeignCallSignature STORE_INLINE_TYPE_FIELDS_TO = new ForeignCallSignature("storeInlineTypeFieldsToBuf",
                     Object.class,
                     long.class /* oop or hub */);
 
     // see PhaseMacroExpand::expand_mh_intrinsic_return
     private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
 
-        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(STORE_INLINE_TYPE_FIELDS_TO_BUF, invokable.asNode());
+        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(b.getForeignCalls().lookupForeignCall(STORE_INLINE_TYPE_FIELDS_TO).getDescriptor(), invokable.asNode());
         bufferInlineTypeCall.setBci(bci);
         b.append(bufferInlineTypeCall);
 

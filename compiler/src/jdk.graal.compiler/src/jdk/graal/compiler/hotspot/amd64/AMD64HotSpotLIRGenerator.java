@@ -85,7 +85,7 @@ import jdk.graal.compiler.lir.gen.BarrierSetLIRGeneratorTool;
 import jdk.graal.compiler.lir.gen.LIRGenerationResult;
 import jdk.graal.compiler.lir.gen.MoveFactory;
 import jdk.graal.compiler.lir.gen.MoveFactory.BackupSlotProvider;
-import jdk.graal.compiler.replacements.MethodHandlePlugin;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64.CPUFeature;
 import jdk.vm.ci.amd64.AMD64Kind;
@@ -481,7 +481,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     protected boolean handleScalarizedReturn(ForeignCallLinkage linkage, Value[] argLocations, Value... args) {
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
-        if (linkage.getDescriptor().getName().contains(MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF.getName())) {
+        if (InlineTypeUtil.foreignCallAllocatesInlineType(linkage)) {
             // E.g. in x64 the register rsi (j_arg0) is the last one used in the Valhalla return
             // convention, but the first one according to the Java calling convention.
             // see CallNode::calling_convention in src/hotspot/share/opto/callnode.cpp and
