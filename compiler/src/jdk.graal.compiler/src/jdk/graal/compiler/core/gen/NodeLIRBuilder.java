@@ -119,6 +119,7 @@ import jdk.graal.compiler.nodes.spi.NodeValueMap;
 import jdk.graal.compiler.nodes.spi.NodeWithState;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.StackSlot;
@@ -674,7 +675,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     @Override
     public void emitInvokeWithScalarizedReturn(Invoke x, ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull, List<JavaType> types) {
         FrameMapBuilder frameMapBuilder = gen.getResult().getFrameMapBuilder();
-        List<Value> results = frameMapBuilder.getRegisterConfig().getReturnConvention(types, gen, true);
+        List<Value> results = GraalValhallaServices.getReturnConvention(frameMapBuilder.getRegisterConfig(), types, gen, true);
         LoweredCallTargetNode callTarget = (LoweredCallTargetNode) x.callTarget();
 
         CallingConvention invokeCc = frameMapBuilder.getRegisterConfig().getCallingConvention(callTarget.callType(), x.asNode().stamp(NodeView.DEFAULT).javaType(gen.getMetaAccess()),

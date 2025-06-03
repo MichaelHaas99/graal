@@ -2000,7 +2000,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         /**
-         * Used to virtualze materialized inline objects. This is possible because they don't have
+         * Used to virtualize materialized inline objects. This is possible because they don't have
          * identity. The oop is saved and used if the newly created virtual object materializes
          * again. The field values are either retrieved from the cache of ReadElimination or a
          * scalarization diamond is inserted. This can avoid materializations in merges, if not all
@@ -2028,7 +2028,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
             }
             VirtualObjectNode virtualObject = new VirtualInstanceNode(instanceClass,
-                            instanceClass.isIdentity(), StampTool.isPointerNonNull(node));
+                            false, StampTool.isPointerNonNull(node));
             if (virtualObjectNode != null) {
                 virtualObject = virtualObjectNode;
             }

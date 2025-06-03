@@ -34,7 +34,7 @@ import org.graalvm.collections.MapCursor;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.debug.TTY;
 import jdk.graal.compiler.nodes.StructuredGraph;
-import jdk.vm.ci.hotspot.ACmpDataAccessor;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaMethodProfile;
 import jdk.vm.ci.meta.JavaTypeProfile;
@@ -454,9 +454,8 @@ public class StableProfileProvider implements ProfileProvider {
             return cached.exceptionSeen;
         }
 
-        @Override
-        public ACmpDataAccessor getACmpData(int bci) {
-            return realProfile.getACmpData(bci);
+        public Object getACmpData(int bci) {
+            return GraalValhallaServices.getACmpData(realProfile, bci);
         }
 
         private BytecodeProfile getBytecodeProfile(int bci) {

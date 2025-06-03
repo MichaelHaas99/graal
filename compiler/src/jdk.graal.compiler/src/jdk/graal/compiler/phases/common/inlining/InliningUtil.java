@@ -116,6 +116,7 @@ import jdk.graal.compiler.phases.util.ValueMergeUtil;
 import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -514,7 +515,7 @@ public class InliningUtil extends ValueMergeUtil {
             }
         }
 
-        if (invoke.next() instanceof InlineTypeNode inlineTypeNode && inlineeMethod.hasScalarizedReturn()) {
+        if (invoke.next() instanceof InlineTypeNode inlineTypeNode && GraalValhallaServices.hasScalarizedReturn(inlineeMethod)) {
             inlineTypeNode.removeOnInlining();
         }
         if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF) {

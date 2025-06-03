@@ -75,6 +75,8 @@ import static jdk.graal.compiler.hotspot.HotSpotHostBackend.THROW_DELAYED_STACKO
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF_NO_VZERO;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
+import static jdk.graal.compiler.hotspot.meta.InlineTypePlugin.LOAD_UNKNOWN_INLINE;
+import static jdk.graal.compiler.hotspot.meta.InlineTypePlugin.STORE_UNKNOWN_INLINE;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets.G1WBPOSTCALL;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets.G1WBPRECALL;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets.VALIDATE_OBJECT;
@@ -90,8 +92,6 @@ import static jdk.graal.compiler.hotspot.stubs.LookUpSecondarySupersTableStub.LO
 import static jdk.graal.compiler.hotspot.stubs.StubUtil.VM_MESSAGE_C;
 import static jdk.graal.compiler.hotspot.stubs.UnwindExceptionToCallerStub.EXCEPTION_HANDLER_FOR_RETURN_ADDRESS;
 import static jdk.graal.compiler.nodes.java.ForeignCallDescriptors.REGISTER_FINALIZER;
-import static jdk.graal.compiler.replacements.InlineTypePlugin.LOAD_UNKNOWN_INLINE;
-import static jdk.graal.compiler.replacements.InlineTypePlugin.STORE_UNKNOWN_INLINE;
 import static jdk.graal.compiler.replacements.MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF;
 import static jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates.findMethod;
 import static jdk.graal.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation.POW;

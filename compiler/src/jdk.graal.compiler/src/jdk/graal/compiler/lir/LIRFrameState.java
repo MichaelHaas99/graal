@@ -36,6 +36,7 @@ import java.util.EnumSet;
 import jdk.graal.compiler.lir.LIRInstruction.OperandFlag;
 import jdk.graal.compiler.lir.LIRInstruction.OperandMode;
 import jdk.graal.compiler.lir.util.IndexedValueMap;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.StackLockValue;
@@ -95,8 +96,8 @@ public class LIRFrameState {
 
                 // Also process non-null information if exists. Produced for a framestate of an
                 // InvokeNode which has a nullable scalarized inline object as return.
-                if (obj.getNonNull() != null) {
-                    processValues(inst, obj.getNonNull(), proc);
+                if (GraalValhallaServices.getNonNull(obj) != null) {
+                    processValues(inst, GraalValhallaServices.getNonNull(obj), proc);
                 }
             }
         }
@@ -121,8 +122,8 @@ public class LIRFrameState {
                 // Also visit non-null information if exists. Produced for a framestate of an
                 // InvokeNode which
                 // has a nullable scalarized inline object as return.
-                if (obj.getNonNull() != null) {
-                    visitValues(inst, obj.getNonNull(), proc);
+                if (GraalValhallaServices.getNonNull(obj) != null) {
+                    visitValues(inst, GraalValhallaServices.getNonNull(obj), proc);
                 }
             }
         }

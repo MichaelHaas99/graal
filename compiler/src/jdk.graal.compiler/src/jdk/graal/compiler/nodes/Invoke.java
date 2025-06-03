@@ -36,6 +36,7 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -118,7 +119,7 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
     default boolean hasScalarizedReturn() {
         ResolvedJavaMethod targetMethod = getTargetMethod();
-        return targetMethod != null && targetMethod.hasScalarizedReturn();
+        return targetMethod != null && GraalValhallaServices.hasScalarizedReturn(targetMethod);
     }
 
     @Override
@@ -153,12 +154,12 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
     @Override
     default void generate(NodeLIRBuilderTool gen) {
-        if (!gen.getLIRGeneratorTool().getValhallaOptionsProvider().returnConventionEnabled() || !callTarget().targetMethod().hasScalarizedReturn()) {
+        if (!gen.getLIRGeneratorTool().getValhallaOptionsProvider().returnConventionEnabled() || !GraalValhallaServices.hasScalarizedReturn(callTarget().targetMethod())) {
             gen.emitInvoke(this);
             return;
         }
 
-        List<JavaType> types = this.callTarget().targetMethod().getScalarizedReturn();
+        List<JavaType> types = GraalValhallaServices.getScalarizedReturn(this.callTarget().targetMethod());
         int oopIndex = 0;
         ReadMultiValueNode oop = null;
         int nonNullIndex = types.size();

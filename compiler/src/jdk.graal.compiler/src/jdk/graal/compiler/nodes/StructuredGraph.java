@@ -71,6 +71,7 @@ import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.Assumption;
@@ -599,7 +600,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     public boolean hasScalarizedParameters() {
         boolean[] parameters = getScalarizeParameters();
         for (int i = 0; i < parameters.length; i++) {
-            if (parameters[i] && method().isScalarizedParameter(i, true)) {
+            if (parameters[i] && GraalValhallaServices.isScalarizedParameter(method(), i, true)) {
                 return true;
             }
         }

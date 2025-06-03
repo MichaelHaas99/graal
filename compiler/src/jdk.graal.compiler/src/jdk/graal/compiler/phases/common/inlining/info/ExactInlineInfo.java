@@ -50,7 +50,7 @@ public class ExactInlineInfo extends AbstractInlineInfo {
 
     @Override
     public EconomicSet<Node> inline(CoreProviders providers, String reason) {
-        return inline(invoke, concrete, inlineableElement, !concrete.hasScalarizedReceiver(), reason);
+        return inline(invoke, concrete, inlineableElement, true, reason);
     }
 
     @Override

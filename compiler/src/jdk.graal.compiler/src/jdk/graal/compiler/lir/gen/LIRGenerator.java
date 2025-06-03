@@ -68,6 +68,7 @@ import jdk.graal.compiler.options.OptionKey;
 import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.replacements.MethodHandlePlugin;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
@@ -312,7 +313,7 @@ public abstract class LIRGenerator extends CoreProvidersDelegate implements LIRG
      * @return the operands representing the ABI defined locations used return multiple values
      */
     public AllocatableValue[] resultOperandsFor(JavaKind[] javaKinds, Value[] values) {
-        Register[] regs = getRegisterConfig().getReturnRegisters(javaKinds, false);
+        Register[] regs = GraalValhallaServices.getReturnRegisters(getRegisterConfig(), javaKinds, false);
         AllocatableValue[] result = new AllocatableValue[regs.length];
         for (int i = 0; i < javaKinds.length; i++) {
             result[i] = regs[i].asValue(values[i].getValueKind());
@@ -547,7 +548,6 @@ public abstract class LIRGenerator extends CoreProvidersDelegate implements LIRG
                 argLocations[i] = loc;
             }
         }
-
 
         res.setForeignCall(true);
         emitForeignCallOp(linkage, targetAddress, linkageCc.getReturn(), argLocations, linkage.getTemporaries(), state);

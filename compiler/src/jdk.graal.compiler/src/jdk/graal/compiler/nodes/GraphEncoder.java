@@ -49,7 +49,9 @@ import jdk.graal.compiler.graph.NodeMap;
 import jdk.graal.compiler.graph.iterators.NodeIterable;
 import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
 import jdk.graal.compiler.replacements.nodes.MethodHandleWithExceptionNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Encodes a {@link StructuredGraph} to a compact byte[] array. All nodes of the graph and edges
@@ -435,10 +437,11 @@ public class GraphEncoder {
              * parsing). This leads to holes in the orderId, i.e., unused orderIds.
              */
             int parameterCount;
-            if (graph.method().hasScalarizedParameters()) {
-                parameterCount = graph.method().getScalarizedParameters(true).size();
+            ResolvedJavaMethod method = graph.method();
+            if (GraalValhallaServices.hasScalarizedParameters(method)) {
+                parameterCount = GraalValhallaServices.getScalarizedParameters(method, true).size();
             } else {
-                parameterCount = graph.method().getSignature().getParameterCount(!graph.method().isStatic());
+                parameterCount = method.getSignature().getParameterCount(!method.isStatic());
             }
 
             for (ParameterNode node : graph.getNodes(ParameterNode.TYPE)) {

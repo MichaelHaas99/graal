@@ -121,6 +121,7 @@ import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.SnippetTemplate.AbstractTemplates;
 import jdk.graal.compiler.replacements.SnippetTemplate.Arguments;
 import jdk.graal.compiler.replacements.SnippetTemplate.SnippetInfo;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.Register;
@@ -717,7 +718,7 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
             StructuredGraph graph = node.graph();
             ResolvedJavaType elementType = node.elementType();
             HotSpotResolvedObjectType arrayType = (HotSpotResolvedObjectType) elementType.getArrayClass();
-            assert !arrayType.isFlatArray() : " no flat array support at the moment";
+            assert !GraalValhallaServices.isFlatArray(arrayType) : " no flat array support at the moment";
             JavaKind elementKind = elementType.getJavaKind();
             ConstantNode hub = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), arrayType.klass(), tool.getMetaAccess(), graph);
             final int arrayBaseOffset = tool.getMetaAccess().getArrayBaseOffset(elementKind);

@@ -90,9 +90,9 @@ import jdk.graal.compiler.lir.gen.LIRGeneratorTool;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterConfig;
@@ -445,15 +445,14 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      */
     public int unpackInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig, boolean receiverOnly) {
 
-
         // VIEP: nothing scalarized yet
         // VIEP_RO: everything except receiver already scalarized
-        JavaType[] currentParameterTypes = receiverOnly ? rootMethod.getScalarizedParameters(false).toArray(new JavaType[0])
+        JavaType[] currentParameterTypes = receiverOnly ? GraalValhallaServices.getScalarizedParameters(rootMethod, false).toArray(new JavaType[0])
                         : rootMethod.getSignature().toParameterTypes(rootMethod.isStatic() ? null : rootMethod.getDeclaringClass());
         CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
 
         // VEP: the parameters that are expected
-        JavaType[] expectedParameterTypes = rootMethod.getScalarizedParameters(true).toArray(new JavaType[0]);
+        JavaType[] expectedParameterTypes = GraalValhallaServices.getScalarizedParameters(rootMethod, true).toArray(new JavaType[0]);
         CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
 
         int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
@@ -471,7 +470,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                         spInc);
         return spInc;
     }
-
 
     /**
      * Unpacks all inline type args and solves circular dependencies.
@@ -512,7 +510,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 } else {
                     kind = rootMethod.getSignature().getParameterKind(signatureIndex);
                 }
-                boolean isScalarized = rootMethod.isScalarizedParameter(signatureIndex, true);
+                boolean isScalarized = GraalValhallaServices.isScalarizedParameter(rootMethod, signatureIndex, true);
 
                 if (isScalarized && (!receiverOnly || signatureIndex == 0)) {
                     // parameter which is not scalarized yet
@@ -520,7 +518,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
                     done &= unpackInlineHelper(rootMethod, crb, asm, signatureIndex, fromArgument, expectedArguments, toIndex, state);
 
-                    toIndex -= rootMethod.getScalarizedParameter(signatureIndex, true).size();
+                    toIndex -= GraalValhallaServices.getScalarizedParameter(rootMethod, signatureIndex, true).size();
                     fromIndex--;
                     if (fromIndex == -1 && signatureIndex != 0) {
                         assert receiverOnly : "sanity";
@@ -529,7 +527,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 } else if (isScalarized && receiverOnly) {
                     // for receiverOnly all parameters (not including receiver) already scalarized,
                     // just move them
-                    List<JavaType> types = rootMethod.getScalarizedParameter(signatureIndex, true);
+                    List<JavaType> types = GraalValhallaServices.getScalarizedParameter(rootMethod, signatureIndex, true);
                     for (int j = 0; j < types.size(); j++) {
                         AllocatableValue fromArgument = currentArguments[fromIndex];
                         AllocatableValue toArgument = expectedArguments[toIndex];
@@ -558,7 +556,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     int toIndex,
                     State[] state) {
 
-        assert rootMethod.isScalarizedParameter(signatureIndex, true);
+        assert GraalValhallaServices.isScalarizedParameter(rootMethod, signatureIndex, true);
         assert !ValueUtil.isIllegal(fromValue) : "source must be valid";
         boolean progress = false;
         final Label labelIsNull = new Label();
@@ -571,15 +569,15 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         int fromValueIndex = argumentToStateIndex(fromValue);
 
-        List<JavaType> types = rootMethod.getScalarizedParameter(signatureIndex, true);
+        List<JavaType> types = GraalValhallaServices.getScalarizedParameter(rootMethod, signatureIndex, true);
 
-        List<ResolvedJavaField> fields = rootMethod.getScalarizedParameterFields(signatureIndex, true);
+        List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(rootMethod, signatureIndex, true);
         boolean done = true;
         boolean markDone = true;
         AllocatableValue toValue = null;
 
         // receiver is non-null
-        boolean nullCheck = !rootMethod.isParameterNullFree(signatureIndex, true);
+        boolean nullCheck = !GraalValhallaServices.isParameterNullFree(rootMethod, signatureIndex, true);
 
         for (int i = 0; i < types.size(); i++) {
             JavaKind kind = types.get(types.size() - i - 1).getJavaKind();
@@ -717,7 +715,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         masm.push(temp2);
         masm.push(temp3);
 
-
         ForeignCallLinkage callTarget = getForeignCalls().lookupForeignCall(tool.preWriteBarrierDescriptor());
 
         AMD64Address storeAddress = address;
@@ -799,7 +796,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             masm.jmp(done);
         });
     }
-
 
     public static void emitZBarrier(CompilationResultBuilder crb,
                     AMD64MacroAssembler masm,
@@ -1060,11 +1056,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * @return true if stack repair is necessary, false otherwise
      */
     public boolean needStackRepair(ResolvedJavaMethod rootMethod) {
-        if (rootMethod == null)
+        if (rootMethod == null || !getProviders().getValhallaOptionsProvider().callingConventionEnabled()) {
             return false;
+        }
         CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this);
-        CallingConvention ccScalarized = CodeUtil.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
-        CallingConvention ccScalarizedWithoutReceiver = CodeUtil.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
+        CallingConvention ccScalarized = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
+        CallingConvention ccScalarizedWithoutReceiver = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
 
         return ccScalarized.getStackSize() > cc.getStackSize() || ccScalarized.getStackSize() > ccScalarizedWithoutReceiver.getStackSize();
     }
@@ -1098,7 +1095,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * @return size of Args + RA + Padding
      */
     public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
-        List<JavaType> parameterTypes = rootMethod.getScalarizedParameters(true);
+        List<JavaType> parameterTypes = GraalValhallaServices.getScalarizedParameters(rootMethod, true);
         CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes.toArray(new JavaType[0]), this);
 
         int RAsize = crb.target.arch.getReturnAddressSize();
@@ -1280,14 +1277,14 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         Label verifiedEntry = new Label();
         if (installedCodeOwner != null) {
-            if (crb.compilationResult.getEntryBCI() == -1 && installedCodeOwner.hasScalarizedParameters()) {
+            if (crb.compilationResult.getEntryBCI() == -1 && GraalValhallaServices.hasScalarizedParameters(installedCodeOwner)) {
                 // we have parameters that need to be scalarized
                 if (!installedCodeOwner.isStatic()) {
 
-                    if (installedCodeOwner.hasScalarizedReceiver()) {
+                    if (GraalValhallaServices.hasScalarizedReceiver(installedCodeOwner)) {
                         // additional entry points for receiver
 
-                        if (installedCodeOwner.getScalarizedParametersCount() == 1) {
+                        if (GraalValhallaServices.getScalarizedParametersCount(installedCodeOwner) == 1) {
                             // case (2)
 
                             // only receiver needs to be scalarized share entries
@@ -1428,7 +1425,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             crb.frameContext.enter(crb, 0, true);
             asm.bind(verifiedEntry);
         }
-
 
     }
 

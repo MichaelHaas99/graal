@@ -28,7 +28,7 @@ import java.util.AbstractList;
 import java.util.Objects;
 import java.util.RandomAccess;
 
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -91,15 +91,15 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
         }
         // abstract class also needs to specify value keyword, interface does not have identity
-        return !type().isIdentity();
+        return !GraalValhallaServices.isIdentity(type());
     }
 
     public boolean isInlineType() {
-        return nonNull() && isExactType() && !type().isIdentity();
+        return nonNull() && isExactType() && !GraalValhallaServices.isIdentity(type());
     }
 
     public boolean isNullableInlineType() {
-        return isExactType() && !type().isIdentity();
+        return isExactType() && !GraalValhallaServices.isIdentity(type());
     }
 
     public boolean canBeInlineTypeArray() {
@@ -135,7 +135,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
             }
 
         }
-        return !componentType.isIdentity();
+        return !GraalValhallaServices.isIdentity(componentType);
     }
 
     public boolean isInlineTypeArray() {
@@ -145,7 +145,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
 
         ResolvedJavaType componentType = type().getComponentType();
         return isAlwaysArray() && nonNull() && isExactType() && !componentType.isArray() && !componentType.isPrimitive() && !componentType.isInterface() && !componentType.isAbstract() &&
-                        !componentType.isIdentity();
+                        !GraalValhallaServices.isIdentity(componentType);
     }
 
     @Override
@@ -211,7 +211,7 @@ public abstract class AbstractObjectStamp extends AbstractPointerStamp {
         } else {
             // Append "[]" for arrays, but only if it's not included in the type.
             boolean forceArrayNotation = alwaysArray && !(type != null && type.isArray());
-            boolean flatArray = type != null && type.isArray() && type instanceof HotSpotResolvedObjectType objectType && objectType.isFlatArray();
+            boolean flatArray = type != null && type.isArray() && GraalValhallaServices.isFlatArray(type);
             str.append(nonNull() ? "!" : "").//
                             append(exactType ? "#" : "").//
                             append(' ').//

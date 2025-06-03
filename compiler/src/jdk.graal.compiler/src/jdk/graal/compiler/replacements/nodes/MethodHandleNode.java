@@ -60,6 +60,7 @@ import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.replacements.MethodHandlePlugin;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -173,7 +174,7 @@ public final class MethodHandleNode extends MacroNode implements Simplifiable {
             graph().addBeforeFixed(currentNext, invoke);
 
             if (invoke.next() instanceof ForeignCallNode foreignCallNode && foreignCallNode.getDescriptor() == MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO_BUF &&
-                            !invoke.getTargetMethod().hasScalarizedReturn()) {
+                            !GraalValhallaServices.hasScalarizedReturn(invoke.getTargetMethod())) {
                 // remove method handle expansion if resolved target method indicates no scalarized
                 // return
                 foreignCallNode.replaceAtUsages(invoke.asNode());

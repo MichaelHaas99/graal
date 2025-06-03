@@ -29,7 +29,6 @@ import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Trans
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
 import static jdk.vm.ci.code.CodeUtil.K;
 import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
-import static jdk.vm.ci.code.CodeUtil.getValhallaCallingConvention;
 import static jdk.vm.ci.common.InitTimer.timer;
 
 import java.util.Collections;
@@ -52,6 +51,7 @@ import jdk.graal.compiler.lir.gen.LIRGenerationResult;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterConfig;
@@ -128,7 +128,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
 
         CallingConvention cc;
         if (getProviders().getValhallaOptionsProvider().callingConventionEnabled()) {
-            cc = getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, graph.method(), this, true);
+            cc = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, graph.method(), this, true);
         } else {
             cc = getCallingConvention(getCodeCache(),
                             HotSpotCallingConventionType.JavaCallee, graph.method(), this);

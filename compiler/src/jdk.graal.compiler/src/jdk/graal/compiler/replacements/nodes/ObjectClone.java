@@ -44,6 +44,7 @@ import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
@@ -117,7 +118,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
                 return;
             }
             if (!type.isArray()) {
-                VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, type.isIdentity());
+                VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, GraalValhallaServices.isIdentity(type));
                 ResolvedJavaField[] fields = newVirtual.getFields();
 
                 ValueNode[] state = new ValueNode[fields.length];

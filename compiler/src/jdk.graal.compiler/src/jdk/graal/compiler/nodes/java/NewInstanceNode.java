@@ -38,6 +38,7 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -83,7 +84,7 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
                         tool.getMetaAccessExtensionProvider().canVirtualize(instanceClass)) {
 
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(),
-                            instanceClass.isIdentity());
+                            GraalValhallaServices.isIdentity(instanceClass));
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {

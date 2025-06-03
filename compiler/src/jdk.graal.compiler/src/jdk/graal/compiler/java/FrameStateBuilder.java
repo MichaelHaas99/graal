@@ -78,6 +78,7 @@ import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
@@ -328,8 +329,8 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (receiver == null) {
-                if (method.hasScalarizedReceiver() && scalarizeParameters[0]) {
-                    List<JavaType> receiverTypes = method.getScalarizedReceiver();
+                if (GraalValhallaServices.hasScalarizedReceiver(method) && scalarizeParameters[0]) {
+                    List<JavaType> receiverTypes = GraalValhallaServices.getScalarizedReceiver(method);
                     ParameterNode[] scalarizedValues = new ParameterNode[receiverTypes.size()];
                     for (int i = 0; i < receiverTypes.size(); i++) {
                         ParameterNode current = new ParameterNode(index, StampFactory.forDeclaredType(assumptions, receiverTypes.get(i), false));
@@ -402,11 +403,12 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (param == null) {
-                if (method.isScalarizedParameter(i, false) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
-                    List<JavaType> parameterTypes = method.getScalarizedParameterNullFree(i, false);
+                if (GraalValhallaServices.isScalarizedParameter(method, i, false) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
+                    List<JavaType> parameterTypes = GraalValhallaServices.getScalarizedParameterNullFree(method, i, false);
                     ParameterNode nonNull = null;
-                    if (!method.isParameterNullFree(i, false)) {
-                        nonNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterNonNullType(i, false), false)));
+                    if (!GraalValhallaServices.isParameterNullFree(method, i, false)) {
+                        nonNull = graph.addOrUnique(
+                                        new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, GraalValhallaServices.getScalarizedParameterNonNullType(method, i, false), false)));
                         // TODO: create an option to decided if the arguments should be logged
 // ForeignCallNode foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
 // ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), nonNull, ConstantNode.forBoolean(true,
@@ -493,8 +495,8 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (receiver == null) {
-                if (method.hasScalarizedReceiver() && scalarizeParameters[0]) {
-                    List<JavaType> receiverTypes = method.getScalarizedReceiver();
+                if (GraalValhallaServices.hasScalarizedReceiver(method) && scalarizeParameters[0]) {
+                    List<JavaType> receiverTypes = GraalValhallaServices.getScalarizedReceiver(method);
                     ParameterNode[] scalarizedValues = new ParameterNode[receiverTypes.size()];
                     for (int i = 0; i < receiverTypes.size(); i++) {
                         ParameterNode current = graph.addOrUnique(new ParameterNode(index, StampFactory.forDeclaredType(assumptions, receiverTypes.get(i), false)));
@@ -560,11 +562,12 @@ public final class FrameStateBuilder implements SideEffectsState {
                 }
             }
             if (param == null) {
-                if (method.isScalarizedParameter(i, false) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
-                    List<JavaType> parameterTypes = method.getScalarizedParameterNullFree(i, false);
+                if (GraalValhallaServices.isScalarizedParameter(method, i, false) && scalarizeParameters[i + (method.isStatic() ? 0 : 1)]) {
+                    List<JavaType> parameterTypes = GraalValhallaServices.getScalarizedParameterNullFree(method, i, false);
                     ParameterNode nonNull = null;
-                    if (!method.isParameterNullFree(i, false)) {
-                        nonNull = graph.addOrUnique(new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, method.getScalarizedParameterNonNullType(i, false), false)));
+                    if (!GraalValhallaServices.isParameterNullFree(method, i, false)) {
+                        nonNull = graph.addOrUnique(
+                                        new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, GraalValhallaServices.getScalarizedParameterNonNullType(method, i, false), false)));
                     }
                     ParameterNode[] scalarizedValues = new ParameterNode[parameterTypes.size()];
                     for (int j = 0; j < parameterTypes.size(); j++) {

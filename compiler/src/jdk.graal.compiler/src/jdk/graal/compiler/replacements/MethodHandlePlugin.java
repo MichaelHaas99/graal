@@ -50,6 +50,7 @@ import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.MacroNode;
 import jdk.graal.compiler.replacements.nodes.MethodHandleNode;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MethodHandleAccessProvider;
 import jdk.vm.ci.meta.MethodHandleAccessProvider.IntrinsicMethod;
@@ -138,7 +139,6 @@ public class MethodHandlePlugin implements NodePlugin {
                     return false;
                 }
 
-
                 // also make sure that inline objects are not scalarized on the new call target
                 Invokable newInvokable = b.handleReplacedInvoke(invoke.getInvokeKind(),
                                 targetMethod, argumentsList.toArray(new ValueNode[argumentsList.size()]),
@@ -150,13 +150,13 @@ public class MethodHandlePlugin implements NodePlugin {
                         // the special ResolvedMethodHandleCallTargetNode.
 
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
-                        if (callTarget.targetMethod().hasScalarizedReturn()) {
+                        if (GraalValhallaServices.hasScalarizedReturn(callTarget.targetMethod())) {
                             appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci());
                         }
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
                         macroInvokable.addMethodHandleInfo(b.append(callTarget));
-                        if (callTarget.targetMethod().hasScalarizedReturn()) {
+                        if (GraalValhallaServices.hasScalarizedReturn(callTarget.targetMethod())) {
                             appendForeignCall(b, macroInvokable, invokeReturnStamp, invoke.bci());
                         }
                     } else {

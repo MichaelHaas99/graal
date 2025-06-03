@@ -55,7 +55,6 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -104,7 +103,6 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
     }
 
     private ResolvedJavaField field;
-
 
     /**
      * Creates a new LoadIndexedNode.
@@ -185,12 +183,15 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
         if (array().isNullConstant()) {
             return new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
         }
-        ValueNode constant = tryConstantFold(array(), index(), tool.getMetaAccess(), tool.getConstantReflection());
+        // TODO: implement constant folding of flat arrays
+// if (array.asJavaConstant() instanceof HotSpotObjectConstant arrayConstant &&
+// arrayConstant.getType().isFlatArray()) {
+// constant = LoadFieldNode.asConstant(tool.getConstantFieldProvider(),
+// tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), constant, field,
+// getNodeSourcePosition());
+// }
+        ValueNode constant = tool.getValhallaOptionsProvider().useArrayFlattening() ? null : tryConstantFold(array(), index(), tool.getMetaAccess(), tool.getConstantReflection());
         if (constant != null) {
-            if (array.asJavaConstant() instanceof HotSpotObjectConstant arrayConstant && arrayConstant.getType().isFlatArray()) {
-                constant = LoadFieldNode.asConstant(tool.getConstantFieldProvider(), tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), constant, field,
-                                getNodeSourcePosition());
-            }
             return constant;
         }
         if (tool.allUsagesAvailable() && hasNoUsages() && getBoundsCheck() != null) {

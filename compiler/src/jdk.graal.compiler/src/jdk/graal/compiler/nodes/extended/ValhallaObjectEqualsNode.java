@@ -39,7 +39,6 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.options.OptionValues;
-import jdk.vm.ci.hotspot.ACmpDataAccessor;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
@@ -80,13 +79,13 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
         this.y = newY;
     }
 
-    private ACmpDataAccessor profile;
+    private Object profile;
 
-    public ACmpDataAccessor getProfile() {
+    public Object getProfile() {
         return profile;
     }
 
-    public ValhallaObjectEqualsNode(ValueNode x, ValueNode y, ACmpDataAccessor profile) {
+    public ValhallaObjectEqualsNode(ValueNode x, ValueNode y, Object profile) {
         super(TYPE, StampFactory.forInteger(JavaKind.Int, 0, 1));
         assert x != null;
         assert y != null;
@@ -95,7 +94,7 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
         this.profile = profile;
     }
 
-    public static LogicNode create(GraphBuilderContext b, ValueNode x, ValueNode y, NodeView view, ACmpDataAccessor profile) {
+    public static LogicNode create(GraphBuilderContext b, ValueNode x, ValueNode y, NodeView view, Object profile) {
         LogicNode result = OP.canonical(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, CanonicalCondition.EQ, false, x, y, view, b.getValhallaOptionsProvider());
         if (result != null) {
             return result;

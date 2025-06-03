@@ -48,6 +48,7 @@ import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -103,10 +104,10 @@ public class InlineTypeUtil {
         ArrayList<ValueNode> newArguments = new ArrayList<>(parameterLength);
         int currentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {
-            if (targetMethod.isScalarizedParameter(i, true)) {
-                int scalarizedParametersLen = targetMethod.getScalarizedParameter(i, true).size();
+            if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true)) {
+                int scalarizedParametersLen = GraalValhallaServices.getScalarizedParameter(targetMethod, i, true).size();
                 InlineTypeNode inlineTypeNode;
-                if (targetMethod.isParameterNullFree(i, true)) {
+                if (GraalValhallaServices.isParameterNullFree(targetMethod, i, true)) {
                     inlineTypeNode = InlineTypeNode.createNonNullWithoutOop(getParameterType(targetMethod, i, true),
                                     arguments.subList(currentIndex, scalarizedParametersLen).toArray(new ValueNode[parameterLength]));
                 } else {
@@ -147,14 +148,16 @@ public class InlineTypeUtil {
      * @param nothingScalarizedYet determines if no arguments of the old method were scalarized yet
      */
     public static void handleDevirtualizationOnCallTarget(MethodCallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
-        if (oldMethod.hasScalarizedParameters() && !oldMethod.hasCallingConventionMismatch() && !newMethod.hasScalarizedParameters()) {
+        if (GraalValhallaServices.hasScalarizedParameters(oldMethod) && !GraalValhallaServices.hasCallingConventionMismatch(oldMethod) &&
+                        !GraalValhallaServices.hasScalarizedParameters(newMethod)) {
             throw new GraalError("method parameters scalarization mismatch between" + oldMethod + " and " + newMethod);
         }
-        if (!newMethod.hasScalarizedParameters() || oldMethod == newMethod && oldMethod.hasCallingConventionMismatch() || callTargetNode instanceof ResolvedMethodHandleCallTargetNode) {
+        if (!GraalValhallaServices.hasScalarizedParameters(newMethod) || oldMethod == newMethod && GraalValhallaServices.hasCallingConventionMismatch(oldMethod) ||
+                        callTargetNode instanceof ResolvedMethodHandleCallTargetNode) {
             return;
         }
 
-        nothingScalarizedYet |= oldMethod.hasCallingConventionMismatch();
+        nothingScalarizedYet |= GraalValhallaServices.hasCallingConventionMismatch(oldMethod);
 
         StructuredGraph graph = callTargetNode.graph();
         int parameterLength = oldMethod.getSignature().getParameterCount(!oldMethod.isStatic());
@@ -180,7 +183,8 @@ public class InlineTypeUtil {
         boolean[] scalarizeParameters = new boolean[parameterLength];
         int argumentIndex = 0;
         for (int i = 0; i < parameterLength; i++) {
-            scalarizeParameters[i] = (!oldMethod.isScalarizedParameter(i, true) || nothingScalarizedYet) && newMethod.isScalarizedParameter(i, true);
+            scalarizeParameters[i] = (!GraalValhallaServices.isScalarizedParameter(oldMethod, i, true) || nothingScalarizedYet) &&
+                            GraalValhallaServices.isScalarizedParameter(newMethod, i, true);
         }
         ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
         for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
@@ -189,8 +193,8 @@ public class InlineTypeUtil {
                 scalarizedArgs.addAll(List.of(scalarized));
                 argumentIndex++;
             } else {
-                if (oldMethod.isScalarizedParameter(signatureIndex, true) && !nothingScalarizedYet) {
-                    int length = oldMethod.getScalarizedParameter(signatureIndex, true).size();
+                if (GraalValhallaServices.isScalarizedParameter(oldMethod, signatureIndex, true) && !nothingScalarizedYet) {
+                    int length = GraalValhallaServices.getScalarizedParameter(oldMethod, signatureIndex, true).size();
                     scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
                     argumentIndex += length;
                 } else {
@@ -236,10 +240,10 @@ public class InlineTypeUtil {
      * @return the phi nodes representing the field values of the argument
      */
     private static ValueNode[] createScalarizationCFGForInvokeArg(FixedNode addBefore, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
-        boolean isNullFree = targetMethod.isParameterNullFree(signatureIndex, true);
+        boolean isNullFree = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
 
         return createScalarizationCFG(addBefore, arg,
-                        targetMethod.getScalarizedParameterFields(signatureIndex, true), isNullFree, !isNullFree);
+                        GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true), isNullFree, !isNullFree);
     }
 
     /**
@@ -360,7 +364,7 @@ public class InlineTypeUtil {
             }
             for (int i = 0; i < fields.size(); i++) {
                 phis[i + (includeNonNullPhi ? 1 : 0)] = graph.addOrUnique(
-                        new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields.get(i).getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
+                                new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields.get(i).getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
             }
         } else {
             // phi inputs set in after merge effects
@@ -619,7 +623,7 @@ public class InlineTypeUtil {
     }
 
     private static boolean isCircularInlineType(ResolvedJavaType type, Set<ResolvedJavaType> visitedTypes) {
-        if (type.isIdentity() || type.isPrimitive()) {
+        if (GraalValhallaServices.isIdentity(type) || type.isPrimitive()) {
             return false;
         }
         Queue<ResolvedJavaType> queue = new ArrayDeque<>();
@@ -642,12 +646,12 @@ public class InlineTypeUtil {
 
             if (type != t) {
                 // object type
-                if ((t.isInterface() || !t.isIdentity() && t.isAbstract()) || t.isJavaLangObject()) {
+                if ((t.isInterface() || !GraalValhallaServices.isIdentity(t) && t.isAbstract()) || t.isJavaLangObject()) {
                     // inline type could be assignable to type, but we can't analyze its fields at
                     // compile time
                     return true;
                 }
-                if (t.isIdentity()) {
+                if (GraalValhallaServices.isIdentity(t)) {
                     // not interested in non-inline types
                     continue;
                 }

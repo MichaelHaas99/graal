@@ -48,9 +48,8 @@ import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.Snippets;
 import jdk.graal.compiler.replacements.nodes.ExplodeLoopNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.word.Word;
-import jdk.vm.ci.hotspot.ACmpDataAccessor;
-import jdk.vm.ci.hotspot.SingleTypeEntry;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -71,7 +70,7 @@ public class ObjectEqualsSnippets implements Snippets {
         public void lower(ValhallaObjectEqualsNode node, LoweringTool tool) {
             SnippetTemplate.Arguments args;
             StructuredGraph graph = node.graph();
-            ACmpDataAccessor profile = node.getProfile();
+            Object profile = node.getProfile();
             ValueNode x = node.getX();
             ValueNode y = node.getY();
             ResolvedJavaType type = null;
@@ -127,12 +126,12 @@ public class ObjectEqualsSnippets implements Snippets {
             args.addVarargs("stamps", Stamp.class, StampFactory.forKind(JavaKind.Object), stamps);
 
             if (profile != null) {
-                SingleTypeEntry leftEntry = profile.getLeft();
-                SingleTypeEntry rightEntry = profile.getRight();
-                boolean xAlwaysNullProfile = leftEntry.alwaysNull();
-                boolean xInlineTypeProfile = leftEntry.inlineType();
-                boolean yAlwaysNullProfile = rightEntry.alwaysNull();
-                boolean yInlineTypeProfile = rightEntry.inlineType();
+                Object leftEntry = GraalValhallaServices.getLeft(profile);
+                Object rightEntry = GraalValhallaServices.getRight(profile);
+                boolean xAlwaysNullProfile = GraalValhallaServices.getAlwaysNull(leftEntry);
+                boolean xInlineTypeProfile = GraalValhallaServices.getInlineType(leftEntry);
+                boolean yAlwaysNullProfile = GraalValhallaServices.getAlwaysNull(rightEntry);
+                boolean yInlineTypeProfile = GraalValhallaServices.getInlineType(rightEntry);
                 args.add("xAlwaysNullProfile", xAlwaysNullProfile);
                 args.add("xInlineTypeProfile", xInlineTypeProfile);
                 args.add("yAlwaysNullProfile", yAlwaysNullProfile);
@@ -154,7 +153,6 @@ public class ObjectEqualsSnippets implements Snippets {
                 }
             }
         }
-
 
         private static boolean isTracingEnabledForMethod(StructuredGraph graph) {
             String filter = HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter.getValue(graph.getOptions());

@@ -228,6 +228,7 @@ import jdk.graal.compiler.replacements.nodes.AssertionNode;
 import jdk.graal.compiler.replacements.nodes.CStringConstant;
 import jdk.graal.compiler.replacements.nodes.LogNode;
 import jdk.graal.compiler.serviceprovider.GraalServices;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.serviceprovider.LibGraalService;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
@@ -984,8 +985,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             }
             JavaType[] signature;
             ResolvedJavaMethod method = callTarget.targetMethod();
-            if (method.hasScalarizedParameters() && !method.hasCallingConventionMismatch()) {
-                signature = method.getScalarizedParameters(!callTarget.invokeKind().isIndirect()).toArray(new JavaType[0]);
+            if (GraalValhallaServices.hasScalarizedParameters(method) && !GraalValhallaServices.hasCallingConventionMismatch(method)) {
+                signature = GraalValhallaServices.getScalarizedParameters(method, !callTarget.invokeKind().isIndirect()).toArray(new JavaType[0]);
             } else {
                 signature = method.getSignature().toParameterTypes(callTarget.isStatic() ? null : method.getDeclaringClass());
             }
@@ -1004,7 +1005,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     // compiled code entry as HotSpot does not guarantee they are final
                     // values.
                     int methodCompiledEntryOffset;
-                    if (hsMethod.hasScalarizedParameters() && !hsMethod.hasCallingConventionMismatch()) {
+                    if (GraalValhallaServices.hasScalarizedParameters(hsMethod) && !GraalValhallaServices.hasCallingConventionMismatch(hsMethod)) {
                         methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledROEntryOffset;
                     } else {
                         methodCompiledEntryOffset = runtime.getVMConfig().methodCompiledEntryOffset;

@@ -446,13 +446,12 @@ import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup;
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.site.InfopointReason;
-import jdk.vm.ci.hotspot.ACmpDataAccessor;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -1076,7 +1075,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         // graphBuilderConfig.eagerResolving() || intrinsicContext != null,
         // graphBuilderConfig.getPlugins(), null);
 
-
         FrameStateBuilder startFrameStateNonVirtual = null;
         ArrayList<VirtualObjectState> states = null;
         if (getValhallaOptionsProvider().callingConventionEnabled() && graph.hasScalarizedParameters() && !parsingIntrinsic() && entryBCI == INVOCATION_ENTRY_BCI) {
@@ -1118,6 +1116,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState) {
         build(startInstruction, startFrameState, null, null);
     }
+
     @SuppressWarnings("try")
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState, ArrayList<VirtualObjectState> virtualStates, FrameStateBuilder startFrameStateNonVirtual) {
         if (PrintProfilingInformation.getValue(options) && profilingInfo != null) {
@@ -2346,7 +2345,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // emit null checks for non-null parameters before the scalarization
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
         for (int i = 0; i < parameterLength; i++) {
-            if (targetMethod.isParameterNullFree(i, true)) {
+            if (GraalValhallaServices.isParameterNullFree(targetMethod, i, true)) {
                 invokeArgs[i] = nullCheckedValue(invokeArgs[i]);
             }
         }
@@ -2357,7 +2356,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
 
-        if (getValhallaOptionsProvider().callingConventionEnabled() && !targetMethod.hasCallingConventionMismatch() && targetMethod.hasScalarizedParameters() && !fromMethodHandle) {
+        if (getValhallaOptionsProvider().callingConventionEnabled() && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod) &&
+                        GraalValhallaServices.hasScalarizedParameters(targetMethod) &&
+                        !fromMethodHandle) {
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
         }
 
@@ -2390,7 +2391,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 throw new RetryableBailoutException("Return type is unresolved and may be an inline type.");
             }
 
-            if (targetMethod.hasScalarizedReturn()) {
+            if (GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
                 InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
                 return invoke;
             }
@@ -2399,7 +2400,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
         return invoke;
     }
-
 
     /**
      * Describes what should be done with the exception edge of an invocation. The edge can be
@@ -3069,7 +3069,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         frameState.clearStack();
         beforeReturn(realReturnVal, returnKind);
         if (parent == null) {
-            if (getValhallaOptionsProvider().returnConventionEnabled() && method.hasScalarizedReturn() && graph.scalarizeReturn()) {
+            if (getValhallaOptionsProvider().returnConventionEnabled() && GraalValhallaServices.hasScalarizedReturn(method) && graph.scalarizeReturn()) {
                 // return type was already resolved in Hotspot
                 // see Method::load_signature_classes in compileBroker.cpp
                 JavaType returnType = maybeEagerlyResolve(method.getSignature().getReturnType(method.getDeclaringClass()), method.getDeclaringClass());
@@ -4575,7 +4575,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         JavaKind actualKind = refineComponentType(array, kind);
         if (actualKind != null) {
-                frameState.push(actualKind, append(genLoadIndexed(array, index, boundsCheck, actualKind)));
+            frameState.push(actualKind, append(genLoadIndexed(array, index, boundsCheck, actualKind)));
         } else {
             GraalError.guarantee(kind == JavaKind.Byte, "refineComponentType should not have failed for %s", kind);
             genByteSizedLoadIndexed(index, array, boundsCheck);
@@ -4627,7 +4627,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         JavaKind actualKind = refineComponentType(array, kind);
         if (actualKind != null) {
-                genStoreIndexed(array, index, boundsCheck, storeCheck, actualKind, maskSubWordValue(value, actualKind));
+            genStoreIndexed(array, index, boundsCheck, storeCheck, actualKind, maskSubWordValue(value, actualKind));
         } else {
             GraalError.guarantee(kind == JavaKind.Byte, "refineComponentType should not have failed for %s", kind);
             genByteSizedStoreIndexed(value, index, array, boundsCheck, storeCheck);
@@ -4969,12 +4969,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
     }
 
-    private ACmpDataAccessor getProfileForObjectEquals() {
+    private Object getProfileForObjectEquals() {
         if (!getValhallaOptionsProvider().useACmpProfile() || parsingIntrinsic() || profilingInfo == null ||
                         !optimisticOpts.useTypeCheckHints(getOptions())) {
             return null;
         }
-        return profilingInfo.getACmpData(bci());
+        return GraalValhallaServices.getACmpData(profilingInfo, bci());
     }
 
     private void genCheckCast(int cpi) {
@@ -5040,9 +5040,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                     ResolvedJavaType singleType = profile.asSingleType();
                     if (singleType != null && checkedType.getType().isAssignableFrom(singleType)) {
                         LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
-                        if (getValhallaOptionsProvider().valhallaEnabled() && singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                        if (getValhallaOptionsProvider().valhallaEnabled() && singleType.isArray()) {
                             // also check against the flat array class
-                            LogicNode flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+                            LogicNode flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(GraalValhallaServices.convertToFlatArray(singleType)), object, profile));
                             typeCheck = append(LogicNode.or(typeCheck, flatArrayTypeCheck, BranchProbabilityData.unknown()));
                         }
                         if (typeCheck.isTautology()) {
@@ -5060,9 +5060,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         boolean nonNull = ((ObjectStamp) object.stamp(NodeView.DEFAULT)).nonNull();
         if (castNode == null) {
             LogicNode condition = genUnique(createInstanceOfAllowNull(checkedType, object, null));
-            if (getValhallaOptionsProvider().valhallaEnabled() && resolvedType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+            if (getValhallaOptionsProvider().valhallaEnabled() && resolvedType.isArray()) {
                 // also check against the flat array class
-                TypeReference flatArrayCheckedType = TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray());
+                TypeReference flatArrayCheckedType = TypeReference.createTrusted(graph.getAssumptions(), GraalValhallaServices.convertToFlatArray(resolvedType));
                 LogicNode flatArrayTypeCheck = append(createInstanceOfAllowNull(flatArrayCheckedType, object, null));
                 condition = append(LogicNode.or(condition, flatArrayTypeCheck, BranchProbabilityData.unknown()));
             }
@@ -5116,9 +5116,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 ResolvedJavaType singleType = profile.asSingleType();
                 if (singleType != null) {
                     LogicNode typeCheck = append(createInstanceOf(TypeReference.createExactTrusted(singleType), object, profile));
-                    if (getValhallaOptionsProvider().valhallaEnabled() && singleType instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+                    if (getValhallaOptionsProvider().valhallaEnabled() && singleType.isArray()) {
                         // also check against the flat array class
-                        flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(resolvedObjectType.convertToFlatArray()), object, profile));
+                        flatArrayTypeCheck = append(createInstanceOf(TypeReference.createExactTrusted(GraalValhallaServices.convertToFlatArray(singleType)), object, profile));
                         typeCheck = append(LogicNode.or(typeCheck, flatArrayTypeCheck, BranchProbabilityData.unknown()));
                     }
                     if (!typeCheck.isTautology()) {
@@ -5138,9 +5138,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
         if (instanceOfNode == null) {
             instanceOfNode = createInstanceOf(checkedType, object, null);
-            if (getValhallaOptionsProvider().valhallaEnabled() && checkedType.getType() instanceof HotSpotResolvedObjectType resolvedObjectType && resolvedObjectType.isArray()) {
+            if (getValhallaOptionsProvider().valhallaEnabled() && checkedType.getType().isArray()) {
                 // also check against the flat array class
-                flatArrayTypeCheck = append(createInstanceOf(TypeReference.createTrusted(graph.getAssumptions(), resolvedObjectType.convertToFlatArray()), object, null));
+                flatArrayTypeCheck = append(createInstanceOf(TypeReference.createTrusted(graph.getAssumptions(), GraalValhallaServices.convertToFlatArray(resolvedType)), object, null));
             }
         }
         LogicNode logicNode = genUnique(instanceOfNode);

@@ -51,6 +51,7 @@ import jdk.graal.compiler.nodes.virtual.MaterializedObjectState;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.VirtualObject;
@@ -184,7 +185,7 @@ public class DebugInfoBuilder {
                 // which has a nullable scalarized inline object as return.
                 ValueNode nonNull = ((VirtualObjectState) objectStates.get(vobjNode)).getNonNull();
                 if (nonNull != null) {
-                    vobjValue.setNonNull(new JavaValue[]{toJavaValue(nonNull)});
+                    GraalValhallaServices.setNonNull(vobjValue, new JavaValue[]{toJavaValue(nonNull)});
                 }
             }
 
