@@ -157,7 +157,7 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
                                 locationIdentity);
             } else {
                 identityHashCodeSnippet = snippet(providers,
-                                HotSpotHashCodeSnippets.class,
+                                IdentityHashCodeSnippets.class,
                                 "identityHashCodeSnippet",
                                 null,
                                 receiver,
