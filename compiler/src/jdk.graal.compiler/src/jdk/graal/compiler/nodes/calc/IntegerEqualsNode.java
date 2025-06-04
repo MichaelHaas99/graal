@@ -42,7 +42,6 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
-import jdk.graal.compiler.word.WordCastNode;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
@@ -218,9 +217,6 @@ public final class IntegerEqualsNode extends CompareNode implements Canonicaliza
             if (forY instanceof NotNode notX && forX == notX.getValue()) {
                 // x == ~x => false
                 return LogicConstantNode.contradiction();
-            }
-            if (forX instanceof WordCastNode wordForX && forY instanceof WordCastNode wordForY && wordForX.getInput() == wordForY.getInput()) {
-                return LogicConstantNode.tautology();
             }
 
             return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);
