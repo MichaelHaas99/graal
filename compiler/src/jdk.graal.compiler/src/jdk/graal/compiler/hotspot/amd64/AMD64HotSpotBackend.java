@@ -247,7 +247,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
             ResolvedJavaMethod[] methods = crb.compilationResult.getMethods();
-            if (methods != null && needStackRepair(methods[0])) {
+            if (methods != null && needStackRepair(methods[0]) && crb.compilationResult.getEntryBCI() == -1) {
                 // method needs stack repair
                 // stack increment doesn't include RBP so add it, RA and padding already included
                 AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
@@ -424,11 +424,17 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         RegisterConfig regConfig = frameMap.getRegisterConfig();
 
         // Emit the prefix
-        emitCodePrefix(installedCodeOwner, crb, asm, regConfig);
+        Label entry = emitCodePrefix(installedCodeOwner, crb, asm, regConfig);
 
         if (entryPointDecorator != null) {
             entryPointDecorator.emitEntryPoint(crb, true);
         }
+
+        // TODO: The new Valhalla entry points could cause problems with the decorator
+        if (entry != null) {
+            crb.asm.bind(entry);
+        }
+        crb.frameContext.enter(crb, 0, true);
 
         // Emit code for the LIR
         crb.emitLIR(false);
@@ -1268,7 +1274,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     //                                                              VEP:
     //                                                                body
     // @formatter:on
-    public void emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
+    public Label emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
 
         boolean verifiedInlineSet = false;
         boolean verifiedInlineROSet = false;
@@ -1401,7 +1407,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         if (crb.compilationResult.getEntryBCI() != -1) {
             crb.recordMark(HotSpotMarkId.OSR_ENTRY);
-            crb.frameContext.enter(crb);
+            return null;
 
         } else {
             // set entry points (if not set yet) to verified entry point
@@ -1422,8 +1428,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
             // record the normal entry point
             crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
-            crb.frameContext.enter(crb, 0, true);
-            asm.bind(verifiedEntry);
+            return verifiedEntry;
         }
 
     }
