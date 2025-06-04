@@ -27,6 +27,7 @@ package jdk.graal.compiler.hotspot.meta;
 import static jdk.graal.compiler.core.common.GraalOptions.AlwaysInlineVTableStubs;
 import static jdk.graal.compiler.core.common.GraalOptions.InlineVTableStubs;
 import static jdk.graal.compiler.core.common.GraalOptions.OmitHotExceptionStacktrace;
+import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfigAccess.VALHALLA_JDK;
 import static jdk.graal.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.OSR_MIGRATION_END;
 import static jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider.GENERIC_ARRAYCOPY;
@@ -1199,7 +1200,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             runtimeCalls.put(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY,
                             new ForeignCallSignature("createIllegalArgumentExceptionArgumentIsNotAnArray", IllegalArgumentException.class));
             // TODO: simplify to IdentityException.class at some point
-            runtimeCalls.put(BytecodeExceptionKind.IDENTITY, new ForeignCallSignature("createIdentityException", InlineTypeUtil.getIdentityExceptionClass(), Object.class));
+            if (VALHALLA_JDK) {
+                runtimeCalls.put(BytecodeExceptionKind.IDENTITY, new ForeignCallSignature("createIdentityException", InlineTypeUtil.getIdentityExceptionClass(), Object.class));
+            }
         }
     }
 
