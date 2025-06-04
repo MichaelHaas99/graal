@@ -431,7 +431,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
             // In the function SharedRuntime::store_inline_type_fields_to_buf, the statement
             // InlineKlass* verif_vk = InlineKlass::returned_inline_klass(reg_map); expects the
             // first general return register to be in the register map so don't remove it
-            if (InlineTypeUtil.foreignCallAllocatesInlineType(stub.getLinkage())) {
+            if (!InlineTypeUtil.foreignCallAllocatesInlineType(stub.getLinkage())) {
                 save.remove(destroyedRegisters);
             }
             if (cursor.getKey().hasDebugInfo()) {
