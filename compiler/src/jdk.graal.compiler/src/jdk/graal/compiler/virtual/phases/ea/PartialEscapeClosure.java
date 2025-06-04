@@ -1389,7 +1389,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 if (types[valueIndex] == null) {
                                     // remember the type for null constants
                                     types[valueIndex] = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
-                                } else if (entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()) != types[valueIndex]) {
+                                } else if (!entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()).equals(types[valueIndex])) {
                                     // inline types are not the same
                                     virtualize = false;
                                     break;

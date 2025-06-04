@@ -157,7 +157,7 @@ public class InlineTypeUtil {
                         !GraalValhallaServices.hasScalarizedParameters(newMethod)) {
             throw new GraalError("method parameters scalarization mismatch between" + oldMethod + " and " + newMethod);
         }
-        if (!GraalValhallaServices.hasScalarizedParameters(newMethod) || oldMethod == newMethod && GraalValhallaServices.hasCallingConventionMismatch(oldMethod) ||
+        if (!GraalValhallaServices.hasScalarizedParameters(newMethod) || oldMethod.equals(newMethod) && GraalValhallaServices.hasCallingConventionMismatch(oldMethod) ||
                         callTargetNode instanceof ResolvedMethodHandleCallTargetNode) {
             return;
         }
@@ -649,7 +649,7 @@ public class InlineTypeUtil {
                 return true;
             }
 
-            if (type != t) {
+            if (!type.equals(t)) {
                 // object type
                 if ((t.isInterface() || !GraalValhallaServices.isIdentity(t) && t.isAbstract()) || t.isJavaLangObject()) {
                     // inline type could be assignable to type, but we can't analyze its fields at

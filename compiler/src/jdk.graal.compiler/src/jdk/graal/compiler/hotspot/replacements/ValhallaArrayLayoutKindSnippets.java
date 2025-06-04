@@ -15,6 +15,8 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.ma
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayMaskInPlace;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.nullFreeArrayPattern;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
+import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
@@ -91,7 +93,7 @@ public class ValhallaArrayLayoutKindSnippets implements Snippets {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        if (isUnlocked(mark)) {
+        if (probability(FAST_PATH_PROBABILITY, isUnlocked(mark))) {
             return mark.and(Word.unsigned(flatArrayMaskInPlace(INJECTED_VMCONFIG))).equal(Word.unsigned(flatArrayPattern(INJECTED_VMCONFIG))) ? trueValue : falseValue;
         }
         return isFlatArrayFromKlass(object, trueValue, falseValue);
@@ -112,7 +114,7 @@ public class ValhallaArrayLayoutKindSnippets implements Snippets {
         HotSpotReplacementsUtil.verifyOop(object);
 
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        if (isUnlocked(mark)) {
+        if (probability(FAST_PATH_PROBABILITY, isUnlocked(mark))) {
             return mark.and(Word.unsigned(nullFreeArrayMaskInPlace(INJECTED_VMCONFIG))).equal(Word.unsigned(nullFreeArrayPattern(INJECTED_VMCONFIG))) ? trueValue : falseValue;
         }
         return isNullFreeArrayFromKlass(object, trueValue, falseValue);

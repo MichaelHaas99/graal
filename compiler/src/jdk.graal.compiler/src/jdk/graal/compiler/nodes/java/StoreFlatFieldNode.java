@@ -26,6 +26,7 @@ package jdk.graal.compiler.nodes.java;
 
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_2;
+import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,7 +67,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
  * The {@code StoreFlatFieldNode} performs a (maybe not atomic) store operation for a flat instance
  * field.
  */
-@NodeInfo(nameTemplate = "StoreFlatField")
+@NodeInfo(nameTemplate = "StoreFlatField", cycles = CYCLES_8, size = SIZE_8)
 public final class StoreFlatFieldNode extends FixedWithNextNode implements StateSplit, Virtualizable, Canonicalizable, MultiWrite, Lowerable, OrderedMemoryAccess {
     public static final NodeClass<StoreFlatFieldNode> TYPE = NodeClass.create(StoreFlatFieldNode.class);
     @OptionalInput ValueNode object;
@@ -215,7 +216,7 @@ public final class StoreFlatFieldNode extends FixedWithNextNode implements State
     }
 
     public LocationIdentity getKilledLocation(int index) {
-        assert index >= 0 && index < singleWriteOperations.size();
+        assert index >= 0 && index < singleWriteOperations.size() : "wrong index";
         if (killedLocations.length == 1) {
             return killedLocations[0];
         }
