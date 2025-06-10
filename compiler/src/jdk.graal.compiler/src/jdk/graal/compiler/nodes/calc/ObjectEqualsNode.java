@@ -306,10 +306,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode x = getX();
-        ValueNode y = getY();
-
-        ValueNode node = virtualizeComparison(x, y, graph(), tool);
+        ValueNode node = virtualizeComparison(getX(), getY(), graph(), tool);
         if (node == null) {
             return;
         }

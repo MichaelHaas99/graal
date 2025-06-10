@@ -1121,7 +1121,7 @@ public class GraalValhallaServices {
         if (methodGetReturnRegisters != null) {
             try {
                 try {
-                    return (Register[]) methodGetReturnRegisters.invoke(config, (Object) kinds, includeFirstGeneralRegister);
+                    return (Register[]) methodGetReturnRegisters.invoke(config, kinds, includeFirstGeneralRegister);
                 } catch (InvocationTargetException e) {
                     throw e.getCause();
                 }

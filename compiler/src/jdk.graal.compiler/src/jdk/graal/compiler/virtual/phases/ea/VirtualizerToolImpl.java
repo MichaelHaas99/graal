@@ -359,20 +359,21 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         // don't hold virtual objects as oop, this is necessary when virtualizing the InlineType
         // node
         ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, getMetaAccess(), current.graph());
-        oop = oop instanceof VirtualObjectNode ? oop : closure.getAliasAndResolve(state, oop);
-        if (oop instanceof VirtualObjectNode virtualOop) {
+        ValueNode newOop = oop instanceof VirtualObjectNode ? oop : closure.getAliasAndResolve(state, oop);
+        boolean newIsAllocatedOrNull = isAllocatedOrNull;
+        if (newOop instanceof VirtualObjectNode virtualOop) {
             if (isAllocatedOrNull(virtualOop)) {
-                oop = getOop(virtualOop);
-                isAllocatedOrNull = true;
+                newOop = getOop(virtualOop);
+                newIsAllocatedOrNull = true;
             } else {
                 // virtual object so it was not allocated before, correct the information
-                oop = nullPointer;
-                isAllocatedOrNull = false;
+                newOop = nullPointer;
+                newIsAllocatedOrNull = false;
             }
         }
-        nonNull = closure.getAliasAndResolve(state, nonNull);
+        ValueNode newNonNull = closure.getAliasAndResolve(state, nonNull);
 
-        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, oop, nonNull, isAllocatedOrNull));
+        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized, newOop, newNonNull, newIsAllocatedOrNull));
         closure.addVirtualAlias(virtualObject, virtualObject);
         PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment(debug);
         effects.addVirtualizationDelta(1);
@@ -400,12 +401,12 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         // ObjectState state = new ObjectState(oldState.getEntries(), oldState.getLocks(),
         // oldState.getEnsureVirtualized(), oldState.getOop(), oldState.getNonNull(),
         // oldState.isAllocatedOrNull());
-        ObjectState state = this.state.getObjectState(from).cloneState();
-        state.clearCachedState();
+        ObjectState newState = this.state.getObjectState(from).cloneState();
+        newState.clearCachedState();
         ValueNode constOne = ConstantNode.forInt(1);
         ensureAdded(constOne);
-        state.setNonNull(constOne);
-        this.state.addObject(id, state);
+        newState.setNonNull(constOne);
+        this.state.addObject(id, newState);
         closure.addVirtualAlias(virtualObject, virtualObject);
         if (sourcePosition != null) {
             assert virtualObject.getNodeSourcePosition() == null || virtualObject.getNodeSourcePosition() == sourcePosition : "unexpected source pos!";

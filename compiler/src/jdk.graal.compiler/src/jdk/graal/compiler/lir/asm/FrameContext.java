@@ -50,6 +50,7 @@ public interface FrameContext {
      * @param stackIncrement the stack increment that should be stored under the rbp
      * @param emitEntryBarrier true if the nmethod entry barrier should be emitted
      */
+    @SuppressWarnings("unused")
     default void enter(CompilationResultBuilder crb, int stackIncrement, boolean emitEntryBarrier) {
         throw new UnsupportedOperationException("method enter with stack increment not implemented yet");
     }
@@ -73,6 +74,7 @@ public interface FrameContext {
      *
      * @param allowStackRepair indicates if stack repair is allowed when leaving a method
      */
+    @SuppressWarnings("unused")
     default void leave(CompilationResultBuilder crb, boolean allowStackRepair) {
         throw new UnsupportedOperationException("method leave with stack repair control not implemented yet");
     }

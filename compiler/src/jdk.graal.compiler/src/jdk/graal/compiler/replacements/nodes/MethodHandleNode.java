@@ -173,12 +173,12 @@ public final class MethodHandleNode extends MacroNode implements Simplifiable {
             GraphUtil.removeFixedWithUnusedInputs(this);
             graph().addBeforeFixed(currentNext, invoke);
 
-            FixedNode next = invoke.next();
-            if (InlineTypeUtil.foreignCallAllocatesInlineType(next) &&
+            FixedNode nextFixedNode = invoke.next();
+            if (InlineTypeUtil.foreignCallAllocatesInlineType(nextFixedNode) &&
                             !GraalValhallaServices.hasScalarizedReturn(invoke.getTargetMethod())) {
                 // remove method handle expansion if resolved target method indicates no scalarized
                 // return
-                ForeignCallNode foreignCallNode = (ForeignCallNode) next;
+                ForeignCallNode foreignCallNode = (ForeignCallNode) nextFixedNode;
                 foreignCallNode.replaceAtUsages(invoke.asNode());
                 assert foreignCallNode.next() instanceof MembarNode : "store inline type fields to buf foreign call should be followed by membar";
                 MembarNode membar = (MembarNode) foreignCallNode.next();

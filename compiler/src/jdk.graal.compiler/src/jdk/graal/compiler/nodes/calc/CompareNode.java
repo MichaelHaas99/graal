@@ -208,6 +208,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             return canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view, null);
         }
 
+        @SuppressWarnings("unused")
         protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         CanonicalCondition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue, NodeView view,
                         ValhallaOptionsProvider valhallaOptionsProvider, ValueNode constantValue) {
@@ -351,9 +352,10 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
          */
         protected abstract LogicNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view);
 
+        @SuppressWarnings("unused")
         protected LogicNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view, ValhallaOptionsProvider valhallaOptionsProvider) {
             return duplicateModified(newX, newY, unorderedIsTrue, view);
-        };
+        }
     }
 
     public static LogicNode createCompareNode(StructuredGraph graph, CanonicalCondition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection, NodeView view) {

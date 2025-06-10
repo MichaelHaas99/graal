@@ -35,7 +35,6 @@ import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerBelowNode;
-import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
@@ -63,7 +62,6 @@ import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -83,42 +81,10 @@ public class InlineTypePlugin implements NodePlugin {
             if (!GraalValhallaServices.isNullFreeInlineType(field)) {
                 // field is flat and nullable
 
-                // TODO: when JDK-8341767 is done, current implementation is rubbish
-
-                if (true) {
-                    b.append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
-                    b.push(field.getJavaKind(), ConstantNode.defaultForKind(field.getJavaKind(), b.getGraph()));
-                    return true;
-                } else {
-                    BeginNode trueBegin = b.getGraph().add(new BeginNode());
-                    BeginNode falseBegin = b.getGraph().add(new BeginNode());
-
-                    genFlatFieldNullCheck(b, object, field, trueBegin, falseBegin);
-
-                    // true branch - flat field is null
-                    EndNode trueEnd = b.add(new EndNode());
-                    trueBegin.setNext(trueEnd);
-
-                    // false branch - flat field is non-null
-                    InlineTypeNode instance = genLoadFlatField(b, object, field);
-                    EndNode falseEnd = b.add(new EndNode());
-                    falseBegin.setNext(instance);
-
-                    ConstantNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, b.getMetaAccess(), b.getGraph());
-
-                    // return a null pointer if the flat field was null or the read instance
-                    // otherwise
-                    ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), false).getTrustedStamp(), null,
-                                    nullPointer, instance));
-                    b.push(JavaKind.Object, phiNode);
-
-                    // merge
-                    MergeNode merge = b.add(new MergeNode());
-                    phiNode.setMerge(merge);
-
-                    merge.addForwardEnd(trueEnd);
-                    merge.addForwardEnd(falseEnd);
-                }
+                // TODO: when JDK-8341767 is done
+                b.append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
+                b.push(field.getJavaKind(), ConstantNode.defaultForKind(field.getJavaKind(), b.getGraph()));
+                return true;
 
             } else {
                 // field is flat and null-restricted
@@ -131,8 +97,8 @@ public class InlineTypePlugin implements NodePlugin {
 
             // for null free inline type fields it is the responsibility of the reader to return the
             // default instance if the field is null
-            object = genNullCheck(b, object);
-            LoadFieldNode fieldValue = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
+            ValueNode nonNullObject = genNullCheck(b, object);
+            LoadFieldNode fieldValue = b.add(LoadFieldNode.create(b.getAssumptions(), nonNullObject, field));
             genHandleNullFreeInlineTypeField(b, fieldValue, field);
             return true;
 
@@ -141,8 +107,8 @@ public class InlineTypePlugin implements NodePlugin {
         // do null-check here to avoid it in PEA, if the holder has no identity
         Stamp stamp = StampFactory.forDeclaredType(b.getAssumptions(), field.getType().resolve(field.getDeclaringClass()), false).getTrustedStamp();
         if (!GraalValhallaServices.isIdentity(field.getDeclaringClass()) || StampTool.isNullableInlineType(stamp, b.getValhallaOptionsProvider())) {
-            object = genNullCheck(b, object);
-            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), object, field));
+            ValueNode nonNullObject = genNullCheck(b, object);
+            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNullObject, field));
             if (virtualizeFromInlineObject && StampTool.isNullableInlineType(load, b.getValhallaOptionsProvider())) {
                 FixedNode addBefore = b.add(new ValueAnchorNode());
                 load = virtualizeFromInlineObject(b, load, stamp.javaType(b.getMetaAccess()), addBefore);
@@ -174,10 +140,10 @@ public class InlineTypePlugin implements NodePlugin {
      * @param field the accessed field
      * @return an {@link InlineTypeNode} representing the loaded flat field
      */
-    private InlineTypeNode genLoadFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
+    private static InlineTypeNode genLoadFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
 
         // make a null check for all load operations
-        object = genNullCheck(b, object);
+        ValueNode nonNullObject = genNullCheck(b, object);
 
         // only support null-restricted flat fields for now
         // field type is already resolved because value classes have the loadableDescriptor (also
@@ -198,7 +164,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             // holder is directly embedded in other object, use the offset without the header
             loads[i] = b.add(
-                            LoadFieldNode.create(b.getAssumptions(), object,
+                            LoadFieldNode.create(b.getAssumptions(), nonNullObject,
                                             GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, srcOff + off), field.getDeclaringClass())));
         }
 
@@ -233,13 +199,14 @@ public class InlineTypePlugin implements NodePlugin {
         // false branch - field is non-null
         EndNode falseEnd = b.add(new EndNode());
         falseBegin.setNext(falseEnd);
+        ValueNode virtualizedFieldValue = fieldValue;
         if (virtualizeFromInlineObject) {
-            fieldValue = virtualizeFromInlineObject(b, fieldValue, fieldType, falseEnd);
+            virtualizedFieldValue = virtualizeFromInlineObject(b, fieldValue, fieldType, falseEnd);
         }
 
         // return the default instance if the field was null otherwise the value
         ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), true).getTrustedStamp(), null,
-                        defaultValue, fieldValue));
+                        defaultValue, virtualizedFieldValue));
         b.push(JavaKind.Object, phiNode);
 
         // merge
@@ -257,37 +224,9 @@ public class InlineTypePlugin implements NodePlugin {
             if (!GraalValhallaServices.isNullFreeInlineType(field)) {
                 // field is flat and nullable
 
-                // TODO: when JDK-8341767 is done, current implementation is rubbish
-
-                if (true) {
-                    b.append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
-                    return true;
-                } else {
-                    BeginNode trueBegin = b.getGraph().add(new BeginNode());
-                    BeginNode falseBegin = b.getGraph().add(new BeginNode());
-
-                    // generate if node with condition
-                    genFlatFieldNullCheck(b, object, field, trueBegin, falseBegin);
-
-                    // true branch - flat field is null
-                    StoreFieldNode storeField = b.add(new StoreFieldNode(object, GraalValhallaServices.getNullMarkerField(field),
-                                    b.maskSubWordValue(ConstantNode.forInt(0, b.getGraph()), GraalValhallaServices.getNullMarkerField(field).getJavaKind())));
-                    trueBegin.setNext(storeField);
-                    EndNode trueEnd = b.add(new EndNode());
-
-                    // false branch - flat field is non-null
-                    b.add(falseBegin);
-                    storeField = b.add(new StoreFieldNode(object, GraalValhallaServices.getNullMarkerField(field),
-                                    b.maskSubWordValue(ConstantNode.forInt(1, b.getGraph()), GraalValhallaServices.getNullMarkerField(field).getJavaKind())));
-                    falseBegin.setNext(storeField);
-                    genStoreFlatField(b, object, field, value);
-                    EndNode falseEnd = b.add(new EndNode());
-
-                    // merge
-                    MergeNode merge = b.add(new MergeNode());
-                    merge.addForwardEnd(trueEnd);
-                    merge.addForwardEnd(falseEnd);
-                }
+                // TODO: when JDK-8341767 is done
+                b.append(new DeoptimizeNode(DeoptimizationAction.None, RuntimeConstraint));
+                return true;
 
             } else {
                 // field is null restricted
@@ -296,8 +235,8 @@ public class InlineTypePlugin implements NodePlugin {
             return true;
         }
         if (GraalValhallaServices.isNullFreeInlineType(field)) {
-            value = genNullCheck(b, value);
-            StoreFieldNode storeFieldNode = new StoreFieldNode(object, field, b.maskSubWordValue(value, field.getJavaKind()));
+            ValueNode nonNullValue = genNullCheck(b, value);
+            StoreFieldNode storeFieldNode = new StoreFieldNode(object, field, b.maskSubWordValue(nonNullValue, field.getJavaKind()));
             b.append(storeFieldNode);
             b.setStateAfter(storeFieldNode);
             return true;
@@ -315,12 +254,12 @@ public class InlineTypePlugin implements NodePlugin {
      * @param field the accessed field
      * @param value the value to be stored into the field
      */
-    private void genStoreFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
+    private static void genStoreFlatField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, ValueNode value) {
 
         // make a null check for all load operations
-        value = genNullCheck(b, value);
+        ValueNode nonNullValue = genNullCheck(b, value);
         // make a null check for all store operations
-        object = genNullCheck(b, object);
+        ValueNode nonNullObject = genNullCheck(b, object);
 
         HotSpotResolvedObjectType fieldType = (HotSpotResolvedObjectType) field.getType();
 
@@ -340,32 +279,18 @@ public class InlineTypePlugin implements NodePlugin {
             int off = innerField.getOffset() - HotspotGraalValhallaServices.payloadOffset(fieldType);
 
             // holder has a header, use the offset with the header
-            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), value, innerField));
+            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNullValue, innerField));
             readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
 
             // holder is directly embedded in other object, use the offset without the header
             writeOperations.add(new StoreFlatFieldNode.SingleWriteOperation(
                             GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, destOff + off), field.getDeclaringClass())));
         }
-        StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(object, field, writeOperations));
+        StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(nonNullObject, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);
     }
 
-    /**
-     *
-     * @deprecated
-     */
-    private void genFlatFieldNullCheck(GraphBuilderContext b, ValueNode object, ResolvedJavaField field, BeginNode trueBegin, BeginNode falseBegin) {
-        LoadFieldNode y = b.add(LoadFieldNode.create(b.getAssumptions(), object, GraalValhallaServices.getNullMarkerField(field)));
-        ConstantNode x = ConstantNode.forInt(0, b.getGraph());
-
-        LogicNode condition = IntegerEqualsNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, x, y, NodeView.DEFAULT);
-        b.add(condition);
-
-        b.add(new IfNode(condition, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
-    }
-
-    private IfNode genFieldNullCheck(GraphBuilderContext b, ValueNode fieldValue, BeginNode trueBegin, BeginNode falseBegin) {
+    private static IfNode genFieldNullCheck(GraphBuilderContext b, ValueNode fieldValue, BeginNode trueBegin, BeginNode falseBegin) {
         LogicNode condition = b.add(IsNullNode.create(fieldValue));
         b.add(condition);
 
@@ -375,8 +300,8 @@ public class InlineTypePlugin implements NodePlugin {
     @Override
     public boolean handleStoreStaticField(GraphBuilderContext b, ResolvedJavaField field, ValueNode value) {
         if (GraalValhallaServices.isNullFreeInlineType(field)) {
-            value = genNullCheck(b, value);
-            StoreFieldNode storeFieldNode = new StoreFieldNode(null, field, b.maskSubWordValue(value, field.getJavaKind()));
+            ValueNode nonNullValue = genNullCheck(b, value);
+            StoreFieldNode storeFieldNode = new StoreFieldNode(null, field, b.maskSubWordValue(nonNullValue, field.getJavaKind()));
             b.append(storeFieldNode);
             b.setStateAfter(storeFieldNode);
             return true;
@@ -395,16 +320,16 @@ public class InlineTypePlugin implements NodePlugin {
             // array can consist of inline objects
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
 
-            array = genNullCheck(b, array);
-            boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
-            index = createPositiveIndex(b.getGraph(), index, boundsCheck);
+            ValueNode nonNullArray = genNullCheck(b, array);
+            GuardingNode newBoundsCheck = genBoundsCheck(b, boundsCheck, nonNullArray, index);
+            ValueNode positiveIndex = createPositiveIndex(b.getGraph(), index, newBoundsCheck);
 
-            boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
+            boolean isInlineTypeArray = StampTool.isInlineTypeArray(nonNullArray, b.getValhallaOptionsProvider());
             if (isInlineTypeArray && GraalValhallaServices.isFlatArray(resolvedType)) {
                 // array is known to consist of flat inline objects
                 int shift = HotspotGraalValhallaServices.getLog2ComponentSize(resolvedType);
                 b.push(elementKind,
-                                genLoadFlatElement(b, array, index, boundsCheck, resolvedType, shift, null));
+                                genLoadFlatElement(b, nonNullArray, positiveIndex, resolvedType, shift, null));
                 return true;
             }
 
@@ -412,7 +337,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             BeginNode trueBegin = b.getGraph().add(new BeginNode());
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
-            genFlatArrayCheck(b, array, trueBegin, falseBegin);
+            genFlatArrayCheck(b, nonNullArray, trueBegin, falseBegin);
 
             Stamp resultStamp = null;
 
@@ -422,7 +347,7 @@ public class InlineTypePlugin implements NodePlugin {
                 // produce code that loads the flat inline type
                 int shift = HotspotGraalValhallaServices.getLog2ComponentSize(HotspotGraalValhallaServices.convertToFlatArray(resolvedType));
 
-                instanceFlatArray = genLoadFlatElement(b, array, index, boundsCheck, resolvedType,
+                instanceFlatArray = genLoadFlatElement(b, nonNullArray, positiveIndex, resolvedType,
                                 shift, trueBegin);
                 resultStamp = instanceFlatArray.stamp(NodeView.DEFAULT);
                 if (hasNoNext(trueBegin)) {
@@ -430,7 +355,7 @@ public class InlineTypePlugin implements NodePlugin {
                 }
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                ForeignCallNode load = b.add(new ForeignCallNode(LOAD_UNKNOWN_INLINE, array, index));
+                ForeignCallNode load = b.add(new ForeignCallNode(LOAD_UNKNOWN_INLINE, nonNullArray, positiveIndex));
                 resultStamp = load.stamp(NodeView.DEFAULT);
                 instanceFlatArray = load;
                 trueBegin.setNext(load);
@@ -441,7 +366,7 @@ public class InlineTypePlugin implements NodePlugin {
             EndNode trueEnd = b.add(new EndNode());
 
             // false branch - no flat array
-            ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), array, index, falseBegin, elementKind, b.getMetaAccess(), b.getConstantReflection()));
+            ValueNode instanceNonFlatArray = b.add(LoadIndexedNode.create(b.getAssumptions(), nonNullArray, positiveIndex, falseBegin, elementKind, b.getMetaAccess(), b.getConstantReflection()));
             resultStamp = resultStamp.meet(instanceNonFlatArray.stamp(NodeView.DEFAULT));
             EndNode falseEnd = b.add(new EndNode());
             if (instanceNonFlatArray instanceof FixedNode fixedNode) {
@@ -474,7 +399,7 @@ public class InlineTypePlugin implements NodePlugin {
      * Similar to {@link #genLoadFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField)}, but
      * loads a flat element from an array.
      */
-    private FixedWithNextNode genLoadFlatElement(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, HotSpotResolvedObjectType resolvedType, int shift,
+    private static FixedWithNextNode genLoadFlatElement(GraphBuilderContext b, ValueNode array, ValueNode index, HotSpotResolvedObjectType resolvedType, int shift,
                     BeginNode begin) {
         HotSpotResolvedObjectType componentType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
 
@@ -523,20 +448,20 @@ public class InlineTypePlugin implements NodePlugin {
             HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) array.stamp(NodeView.DEFAULT).javaType(b.getMetaAccess());
 
             // produce checks for all store indexed nodes
-            array = genNullCheck(b, array);
-            boundsCheck = genBoundsCheck(b, boundsCheck, array, index);
-            index = createPositiveIndex(b.getGraph(), index, boundsCheck);
-            storeCheck = genStoreCheck(b, storeCheck, array, value);
+            ValueNode nonNullArray = genNullCheck(b, array);
+            GuardingNode newBoundsCheck = genBoundsCheck(b, boundsCheck, nonNullArray, index);
+            ValueNode positiveIndex = createPositiveIndex(b.getGraph(), index, newBoundsCheck);
+            GuardingNode newStoreCheck = genStoreCheck(b, storeCheck, nonNullArray, value);
 
-            boolean isInlineTypeArray = StampTool.isInlineTypeArray(array, b.getValhallaOptionsProvider());
+            boolean isInlineTypeArray = StampTool.isInlineTypeArray(nonNullArray, b.getValhallaOptionsProvider());
             if (isInlineTypeArray && GraalValhallaServices.isFlatArray(resolvedType)) {
                 // array is known to consist of flat inline objects
                 int shift = HotspotGraalValhallaServices.getLog2ComponentSize(resolvedType);
                 // we store the value in a flat array we need to do a null check before loading the
                 // fields
-                ValueNode nullCheckedValue = genNullCheck(b, value);
-                genStoreFlatElement(b, array, index, boundsCheck, storeCheck, resolvedType,
-                                nullCheckedValue, shift);
+                ValueNode nonNullValue = genNullCheck(b, value);
+                genStoreFlatElement(b, nonNullArray, positiveIndex, newBoundsCheck, newStoreCheck, resolvedType,
+                                nonNullValue, shift);
                 return true;
             }
 
@@ -544,7 +469,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             BeginNode trueBegin = null;
             BeginNode falseBegin = b.getGraph().add(new BeginNode());
-            IfNode ifNode = genFlatArrayCheck(b, array, trueBegin, falseBegin);
+            IfNode ifNode = genFlatArrayCheck(b, nonNullArray, trueBegin, falseBegin);
 
             // true branch - flat array
             EndNode trueEnd;
@@ -553,13 +478,13 @@ public class InlineTypePlugin implements NodePlugin {
             trueBegin = b.append(new BeginNode());
             ifNode.setTrueSuccessor(trueBegin);
 
-            ValueNode nullCheckedValue = genNullCheck(b, value);
+            ValueNode nonNullValue = genNullCheck(b, value);
             if (isInlineTypeArray) {
 
                 // produce code that stores the flat element
                 int shift = HotspotGraalValhallaServices.getLog2ComponentSize(HotspotGraalValhallaServices.convertToFlatArray(resolvedType));
-                ValueNode firstFixedNode = genStoreFlatElement(b, array, index, boundsCheck, storeCheck, resolvedType,
-                                nullCheckedValue, shift);
+                ValueNode firstFixedNode = genStoreFlatElement(b, nonNullArray, positiveIndex, newBoundsCheck, newStoreCheck, resolvedType,
+                                nonNullValue, shift);
                 trueEnd = b.add(new EndNode());
                 if (hasNoNext(trueBegin)) {
                     if (firstFixedNode instanceof FixedNode fixedNode) {
@@ -571,7 +496,7 @@ public class InlineTypePlugin implements NodePlugin {
 
             } else {
                 // we don't know the type at compile time, produce a runtime call
-                ForeignCallNode store = b.add(new ForeignCallNode(STORE_UNKNOWN_INLINE, array, index, nullCheckedValue));
+                ForeignCallNode store = b.add(new ForeignCallNode(STORE_UNKNOWN_INLINE, nonNullArray, positiveIndex, nonNullValue));
                 if (hasNoNext(trueBegin)) {
                     trueBegin.setNext(store);
                 }
@@ -579,7 +504,7 @@ public class InlineTypePlugin implements NodePlugin {
             }
 
             // false branch - no flat array
-            StoreIndexedNode storeIndexed = b.add(new StoreIndexedNode(array, index, boundsCheck, storeCheck, elementKind, b.maskSubWordValue(value, elementKind)));
+            StoreIndexedNode storeIndexed = b.add(new StoreIndexedNode(nonNullArray, positiveIndex, newBoundsCheck, newStoreCheck, elementKind, b.maskSubWordValue(value, elementKind)));
             falseBegin.setNext(storeIndexed);
             EndNode falseEnd = b.add(new EndNode());
 
@@ -598,7 +523,7 @@ public class InlineTypePlugin implements NodePlugin {
      * {@link #genStoreFlatField(GraphBuilderContext, ValueNode, ResolvedJavaField, ValueNode)}, but
      * stores the object as a flat element into an array.
      */
-    private ValueNode genStoreFlatElement(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
+    private static ValueNode genStoreFlatElement(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, HotSpotResolvedObjectType resolvedType,
                     ValueNode value, int shift) {
         HotSpotResolvedObjectType elementType = (HotSpotResolvedObjectType) resolvedType.getComponentType();
         ResolvedJavaField[] fields = elementType.getInstanceFields(true);
@@ -633,22 +558,22 @@ public class InlineTypePlugin implements NodePlugin {
         return returnValue;
     }
 
-    private IfNode genFlatArrayCheck(GraphBuilderContext b, ValueNode array, BeginNode trueBegin, BeginNode falseBegin) {
+    private static IfNode genFlatArrayCheck(GraphBuilderContext b, ValueNode array, BeginNode trueBegin, BeginNode falseBegin) {
         IsFlatArrayNode isFlatArrayNode = b.add(new IsFlatArrayNode(array));
 
         // TODO: insert profiling data
         return b.add(new IfNode(isFlatArrayNode, trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
     }
 
-    private ValueNode genNullCheck(GraphBuilderContext b, ValueNode value) {
+    private static ValueNode genNullCheck(GraphBuilderContext b, ValueNode value) {
         return b.nullCheckedValue(value);
     }
 
-    private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value) {
+    private static GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value) {
         return genStoreCheck(b, storeCheck, array, value, null);
     }
 
-    private GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value, BeginNode begin) {
+    private static GuardingNode genStoreCheck(GraphBuilderContext b, GuardingNode storeCheck, ValueNode array, ValueNode value, BeginNode begin) {
         if (storeCheck != null) {
             return storeCheck;
         }
@@ -678,11 +603,11 @@ public class InlineTypePlugin implements NodePlugin {
         return guard;
     }
 
-    private GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index) {
+    private static GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index) {
         return genBoundsCheck(b, boundsCheck, array, index, null);
     }
 
-    private GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index, BeginNode begin) {
+    private static GuardingNode genBoundsCheck(GraphBuilderContext b, GuardingNode boundsCheck, ValueNode array, ValueNode index, BeginNode begin) {
         if (boundsCheck != null) {
             return boundsCheck;
         }
@@ -702,7 +627,7 @@ public class InlineTypePlugin implements NodePlugin {
         return guard;
     }
 
-    private ValueNode createPositiveIndex(StructuredGraph graph, ValueNode index, GuardingNode boundsCheck) {
+    private static ValueNode createPositiveIndex(StructuredGraph graph, ValueNode index, GuardingNode boundsCheck) {
         return graph.addOrUnique(PiNode.create(index, POSITIVE_ARRAY_INDEX_STAMP, boundsCheck != null ? boundsCheck.asNode() : null));
     }
 

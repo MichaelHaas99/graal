@@ -528,6 +528,7 @@ public abstract class LIRGenerator extends CoreProvidersDelegate implements LIRG
      * registers according to the Valhalla return convention. Register contents could be overwritten
      * if the Java calling convention and Valhalla return convention intersect.
      */
+    @SuppressWarnings("unused")
     protected boolean handleScalarizedReturn(ForeignCallLinkage linkage, Value[] argLocations, Value... args) {
         return false;
     }

@@ -313,6 +313,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         });
     }
 
+    @SuppressWarnings("unused")
     private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<List<MonitorIdNode>> locks, List<ValueNode> values,
                     List<Boolean> ensureVirtual, List<ValueNode> otherAllocations, GraphEffectList materializeEffects) {
         ObjectState obj = getObjectState(virtual);
@@ -392,7 +393,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     values.set(pos + i, entries[i]);
                 }
             }
-            objectMaterialized(virtual, (AllocatedObjectNode) representation, values.subList(pos, pos + entries.length));
+            objectMaterialized(virtual, representation, values.subList(pos, pos + entries.length));
         } else {
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
             if (obj.isAllocatedOrNull()) {

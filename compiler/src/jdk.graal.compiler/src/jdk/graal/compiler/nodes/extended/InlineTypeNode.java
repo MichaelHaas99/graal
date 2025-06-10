@@ -126,12 +126,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return type;
     }
 
-
     public ValueNode getField(int index) {
         return fieldValues.get(index);
     }
-
-
 
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oop, ValueNode nonNull) {
         return new InlineTypeNode(type, oop, new ValueNode[type.getInstanceFields(true).length], nonNull, false);
@@ -173,7 +170,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return newInstance;
     }
 
-
     public void removeOnInlining() {
         assert oop instanceof ReadMultiValueNode : "oop has to be a ReadMultiValueNode";
         assert nonNull instanceof ReadMultiValueNode : "nonNull has to be a ReadMultiValueNode";
@@ -198,7 +194,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     public LocationIdentity getKilledLocationIdentity() {
         return LocationIdentity.init();
     }
-
 
     // comment to see inline type node getting materialized to null for test6_verifier
     @Override
@@ -254,19 +249,19 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         if (tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
-            ValueNode oop = this.oop;
-            ValueNode nonNull = this.nonNull;
+            ValueNode tempOop = this.oop;
+            ValueNode tempNonNull = this.nonNull;
             if (insertGuardBeforeVirtualize) {
                 // outdated
                 if (!StampTool.isPointerNonNull(this)) {
                     // Because the node can represent a null value, insert a guard before we
                     // virtualize
                     tool.addNode(new FixedGuardNode(createNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
-                    if (oop == null) {
-                        nonNull = null;
+                    if (tempOop == null) {
+                        tempNonNull = null;
                     } else {
-                        nonNull = ConstantNode.forInt(1, graph());
-                        tool.ensureAdded(nonNull);
+                        tempNonNull = ConstantNode.forInt(1, graph());
+                        tool.ensureAdded(tempNonNull);
                     }
                 }
 
@@ -283,15 +278,15 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             // make sure both values are either null or set
             // after an invoke we already have both
             // a parameter only includes the non-null information so use the null pointer constant
-            if (oop == null && nonNull != null) {
-                oop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
+            if (tempOop == null && tempNonNull != null) {
+                tempOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
             }
-            if (oop != null && nonNull == null) {
-                nonNull = ConstantNode.forInt(1, graph());
+            if (tempOop != null && tempNonNull == null) {
+                tempNonNull = ConstantNode.forInt(1, graph());
             }
 
             // create virtual object and hand over oop and non-null info
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, oop, nonNull, isAllocatedOrNull);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, tempOop, tempNonNull, isAllocatedOrNull);
             tool.replaceWithVirtual(virtualObject);
         }
     }

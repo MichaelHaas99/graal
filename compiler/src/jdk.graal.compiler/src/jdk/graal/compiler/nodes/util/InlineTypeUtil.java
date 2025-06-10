@@ -70,7 +70,9 @@ public class InlineTypeUtil {
 
     static {
         try {
-            identityExceptionClass = (Class<? extends Throwable>) Class.forName("java.lang.IdentityException");
+            @SuppressWarnings("unchecked")
+            Class<? extends Throwable> temp = (Class<? extends Throwable>) Class.forName("java.lang.IdentityException");
+            identityExceptionClass = temp;
             identityExceptionClassAvailable = true;
         } catch (Exception e) {
             // just use the null pointer exception class as dummy which shouldn't be used
@@ -131,16 +133,18 @@ public class InlineTypeUtil {
         callTarget.arguments().addAll(newArguments);
     }
 
+    @Deprecated
     private static ResolvedJavaType getParameterType(ResolvedJavaMethod method, int index, boolean indexIncludesReceiverIfExists) {
         boolean includeReceiver = indexIncludesReceiverIfExists && !method.isStatic();
+        int newIndex = index;
         if (includeReceiver) {
             if (index == 0) {
                 return method.getDeclaringClass();
             } else {
-                index--;
+                newIndex--;
             }
         }
-        return method.getSignature().getParameterType(index, method.getDeclaringClass()).resolve(method.getDeclaringClass());
+        return method.getSignature().getParameterType(newIndex, method.getDeclaringClass()).resolve(method.getDeclaringClass());
     }
 
     /**
@@ -150,9 +154,10 @@ public class InlineTypeUtil {
      * @param callTargetNode the call target of whose receiver was devirtualized
      * @param oldMethod the old method before devirtualization
      * @param newMethod the method after devirtiualization
-     * @param nothingScalarizedYet determines if no arguments of the old method were scalarized yet
+     * @param expectNothingScalarizedYet determines if no arguments of the old method were
+     *            scalarized yet
      */
-    public static void handleDevirtualizationOnCallTarget(MethodCallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean nothingScalarizedYet) {
+    public static void handleDevirtualizationOnCallTarget(MethodCallTargetNode callTargetNode, ResolvedJavaMethod oldMethod, ResolvedJavaMethod newMethod, boolean expectNothingScalarizedYet) {
         if (GraalValhallaServices.hasScalarizedParameters(oldMethod) && !GraalValhallaServices.hasCallingConventionMismatch(oldMethod) &&
                         !GraalValhallaServices.hasScalarizedParameters(newMethod)) {
             throw new GraalError("method parameters scalarization mismatch between" + oldMethod + " and " + newMethod);
@@ -162,7 +167,7 @@ public class InlineTypeUtil {
             return;
         }
 
-        nothingScalarizedYet |= GraalValhallaServices.hasCallingConventionMismatch(oldMethod);
+        boolean nothingScalarizedYet = expectNothingScalarizedYet | GraalValhallaServices.hasCallingConventionMismatch(oldMethod);
 
         StructuredGraph graph = callTargetNode.graph();
         int parameterLength = oldMethod.getSignature().getParameterCount(!oldMethod.isStatic());
@@ -361,14 +366,15 @@ public class InlineTypeUtil {
         merge.setStateAfter(framestate);
 
         // produces phi nodes
-        if (phis == null) {
-            phis = new ValuePhiNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
+        ValuePhiNode[] newPhis = phis;
+        if (newPhis == null) {
+            newPhis = new ValuePhiNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
             if (includeNonNullPhi) {
-                phis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Int), merge, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph)));
+                newPhis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Int), merge, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph)));
 
             }
             for (int i = 0; i < fields.size(); i++) {
-                phis[i + (includeNonNullPhi ? 1 : 0)] = graph.addOrUnique(
+                newPhis[i + (includeNonNullPhi ? 1 : 0)] = graph.addOrUnique(
                                 new ValuePhiNode(StampFactory.forDeclaredType(graph.getAssumptions(), fields.get(i).getType(), false).getTrustedStamp(), merge, loads[i], consts[i]));
             }
         } else {
@@ -378,7 +384,7 @@ public class InlineTypeUtil {
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
         merge.setNext(addBefore);
-        return phis;
+        return newPhis;
     }
 
     /**
@@ -468,11 +474,6 @@ public class InlineTypeUtil {
 
         assert !isAllocatedOrNull.isTautology() : "should have been checked for tautology before";
         assert newInstanceNode != null && newInstanceNode.isAlive() : "NewInstanceNode should be alive";
-
-        if (newInstanceNode == null) {
-            assert type != null : "type for lowering inline type expected";
-            newInstanceNode = graph.add(new NewInstanceNode(type, true));
-        }
 
         if (isAllocatedOrNull.isContradiction()) {
             graph.addBeforeFixed(addBefore, newInstanceNode);

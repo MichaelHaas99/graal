@@ -635,19 +635,19 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 virtualThreadUpdateJFRSnippets.lower((VirtualThreadUpdateJFRNode) n, registers, tool);
             }
         } else if (n instanceof IsFlatArrayNode) {
-            lowerIsFlatArray((IsFlatArrayNode) n, tool, graph);
+            lowerIsFlatArray((IsFlatArrayNode) n, tool);
         } else if (n instanceof IsNullFreeArrayNode) {
-            lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool, graph);
+            lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool);
         } else if (n instanceof DelayedRawComparisonNode) {
-            lowerDelayRawComparison((DelayedRawComparisonNode) n, tool, graph);
+            lowerDelayRawComparison((DelayedRawComparisonNode) n, tool);
         } else if (n instanceof ReturnResultDeciderNode) {
             lowerReturnResultDecider((ReturnResultDeciderNode) n, tool);
         } else if (n instanceof HasIdentityNode) {
             lowerHasIdentity((HasIdentityNode) n, tool);
         } else if (n instanceof StoreFlatFieldNode) {
-            lowerStoreFlatFieldNode((StoreFlatFieldNode) n, tool);
+            lowerStoreFlatFieldNode((StoreFlatFieldNode) n);
         } else if (n instanceof StoreFlatElementNode) {
-            lowerStoreFlatElementNode((StoreFlatElementNode) n, tool);
+            lowerStoreFlatElementNode((StoreFlatElementNode) n);
         } else {
             return false;
         }
@@ -818,7 +818,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         }
     }
 
-    protected void lowerIsFlatArray(IsFlatArrayNode node, LoweringTool tool, StructuredGraph graph) {
+    protected void lowerIsFlatArray(IsFlatArrayNode node, LoweringTool tool) {
         if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
             return;
         }
@@ -826,7 +826,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
     }
 
-    protected void lowerIsNullFreeArray(IsNullFreeArrayNode node, LoweringTool tool, StructuredGraph graph) {
+    protected void lowerIsNullFreeArray(IsNullFreeArrayNode node, LoweringTool tool) {
         if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
             return;
         }
@@ -834,7 +834,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
     }
 
-    protected void lowerDelayRawComparison(DelayedRawComparisonNode node, LoweringTool tool, StructuredGraph graph) {
+    protected void lowerDelayRawComparison(DelayedRawComparisonNode node, LoweringTool tool) {
         if (!node.isAccessKindConstant()) {
             return;
         }
@@ -852,7 +852,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         hasIdentitySnippets.lower(node, tool);
     }
 
-    protected void lowerStoreFlatFieldNode(StoreFlatFieldNode storeFlatField, LoweringTool tool) {
+    protected void lowerStoreFlatFieldNode(StoreFlatFieldNode storeFlatField) {
         List<StoreFlatFieldNode.SingleWriteOperation> singleWriteOperations = storeFlatField.getSingleWriteOperations();
         StructuredGraph graph = storeFlatField.graph();
         for (int i = 0; i < singleWriteOperations.size(); i++) {
@@ -889,7 +889,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         lowerLoadIndexedNode(loadIndexed, tool, arrayBaseOffset);
     }
 
-    public void lowerStoreFlatElementNode(StoreFlatElementNode storeFlatIndexed, LoweringTool tool) {
+    public void lowerStoreFlatElementNode(StoreFlatElementNode storeFlatIndexed) {
         List<StoreFlatElementNode.SingleWriteOperation> singleWriteOperations = storeFlatIndexed.getSingleWriteOperations();
         LocationIdentity[] killedLocations = storeFlatIndexed.getKilledLocationIdentities();
         StructuredGraph graph = storeFlatIndexed.graph();

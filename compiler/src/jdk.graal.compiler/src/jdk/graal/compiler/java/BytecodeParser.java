@@ -1853,7 +1853,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     protected ValueNode maybeEmitExplicitIdentityCheck(ValueNode object) {
-        if (!StampTool.canBeInlineType(object, getValhallaOptionsProvider()) || !needsExplicitIdentityCheckException(object)) {
+        if (!StampTool.canBeInlineType(object, getValhallaOptionsProvider()) || !needsExplicitIdentityCheckException()) {
             return object;
         }
         ValueNode hasIdentity = append(new HasIdentityNode(object));
@@ -2392,11 +2392,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             }
 
             if (GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
+                frameState.pop(JavaKind.Object);
                 InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
                 return invoke;
             }
         }
-        frameState.pushReturn(resultType, invoke.asNode());
         invoke.setStateAfter(createFrameState(stream.nextBCI(), invoke));
         return invoke;
     }
@@ -3004,6 +3004,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected InvokeNode createInvoke(int invokeBci, CallTargetNode callTarget, JavaKind resultType) {
         InvokeNode invoke = new InvokeNode(callTarget, invokeBci);
+        frameState.pushReturn(resultType, invoke);
         return invoke;
     }
 
@@ -3018,6 +3019,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
         AbstractBeginNode exceptionEdge = handleException(null, bci(), exceptionEdgeAction == ExceptionEdgeAction.INCLUDE_AND_DEOPTIMIZE);
         InvokeWithExceptionNode invoke = new InvokeWithExceptionNode(callTarget, exceptionEdge, invokeBci);
+        frameState.pushReturn(resultType, invoke);
         return invoke;
     }
 
@@ -3142,11 +3144,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     protected void genMonitorEnter(ValueNode x, int bci) {
         MonitorIdNode monitorId = graph.add(new MonitorIdNode(frameState.lockDepth(true), bci()));
+        ValueNode newX = x;
         if (StampTool.canBeInlineType(x, getValhallaOptionsProvider())) {
             // to avoid a null-check in PEA
-            x = nullCheckedValue(x);
+            newX = nullCheckedValue(x);
         }
-        ValueNode object = maybeEmitExplicitNullCheck(x);
+        ValueNode object = maybeEmitExplicitNullCheck(newX);
         if (getValhallaOptionsProvider().valhallaEnabled() && InlineTypeUtil.isIdentityExceptionClassAvailable()) {
             object = maybeEmitExplicitIdentityCheck(object);
         }
@@ -5465,7 +5468,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         return false;
     }
 
-    protected boolean needsExplicitIdentityCheckException(ValueNode object) {
+    protected boolean needsExplicitIdentityCheckException() {
         return needsExplicitException();
     }
 

@@ -189,6 +189,7 @@ public interface GraphBuilderContext extends GraphBuilderTool {
         return handleReplacedInvoke(invokeKind, targetMethod, args, forceInlineEverything, false);
     }
 
+    @SuppressWarnings("unused")
     default Invokable handleReplacedInvoke(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, boolean forceInlineEverything, boolean fromMethodHandle) {
         throw GraalError.unimplementedOverride();
     }

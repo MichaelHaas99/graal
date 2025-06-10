@@ -99,10 +99,7 @@ public class LoadIndexedNode extends AccessIndexedNode implements Virtualizable,
 
     public void setLocation(ResolvedJavaField field) {
         this.location = NamedLocationIdentity.getFlatArrayLocation(field);
-        this.field = field;
     }
-
-    private ResolvedJavaField field;
 
     /**
      * Creates a new LoadIndexedNode.

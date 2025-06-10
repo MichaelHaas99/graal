@@ -34,7 +34,6 @@ import jdk.vm.ci.meta.Value;
 public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static final NodeClass<ReturnScalarizedNode> TYPE = NodeClass.create(ReturnScalarizedNode.class);
 
-
     @OptionalInput private NodeInputList<ValueNode> fieldValues;
 
     public ReturnScalarizedNode(ValueNode result, List<ValueNode> fieldValues) {
@@ -55,7 +54,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
         // PEA will replace oop with tagged hub if it is virtual
-        ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
+        ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
         ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
         returnNode.fieldValues.clear();
         returnNode.fieldValues.addAll(List.of(phis));
@@ -74,7 +73,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
         // PEA will replace oop with tagged hub if it is virtual
-        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<ValueNode>(fields.length)));
+        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
         FixedWithNextNode previous = (FixedWithNextNode) oldReturn.predecessor();
         previous.setNext(returnNode);
         oldReturn.replaceAtUsages(returnNode);
@@ -129,7 +128,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
                                 tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
                 tool.addNode(hub);
-
 
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
 // ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), returnResultDecider,

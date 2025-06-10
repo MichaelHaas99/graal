@@ -106,7 +106,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Value;
 
 /**
  * HotSpot AMD64 specific backend.
@@ -472,7 +471,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         }
 
         shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
-                        expectedStackSizeArguments,
                         spInc);
         return spInc;
     }
@@ -481,9 +479,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * Unpacks all inline type args and solves circular dependencies.
      */
     public void shuffleInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, boolean receiverOnly, JavaType[] currentParameterTypes,
-                    AllocatableValue[] currentArguments, int currentStackSizeArguments, AllocatableValue[] expectedArguments, int expectedStackSizeArguments, int spInc) {
+                    AllocatableValue[] currentArguments, int currentStackSizeArguments, AllocatableValue[] expectedArguments, int spInc) {
 
-        State[] state = initRegState(currentArguments, currentStackSizeArguments, expectedStackSizeArguments, spInc);
+        State[] state = initRegState(currentArguments, currentStackSizeArguments, spInc);
 
         // Emit code for unpacking inline type arguments
         // We try multiple times and eventually start spilling to resolve (circular) dependencies
@@ -704,13 +702,13 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             BarrierType barrierType = this.getProviders().getPlatformConfigurationProvider().getBarrierSet().fieldReadBarrierType(field,
                             this.getProviders().getMetaAccessExtensionProvider().getStorageKind(field.getType()));
             if (barrierType == BarrierType.REFERENCE_GET) {
-                emitG1Barrier(crb, asm, dst, fromAddress, false);
+                emitG1Barrier(crb, asm, dst, false);
             }
         }
         // others don't have read barriers
     }
 
-    public void emitG1Barrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register expectedObject, AMD64Address address, boolean nonNull) {
+    public void emitG1Barrier(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register expectedObject, boolean nonNull) {
         AMD64HotSpotG1BarrierSetLIRTool tool = new AMD64HotSpotG1BarrierSetLIRTool(config, getProviders());
 
         // save temp registers
@@ -723,11 +721,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         ForeignCallLinkage callTarget = getForeignCalls().lookupForeignCall(tool.preWriteBarrierDescriptor());
 
-        AMD64Address storeAddress = address;
-
         Register thread = getProviders().getRegisters().getThreadRegister();
         Register tmp = temp;
-        Register previousValue = expectedObject.equals(Value.ILLEGAL) ? temp2 : expectedObject;
+        Register previousValue = expectedObject;
 
         guaranteeDifferentRegisters(thread, tmp, previousValue);
 
@@ -739,13 +735,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         // Is marking active?
         masm.cmpb(markingActive, 0);
         masm.jcc(AMD64Assembler.ConditionFlag.Equal, done);
-
-        // Do we need to load the previous value?
-        if (expectedObject.equals(Value.ILLEGAL)) {
-            tool.loadObject(masm, previousValue, storeAddress);
-        } else {
-            // previousValue contains the value
-        }
 
         if (!nonNull) {
             // Is the previous value null?
@@ -923,7 +912,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      *
      * @return the spill register for the {@code value}
      */
-    private AllocatableValue spillRegFor(AllocatableValue value) {
+    private static AllocatableValue spillRegFor(AllocatableValue value) {
         if (ValueUtil.isRegister(value) && ValueUtil.asRegister(value).getRegisterCategory().equals(AMD64.XMM)) {
             return xmm8.asValue(value.getValueKind());
         }
@@ -1001,11 +990,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return true;
     }
 
-    private boolean isXMMRegister(Register register) {
+    private static boolean isXMMRegister(Register register) {
         return register.getRegisterCategory().equals(AMD64.XMM);
     }
 
-    private boolean isXMMRegister(AllocatableValue value) {
+    private static boolean isXMMRegister(AllocatableValue value) {
         if (!ValueUtil.isRegister(value))
             return false;
         return ValueUtil.asRegister(value).getRegisterCategory().equals(AMD64.XMM);
@@ -1016,7 +1005,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * Initialize the states for unpacking. Each Slot is associated with a state. Slots which
      * include arguments that have not been processed yet are read-only.
      */
-    public State[] initRegState(AllocatableValue[] currentArguments, int currentStackSizeArguments, int expectedStackSizeArguments, int spInc) {
+    public State[] initRegState(AllocatableValue[] currentArguments, int currentStackSizeArguments, int spInc) {
         RegisterArray registers = getTarget().arch.getAvailableValueRegisters();
         int wordSize = getTarget().wordSize;
         int registerSize = registers.size();

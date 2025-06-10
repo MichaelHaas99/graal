@@ -115,9 +115,9 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
         // check if object has no identity
         if (canBeInlineType) {
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
-            x = PiNode.piCastNonNull(x, anchorNode);
-            if (probability(NOT_LIKELY_PROBABILITY, isInlineType || !hasIdentity(x))) {
-                return valueObjectHashCodeStubC(VALUE_OBJECT_HASH_CODE, x);
+            Object nonNullX = PiNode.piCastNonNull(x, anchorNode);
+            if (probability(NOT_LIKELY_PROBABILITY, isInlineType || !hasIdentity(nonNullX))) {
+                return valueObjectHashCodeStubC(VALUE_OBJECT_HASH_CODE, nonNullX);
             }
         }
 
@@ -166,6 +166,7 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
 
         }
 
+        @Override
         public void lower(IdentityHashCodeNode node, LoweringTool tool) {
             StructuredGraph graph = node.graph();
             SnippetTemplate.Arguments args = new SnippetTemplate.Arguments(identityHashCodeSnippet, graph.getGuardsStage(), tool.getLoweringStage());

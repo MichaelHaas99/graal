@@ -1946,20 +1946,21 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         // TODO: probably not all values needed to produce a key
-        protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode merge, VirtualObjectNode currentResultObject) {
+        protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode mergeNode,
+                        VirtualObjectNode currentResultObject) {
             if (needsCaching) {
-                return getEntryMergeObjectCached(resultObject, object, entry, state, scalarizationDepth, merge, currentResultObject);
+                return getEntryMergeObjectCached(resultObject, object, entry, state, scalarizationDepth, mergeNode, currentResultObject);
             } else {
                 return currentResultObject;
             }
         }
 
-        private VirtualObjectNode getEntryMergeObjectCached(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode merge,
+        private VirtualObjectNode getEntryMergeObjectCached(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode mergeNode,
                         VirtualObjectNode currentResultObject) {
             if (entryMergeCache == null) {
                 entryMergeCache = EconomicMap.create(Equivalence.DEFAULT);
             }
-            EntryMergeCacheKey key = new EntryMergeCacheKey(resultObject, object, entry, state, scalarizationDepth, merge);
+            EntryMergeCacheKey key = new EntryMergeCacheKey(resultObject, object, entry, state, scalarizationDepth, mergeNode);
             VirtualObjectNode result = entryMergeCache.get(key);
             if (result == null) {
                 entryMergeCache.put(key, currentResultObject);
@@ -2220,6 +2221,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return result;
     }
 
+    @SuppressWarnings("unused")
     public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {
         return null;
     }

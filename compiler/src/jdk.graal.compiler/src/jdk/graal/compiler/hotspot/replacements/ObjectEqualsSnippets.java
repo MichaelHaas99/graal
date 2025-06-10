@@ -230,8 +230,8 @@ public class ObjectEqualsSnippets implements Snippets {
                 return false;
             }
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
-            x = PiNode.piCastNonNull(x, anchorNode);
-            final Word xMark = loadWordFromObject(x, markOffset(INJECTED_VMCONFIG));
+            Object nonNullX = PiNode.piCastNonNull(x, anchorNode);
+            final Word xMark = loadWordFromObject(nonNullX, markOffset(INJECTED_VMCONFIG));
             if (xMark.and(inlineTypePattern(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
                 return false;
             }
@@ -244,8 +244,8 @@ public class ObjectEqualsSnippets implements Snippets {
                 return false;
             }
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
-            y = PiNode.piCastNonNull(y, anchorNode);
-            final Word yMark = loadWordFromObject(y, markOffset(INJECTED_VMCONFIG));
+            Object nonNullY = PiNode.piCastNonNull(y, anchorNode);
+            final Word yMark = loadWordFromObject(nonNullY, markOffset(INJECTED_VMCONFIG));
             if (yMark.and(inlineTypePattern(INJECTED_VMCONFIG)).notEqual(inlineTypePattern(INJECTED_VMCONFIG))) {
                 return false;
             }
@@ -267,17 +267,17 @@ public class ObjectEqualsSnippets implements Snippets {
         }
 
         GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        x = PiNode.piCastNonNull(x, anchorNode);
-        y = PiNode.piCastNonNull(y, anchorNode);
+        Object nonNullX = PiNode.piCastNonNull(x, anchorNode);
+        Object nonNullY = PiNode.piCastNonNull(y, anchorNode);
 
         trace(trace, "check both operands for inline type bit");
-        if (!xIsInlineType && hasIdentity(x) || !yIsInlineType && hasIdentity(y)) {
+        if (!xIsInlineType && hasIdentity(nonNullX) || !yIsInlineType && hasIdentity(nonNullY)) {
             return false;
         }
 
         trace(trace, "apply hub comparison");
-        KlassPointer xHub = loadHub(x);
-        KlassPointer yHub = loadHub(y);
+        KlassPointer xHub = loadHub(nonNullX);
+        KlassPointer yHub = loadHub(nonNullY);
 
         if (xHub.notEqual(yHub)) {
             return false;
@@ -289,7 +289,7 @@ public class ObjectEqualsSnippets implements Snippets {
             ExplodeLoopNode.explodeLoop();
             for (int i = 0; i < offsets.length; i++) {
                 JavaKind kind = kinds[i];
-                if (!DelayedRawComparisonNode.compare(x, y, offsets[i], kind, identities[i], stamps[i])) {
+                if (!DelayedRawComparisonNode.compare(nonNullX, nonNullY, offsets[i], kind, identities[i], stamps[i])) {
                     return false;
                 }
 
@@ -298,7 +298,7 @@ public class ObjectEqualsSnippets implements Snippets {
         } else {
             // do runtime call
             trace(trace, "call to library for substitutability check");
-            return substitutabilityCheckStubC(SUBSTITUTABILITY_CHECK, x, y);
+            return substitutabilityCheckStubC(SUBSTITUTABILITY_CHECK, nonNullX, nonNullY);
         }
 
     }

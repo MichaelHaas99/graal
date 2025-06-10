@@ -181,10 +181,7 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode x = getX();
-        ValueNode y = getY();
-
-        LogicNode node = ObjectEqualsNode.virtualizeComparison(x, y, graph(), tool);
+        LogicNode node = ObjectEqualsNode.virtualizeComparison(getX(), getY(), graph(), tool);
         if (node == null) {
             return;
         }
