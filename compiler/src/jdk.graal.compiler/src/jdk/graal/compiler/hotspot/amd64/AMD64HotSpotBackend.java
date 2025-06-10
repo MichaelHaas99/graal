@@ -430,11 +430,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             entryPointDecorator.emitEntryPoint(crb, true);
         }
 
+        crb.frameContext.enter(crb, 0, true);
         // TODO: The new Valhalla entry points could cause problems with the decorator
         if (entry != null) {
             crb.asm.bind(entry);
         }
-        crb.frameContext.enter(crb, 0, true);
 
         // Emit code for the LIR
         crb.emitLIR(false);
