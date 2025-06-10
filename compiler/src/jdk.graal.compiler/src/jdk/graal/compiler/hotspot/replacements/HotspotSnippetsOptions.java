@@ -67,7 +67,7 @@ public class HotspotSnippetsOptions {
     @Option(help = "Trace substitutability check in methods whose fully qualified name contains this substring.", type = OptionType.Debug)
     public static final OptionKey<String> TraceSubstitutabilityCheckMethodFilter = new OptionKey<>(null);
 
-    @Option(help = "Inline substitutability check", type = OptionType.Expert)
+    @Option(help = "Inline substitutability check", type = OptionType.Debug)
     public static final OptionKey<Boolean> InlineSubstitutabilityCheck = new OptionKey<>(true);
 
 
