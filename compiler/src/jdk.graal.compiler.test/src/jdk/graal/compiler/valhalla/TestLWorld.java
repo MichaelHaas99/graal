@@ -1326,6 +1326,25 @@ public class TestLWorld extends JTTTest {
         getCode(getResolvedJavaMethod( ExceptionCatch.class, "of", Label.class, Label.class, Label.class, java.util.Optional.class), null, true, true, getInitialOptions());
     }
 
+    public long test142() {
+        MyValue2 nonNull = MyValue2.createWithFieldsInline(rI, rD);
+        MyInterface val = null;
+
+        for (int i = 0; i < 4; i++) {
+            if ((i % 2) == 0) {
+                val = nonNull;
+            }
+        }
+        return val.hash();
+    }
+
+    @Test
+    public void run47() throws  Throwable{
+        // set forceInlineEveryThing to trigger error
+        resetCache();
+        getCode(getResolvedJavaMethod( "test142"), null, true, true, getInitialOptions());
+    }
+
 
 
 

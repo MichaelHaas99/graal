@@ -1725,18 +1725,23 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             boolean selfReference = false;
             VirtualObjectNode[] virtualObjs = new VirtualObjectNode[states.length];
             VirtualObjectNode[] previousVirtualObjs = new VirtualObjectNode[states.length];
+            boolean virtualize = true;
             boolean allMaterialized = true;
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
+                if (alias == phi) {
+                    virtualize = false;
+                    break;
+                }
                 if (alias instanceof VirtualObjectNode) {
                     if (!StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider())) {
-                        allMaterialized = true;
+                        virtualize = false;
                         break;
                     }
                     ResolvedJavaType type = StampTool.typeOrNull(alias, tool.getMetaAccess());
                     assert type != null : "expected type to be non-null";
                     if (InlineTypeUtil.isCircularInlineType(type)) {
-                        allMaterialized = true;
+                        virtualize = false;
                         break;
                     }
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
@@ -1746,6 +1751,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                 }
             }
+            virtualize &= !allMaterialized;
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
@@ -1754,7 +1760,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     previousVirtualObjs[i] = virtual;
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
 
-                    if (virtualizeFromInlineObject && !allMaterialized && StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider()) && objectState != null &&
+                    if (virtualizeFromInlineObject && virtualize && StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider()) && objectState != null &&
                                     !objectState.isVirtual()) {
                         virtual = virtualizeFromInlineObject(objectState.getMaterializedValue(), states, i);
                     }
@@ -1777,7 +1783,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     assert i > 0 : i;
                     virtualInputs++;
                     selfReference = true;
-                } else if (virtualizeFromInlineObject && !allMaterialized && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
+                } else if (virtualizeFromInlineObject && virtualize && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
                     VirtualInstanceNode virtualObject = virtualizeFromInlineObject(alias, states, i, phi.stamp(NodeView.DEFAULT));
 
                     virtualObjs[i] = virtualObject;
