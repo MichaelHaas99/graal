@@ -9,23 +9,24 @@ import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.kl
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHub;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadWordFromObject;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.markOffset;
-import static jdk.graal.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
 import jdk.graal.compiler.api.replacements.Snippet;
-import jdk.graal.compiler.core.common.type.ObjectStamp;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
-import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.HasIdentityNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
+import jdk.graal.compiler.replacements.InstanceOfSnippetsTemplates;
 import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.Snippets;
 import jdk.graal.compiler.word.Word;
 
 public class HasIdentitySnippets implements Snippets {
-    public static class Templates extends SnippetTemplate.AbstractTemplates {
+    public static class Templates extends InstanceOfSnippetsTemplates {
         private final SnippetTemplate.SnippetInfo hasIdentitySnippet;
 
         @SuppressWarnings("this-escape")
@@ -40,34 +41,42 @@ public class HasIdentitySnippets implements Snippets {
 
         }
 
-        public void lower(HasIdentityNode node, LoweringTool tool) {
-            SnippetTemplate.Arguments args;
+        @Override
+        protected SnippetTemplate.Arguments makeArguments(InstanceOfUsageReplacer replacer, LoweringTool tool) {
+            ValueNode node = replacer.instanceOf;
             StructuredGraph graph = node.graph();
-            assert ((ObjectStamp) node.getValue().stamp(NodeView.DEFAULT)).nonNull() : "null-check should be performed before a check on identity";
-            args = new SnippetTemplate.Arguments(hasIdentitySnippet, graph.getGuardsStage(), tool.getLoweringStage());
-            args.add("object", node.getValue());
-            template(tool, node, args).instantiate(tool.getMetaAccess(), node, DEFAULT_REPLACER, args);
+            SnippetTemplate.Arguments args = new SnippetTemplate.Arguments(hasIdentitySnippet, graph.getGuardsStage(), tool.getLoweringStage());
+            if (node instanceof HasIdentityNode hasIdentityNode) {
+                assert StampTool.isPointerNonNull(hasIdentityNode.getValue());
+                args.add("object", hasIdentityNode.getValue());
+            } else {
+                throw GraalError.shouldNotReachHere(node + " " + replacer);
+            }
+
+            args.add("trueValue", replacer.trueValue);
+            args.add("falseValue", replacer.falseValue);
+            return args;
         }
 
     }
 
     @Snippet
-    public static boolean hasIdentityFromMarkWord(Object object) {
+    public static Object hasIdentityFromMarkWord(Object object, Object trueValue, Object falseValue) {
         HotSpotReplacementsUtil.verifyOop(object);
 
         // check mark word for inline type
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        return !mark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG));
+        return !mark.and(inlineTypeMaskInPlace(INJECTED_VMCONFIG)).equal(inlineTypePattern(INJECTED_VMCONFIG)) ? trueValue : falseValue;
 
     }
 
     @Snippet
-    public static boolean hasIdentityFromKlass(Object object) {
+    public static Object hasIdentityFromKlass(Object object, Object trueValue, Object falseValue) {
         HotSpotReplacementsUtil.verifyOop(object);
 
         KlassPointer hub = loadHub(object);
         return (hub.readInt(klassAccessFlagsOffset(INJECTED_VMCONFIG), KLASS_ACCESS_FLAGS_LOCATION) &
-                        jvmAccIsIdentityClass(INJECTED_VMCONFIG)) != 0;
+                        jvmAccIsIdentityClass(INJECTED_VMCONFIG)) != 0 ? trueValue : falseValue;
 
     }
 

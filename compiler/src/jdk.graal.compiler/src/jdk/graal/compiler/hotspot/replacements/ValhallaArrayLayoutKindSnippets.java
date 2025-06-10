@@ -19,15 +19,14 @@ import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_
 import static jdk.graal.compiler.nodes.extended.BranchProbabilityNode.probability;
 
 import jdk.graal.compiler.api.replacements.Snippet;
-import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.word.KlassPointer;
-import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.InstanceOfSnippetsTemplates;
@@ -60,7 +59,7 @@ public class ValhallaArrayLayoutKindSnippets implements Snippets {
             SnippetTemplate.Arguments args;
             StructuredGraph graph = node.graph();
             if (node instanceof IsFlatArrayNode isFlatArrayNode) {
-                assert ((ObjectStamp) isFlatArrayNode.getValue().stamp(NodeView.DEFAULT)).nonNull();
+                assert StampTool.isPointerNonNull(isFlatArrayNode.getValue());
                 if (target.wordSize > 4) {
                     args = new SnippetTemplate.Arguments(isFlatArrayFromMarkWordSnippet, graph.getGuardsStage(), tool.getLoweringStage());
                 } else {
@@ -68,7 +67,7 @@ public class ValhallaArrayLayoutKindSnippets implements Snippets {
                 }
                 args.add("object", isFlatArrayNode.getValue());
             } else if (node instanceof IsNullFreeArrayNode isNullFreeArrayNode) {
-                assert ((ObjectStamp) isNullFreeArrayNode.getValue().stamp(NodeView.DEFAULT)).nonNull();
+                assert StampTool.isPointerNonNull(isNullFreeArrayNode.getValue());
                 if (target.wordSize > 4) {
                     args = new SnippetTemplate.Arguments(isNullFreeArrayFromMarkWordSnippet, graph.getGuardsStage(), tool.getLoweringStage());
                 } else {
