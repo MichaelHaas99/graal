@@ -1856,9 +1856,8 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         if (!StampTool.canBeInlineType(object, getValhallaOptionsProvider()) || !needsExplicitIdentityCheckException()) {
             return object;
         }
-        ValueNode hasIdentity = append(new HasIdentityNode(object));
-        LogicNode condition = append(new IntegerEqualsNode(hasIdentity, ConstantNode.forInt(0, graph)));
-        AbstractBeginNode passingSuccessor = emitBytecodeExceptionCheck(condition, false, BytecodeExceptionKind.IDENTITY, object);
+        LogicNode condition = append(new HasIdentityNode(object));
+        AbstractBeginNode passingSuccessor = emitBytecodeExceptionCheck(condition, true, BytecodeExceptionKind.IDENTITY, object);
         // TODO: save identity information in stamp
         return genUnique(PiNode.create(object, StampFactory.object(), passingSuccessor));
     }
