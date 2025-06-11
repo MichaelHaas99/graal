@@ -1729,10 +1729,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             boolean allMaterialized = true;
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
-                if (alias == phi) {
-                    virtualize = false;
-                    break;
-                }
                 if (alias instanceof VirtualObjectNode) {
                     if (!StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider())) {
                         virtualize = false;
@@ -1862,6 +1858,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     // first iteration with "virtual" phi: use forward edge phi
                                     // (we will re-iterate anyway)
                                     virtualObjectIds[i] = virtualObjs[0].getObjectId();
+                                    if (states[i].getObjectStateOptional(virtualObjectIds[i]) == null) {
+                                        // we just virtualized from an inline object, add its object
+                                        // state
+                                        states[i].addObject(virtualObjectIds[i], states[0].getObjectState(virtualObjectIds[i]).share());
+                                    }
                                 }
                             } else {
                                 virtualObjectIds[i] = virtualObjs[i].getObjectId();
