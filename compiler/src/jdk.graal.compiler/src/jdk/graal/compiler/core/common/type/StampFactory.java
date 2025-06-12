@@ -26,9 +26,12 @@ package jdk.graal.compiler.core.common.type;
 
 import static jdk.vm.ci.code.CodeUtil.signExtend;
 
+import java.util.List;
+
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.debug.GraalError;
-
+import jdk.graal.compiler.nodes.GraphState;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaConstant;
@@ -276,7 +279,27 @@ public class StampFactory {
         return createParameterStamps(assumptions, method, false);
     }
 
+    public static Stamp[] createParameterStamps(Assumptions assumptions, ResolvedJavaMethod method, GraphState state) {
+        return createParameterStamps(assumptions, method, false, state);
+    }
+
     public static Stamp[] createParameterStamps(Assumptions assumptions, ResolvedJavaMethod method, boolean trustInterfaceTypes) {
+        return createParameterStamps(assumptions, method, trustInterfaceTypes, null);
+    }
+
+    public static Stamp[] createParameterStamps(Assumptions assumptions, ResolvedJavaMethod method, boolean trustInterfaceTypes, GraphState state) {
+        if (state != null && state.isAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION) && GraalValhallaServices.hasScalarizedParameters(method)) {
+            List<JavaType> types = GraalValhallaServices.getScalarizedParameters(method, true);
+            assert types != null : "types shouldn't be null";
+            int length = types.size();
+            Stamp[] result = new Stamp[length];
+            for (int i = 0; i < length; i++) {
+                JavaType type = types.get(i);
+                result[i] = createParameterStamp(assumptions, trustInterfaceTypes, type);
+            }
+            return result;
+        }
+
         Signature signature = method.getSignature();
         Stamp[] result = new Stamp[signature.getParameterCount(method.hasReceiver())];
 
@@ -292,22 +315,25 @@ public class StampFactory {
 
         for (int i = 0; i < signature.getParameterCount(false); i++) {
             JavaType type = signature.getParameterType(i, accessingClass);
-            JavaKind kind = type.getJavaKind();
-
-            Stamp stamp;
-            if (kind == JavaKind.Object && type instanceof ResolvedJavaType) {
-                if (trustInterfaceTypes) {
-                    stamp = StampFactory.object(TypeReference.createTrusted(assumptions, (ResolvedJavaType) type));
-                } else {
-                    stamp = StampFactory.object(TypeReference.create(assumptions, (ResolvedJavaType) type));
-                }
-            } else {
-                stamp = StampFactory.forKind(kind);
-            }
-            result[index++] = stamp;
+            result[index++] = createParameterStamp(assumptions, trustInterfaceTypes, type);
         }
 
         return result;
+    }
+
+    private static Stamp createParameterStamp(Assumptions assumptions, boolean trustInterfaceTypes, JavaType type) {
+        JavaKind kind = type.getJavaKind();
+        Stamp stamp;
+        if (kind == JavaKind.Object && type instanceof ResolvedJavaType) {
+            if (trustInterfaceTypes) {
+                stamp = StampFactory.object(TypeReference.createTrusted(assumptions, (ResolvedJavaType) type));
+            } else {
+                stamp = StampFactory.object(TypeReference.create(assumptions, (ResolvedJavaType) type));
+            }
+        } else {
+            stamp = StampFactory.forKind(kind);
+        }
+        return stamp;
     }
 
     public static Stamp pointer() {
