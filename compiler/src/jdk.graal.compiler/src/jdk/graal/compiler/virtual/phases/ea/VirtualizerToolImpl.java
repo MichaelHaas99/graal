@@ -359,12 +359,11 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         // don't hold virtual objects as oop, this is necessary when virtualizing the InlineType
         // node
         ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, getMetaAccess(), current.graph());
-        ValueNode newOop = oop instanceof VirtualObjectNode ? oop : closure.getAliasAndResolve(state, oop);
+        ValueNode newOop = closure.getAliasAndResolve(state, oop);
         boolean newIsAllocatedOrNull = isAllocatedOrNull;
         if (newOop instanceof VirtualObjectNode virtualOop) {
-            if (isAllocatedOrNull(virtualOop)) {
+            if (isAllocatedOrNull(virtualOop) && isAllocatedOrNull) {
                 newOop = getOop(virtualOop);
-                newIsAllocatedOrNull = true;
             } else {
                 // virtual object so it was not allocated before, correct the information
                 newOop = nullPointer;
