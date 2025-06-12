@@ -71,10 +71,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     @OptionalInput NodeInputList<ValueNode> fieldValues;
     @OptionalInput ValueNode nonNull;
     private final boolean isAllocatedOrNull;
-
     private final ResolvedJavaType type;
+    private final boolean handlesScalarizedReturn;
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull, boolean isAllocatedOrNull) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull, boolean isAllocatedOrNull, boolean handlesScalarizedReturn) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
@@ -83,6 +83,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         assert nonNull == null && oop == null || nonNull != null && oop != null : "both should be either null or not null";
         this.isAllocatedOrNull = isAllocatedOrNull;
         inferStamp();
+        this.handlesScalarizedReturn = handlesScalarizedReturn;
+    }
+
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull, boolean isAllocatedOrNull) {
+        this(type, oop, fieldValues, nonNull, isAllocatedOrNull, false);
     }
 
     public void setFieldValue(ResolvedJavaField field, ValueNode value) {
@@ -163,7 +168,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ReadMultiValueNode nonNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
                         invoke.asNode(), fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false));
+        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false, true));
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
@@ -240,7 +245,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE)) {
+        if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE) && handlesScalarizedReturn) {
+            // We are not allowed to virtualize before the final partial escape phase, as the invoke
+            // whose scalarized return we handle with this node may be inlined and this node has to
+            // be deleted.
             return;
         }
         if (!virtualize) {
