@@ -143,6 +143,13 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 if (tool.isAllocatedOrNull(virtualObjectNode)) {
                     tool.replaceFirstInput(result, oop);
                 } else {
+                    if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE)) {
+                        // We shouldn't insert a ReturnResultDeciderNode during an earlier PEA as a
+                        // later PEA may insert an allocation below it. The allocation needs a frame
+                        // state. This would lead to an unknown reference alive across safepoint as
+                        // the ReturnResultDeciderNode merges a klass pointer with a tracked oop.
+                        return;
+                    }
                     ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
                     tool.ensureAdded(returnResultDecider);
                     tool.replaceFirstInput(result, returnResultDecider);
