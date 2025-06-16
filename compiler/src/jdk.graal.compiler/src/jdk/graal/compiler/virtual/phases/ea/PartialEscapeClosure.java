@@ -2050,7 +2050,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 fieldsWithoutValue = List.of(fields);
                 entryState = new ValueNode[fields.length];
             } else {
-                entryState = getScalarValues(node, state, fieldsWithoutValue);
+                entryState = getScalarValues(node, state, fieldsWithoutValue, instanceClass);
             }
             ValueNode nonNull;
 
@@ -2213,9 +2213,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    ValueNode[] getScalarValues(ValueNode value, PartialEscapeBlockState<?> state, List<ResolvedJavaField> fieldsWithoutValue) {
-        assert StampTool.isNullableInlineType(value, tool.getValhallaOptionsProvider()) : "should only be called on a node with a nullable inline type stamp";
-        ResolvedJavaType type = value.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+    ValueNode[] getScalarValues(ValueNode value, PartialEscapeBlockState<?> state, List<ResolvedJavaField> fieldsWithoutValue, ResolvedJavaType type) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
         ValueNode[] result = new ValueNode[fields.length];
         for (int i = 0; i < fields.length; i++) {
