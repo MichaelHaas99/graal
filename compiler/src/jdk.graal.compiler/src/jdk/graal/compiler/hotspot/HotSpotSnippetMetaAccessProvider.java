@@ -30,6 +30,7 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -63,6 +64,16 @@ public class HotSpotSnippetMetaAccessProvider implements MetaAccessProvider {
     @Override
     public ResolvedJavaMethod lookupJavaMethod(Executable reflectionMethod) {
         return delegate.lookupJavaMethod(reflectionMethod);
+    }
+
+    public ResolvedJavaMethod getIsSubstitutableMethod() {
+        return GraalValhallaServices.getIsSubstitutableMethod(delegate);
+        // return delegate.getSubstitutabilityMethod();
+    }
+
+    public ResolvedJavaMethod getValueObjectHashCodeMethod() {
+        return GraalValhallaServices.getValueObjectHashCodeMethod(delegate);
+        // return delegate.getValueObjectHashCodeMethod();
     }
 
     @Override

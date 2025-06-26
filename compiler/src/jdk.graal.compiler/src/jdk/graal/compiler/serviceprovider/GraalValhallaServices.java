@@ -39,6 +39,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.JavaValue;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -1158,6 +1159,68 @@ public class GraalValhallaServices {
             try {
                 try {
                     return (List<Value>) methodGetReturnConvention.invoke(config, returnTypes, valueKindFactory, includeFirstGeneralRegister);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            } catch (Error | RuntimeException e) {
+                throw e;
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        return null;
+    }
+
+    private static final Method methodGetIsSubstitutabilityMethod;
+
+    static {
+        Method m = null;
+        try {
+            m = MetaAccessProvider.class.getDeclaredMethod("getIsSubstitutableMethod");
+        } catch (NoSuchMethodException e) {
+        }
+        methodGetIsSubstitutabilityMethod = m;
+    }
+
+    /**
+     * Calls {@code MetaAccessProvider.getSubstitutabilityMethod()}.
+     */
+    public static ResolvedJavaMethod getIsSubstitutableMethod(MetaAccessProvider metaAccess) {
+        if (methodGetIsSubstitutabilityMethod != null) {
+            try {
+                try {
+                    return (ResolvedJavaMethod) methodGetIsSubstitutabilityMethod.invoke(metaAccess);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            } catch (Error | RuntimeException e) {
+                throw e;
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        return null;
+    }
+
+    private static final Method methodGetValueObjectHashCodeMethod;
+
+    static {
+        Method m = null;
+        try {
+            m = MetaAccessProvider.class.getDeclaredMethod("getValueObjectHashCodeMethod");
+        } catch (NoSuchMethodException e) {
+        }
+        methodGetValueObjectHashCodeMethod = m;
+    }
+
+    /**
+     * Calls {@code MetaAccessProvider.getValueObjectHashCodeMethod()}.
+     */
+    public static ResolvedJavaMethod getValueObjectHashCodeMethod(MetaAccessProvider metaAccess) {
+        if (methodGetValueObjectHashCodeMethod != null) {
+            try {
+                try {
+                    return (ResolvedJavaMethod) methodGetValueObjectHashCodeMethod.invoke(metaAccess);
                 } catch (InvocationTargetException e) {
                     throw e.getCause();
                 }
