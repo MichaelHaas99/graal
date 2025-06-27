@@ -4,10 +4,11 @@ import static jdk.graal.compiler.core.common.type.StampFactory.objectNonNull;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
-import java.util.Set;
+
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Equivalence;
 
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
@@ -55,9 +56,11 @@ import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.UnresolvedJavaType;
 
 /**
  * Contains utility functions often needed in conjunction with inline types.
@@ -625,17 +628,18 @@ public class InlineTypeUtil {
      * @return true if a circle is possible
      */
     public static boolean isCircularInlineType(ResolvedJavaType type) {
-        return isCircularInlineType(type, new HashSet<>());
+        return isCircularInlineType(type, EconomicSet.create(Equivalence.DEFAULT));
     }
 
-    private static boolean isCircularInlineType(ResolvedJavaType type, Set<ResolvedJavaType> visitedTypes) {
+    // TODO: use assumptions in combination with a TypeReference
+    private static boolean isCircularInlineType(ResolvedJavaType type, EconomicSet<ResolvedJavaType> visitedTypes) {
         if (GraalValhallaServices.isIdentity(type) || type.isPrimitive()) {
             return false;
         }
         Queue<ResolvedJavaType> queue = new ArrayDeque<>();
         Queue<Integer> counters = new ArrayDeque<>();
         queue.add(type);
-        Set<ResolvedJavaType> newVisited = new HashSet<>();
+        EconomicSet<ResolvedJavaType> newVisited = EconomicSet.create(Equivalence.DEFAULT);
         int counter = 1;
         while (!queue.isEmpty()) {
             ResolvedJavaType t = queue.remove();
@@ -679,8 +683,12 @@ public class InlineTypeUtil {
                 counter = counters.remove();
             }
             for (ResolvedJavaField field : fields) {
-                ResolvedJavaType fieldType = field.getType().resolve(type);
-                queue.add(fieldType);
+                JavaType fieldType = field.getType();
+                if (fieldType instanceof UnresolvedJavaType unresolvedJavaType && unresolvedJavaType.getJavaKind() == JavaKind.Object) {
+                    return true;
+                }
+                assert fieldType instanceof ResolvedJavaType : "Expected field type to be resolved";
+                queue.add((ResolvedJavaType) fieldType);
             }
 
         }
