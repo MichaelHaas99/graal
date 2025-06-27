@@ -31,6 +31,8 @@ import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
 
 @NodeInfo(cycles = NodeCycles.CYCLES_4, size = NodeSize.SIZE_16)
@@ -38,12 +40,22 @@ public class HotSpotIdentityHashCodeNode extends IdentityHashCodeNode {
 
     public static final NodeClass<HotSpotIdentityHashCodeNode> TYPE = NodeClass.create(HotSpotIdentityHashCodeNode.class);
 
+    private boolean canBeInlineType = false;
+
     public HotSpotIdentityHashCodeNode(ValueNode object, int bci) {
         super(TYPE, object, bci);
     }
 
+    public HotSpotIdentityHashCodeNode(ValueNode object, int bci, ValhallaOptionsProvider valhallaOptionsProvider) {
+        this(object, bci);
+        this.canBeInlineType = StampTool.canBeInlineType(object, valhallaOptionsProvider);
+    }
+
     @Override
     public LocationIdentity getKilledLocationIdentity() {
+        if (canBeInlineType) {
+            return LocationIdentity.any();
+        }
         return HotSpotReplacementsUtil.MARK_WORD_LOCATION;
     }
 }

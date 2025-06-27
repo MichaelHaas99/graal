@@ -50,6 +50,7 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.lir.SyncPort;
@@ -66,6 +67,8 @@ import jdk.graal.compiler.replacements.IdentityHashCodeSnippets;
 import jdk.graal.compiler.replacements.SnippetTemplate;
 import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
 import jdk.graal.compiler.word.Word;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 // @formatter:off
 @SyncPort(from = "https://github.com/openjdk/jdk/blob/642816538fbaa5b74c6beb8a14d1738cdde28c10/src/hotspot/share/opto/library_call.cpp#L4644-L4778",
@@ -117,14 +120,22 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             Object nonNullX = PiNode.piCastNonNull(x, anchorNode);
             if (probability(NOT_LIKELY_PROBABILITY, isInlineType || !hasIdentity(nonNullX))) {
-                return valueObjectHashCodeStubC(VALUE_OBJECT_HASH_CODE, nonNullX);
+                // Don't intrinsify hashcode on inline types for now.
+                // see LibraryCallKit::inline_native_hashcode
+                return System.identityHashCode(nonNullX);
+
+                // TODO: actually better alternative directly call into library, just uncomment
+                // return ValueObjectMethodNode.valueObjectHashCodeMethod(nonNullX);
+
+                // TODO: call via stub, can be removed
+                // return valueObjectHashCodeStubC(VALUE_OBJECT_HASH_CODE, nonNullX);
             }
         }
 
         return computeIdentityHashCode(x);
     }
 
-    @Snippet
+    @Snippet(allowPartialIntrinsicArgumentMismatch = true)
     private int valhallaIdentityHashCodeSnippet(final Object thisObj, @Snippet.ConstantParameter boolean canBeInlineType, @Snippet.ConstantParameter boolean isInlineType) {
         if (probability(NOT_FREQUENT_PROBABILITY, thisObj == null)) {
             return 0;
@@ -152,7 +163,7 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
                 identityHashCodeSnippet = snippet(providers,
                                 HotSpotHashCodeSnippets.class,
                                 "valhallaIdentityHashCodeSnippet",
-                                null,
+                                originalIdentityHashCode(providers.getMetaAccess()),
                                 receiver,
                                 locationIdentity);
             } else {
@@ -164,6 +175,19 @@ public class HotSpotHashCodeSnippets extends IdentityHashCodeSnippets {
                                 locationIdentity);
             }
 
+        }
+
+        private ResolvedJavaMethod originalIdentityHashCode;
+
+        private ResolvedJavaMethod originalIdentityHashCode(MetaAccessProvider metaAccess) throws GraalError {
+            if (originalIdentityHashCode == null) {
+                try {
+                    originalIdentityHashCode = findMethod(metaAccess, System.class, "identityHashCode");
+                } catch (SecurityException e) {
+                    throw new GraalError(e);
+                }
+            }
+            return originalIdentityHashCode;
         }
 
         @Override

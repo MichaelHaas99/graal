@@ -582,7 +582,7 @@ public class HotSpotGraphBuilderPlugins {
         r.register(new InlineOnlyInvocationPlugin("identityHashCode", Object.class) {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object) {
-                b.addPush(JavaKind.Int, new HotSpotIdentityHashCodeNode(object, b.bci()));
+                b.addPush(JavaKind.Int, new HotSpotIdentityHashCodeNode(object, b.bci(), b.getValhallaOptionsProvider()));
                 return true;
             }
         });
