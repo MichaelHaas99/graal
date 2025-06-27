@@ -1,6 +1,6 @@
 package jdk.graal.compiler.hotspot.replacements;
 
-import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
+import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.HAS_SIDE_EFFECT;
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.inlineTypePattern;
@@ -304,7 +304,7 @@ public class ObjectEqualsSnippets implements Snippets {
     }
 
     // TODO: avoid a foreign call and emit an invoke see parse2.cpp Parse::do_acmp
-    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, NO_LOCATION, "substitutabilityCheck",
+    public static final HotSpotForeignCallDescriptor SUBSTITUTABILITY_CHECK = new HotSpotForeignCallDescriptor(SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATION, "substitutabilityCheck",
                     boolean.class, Object.class,
                     Object.class);
 

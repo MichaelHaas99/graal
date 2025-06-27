@@ -53,6 +53,7 @@ import jdk.graal.compiler.nodes.memory.AbstractMemoryCheckpoint;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.UncheckedInterfaceProvider;
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
@@ -94,6 +95,20 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         this.polymorphic = false;
         this.inlineControl = InlineControl.Normal;
         this.identity = identity;
+    }
+
+    private ResolvedJavaMethod contextMethod = null;
+
+    public void setContextMethod(ResolvedJavaMethod method) {
+        this.contextMethod = method;
+    }
+
+    @Override
+    public ResolvedJavaMethod getContextMethod() {
+        if (contextMethod == null) {
+            return Invoke.super.getContextMethod();
+        }
+        return contextMethod;
     }
 
     @Override

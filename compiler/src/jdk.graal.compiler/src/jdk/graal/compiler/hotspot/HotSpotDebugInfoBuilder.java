@@ -41,11 +41,11 @@ import jdk.graal.compiler.lir.VirtualStackSlot;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.FullInfopointNode;
+import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.spi.NodeValueMap;
 import jdk.graal.compiler.nodes.spi.NodeWithState;
-
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.StackLockValue;
 import jdk.vm.ci.code.VirtualObject;
@@ -139,6 +139,10 @@ public class HotSpotDebugInfoBuilder extends DebugInfoBuilder {
                     }
                     break;
                 case AfterPop:
+                    if (opcode == Bytecodes.IF_ACMPEQ || opcode == Bytecodes.IF_ACMPNE) {
+                        GraalError.guarantee(node instanceof Invoke || node instanceof ForeignCall, "must be a call to substitutability check");
+                        break;
+                    }
                     GraalError.guarantee(!shouldReexecute(opcode), "hotspot says this must deopt with reexecute: %s %s", Bytecodes.nameOf(opcode), topState);
                     break;
                 case Rethrow:

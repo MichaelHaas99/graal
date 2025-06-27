@@ -52,6 +52,7 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.meta.Constant;
@@ -261,7 +262,10 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                                         result = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                                         tool.getOptions(), xFieldNode, yFieldNode, NodeView.DEFAULT);
                                     } else {
-                                        ValhallaObjectEqualsNode fixedValhallaObjectEquals = new ValhallaObjectEqualsNode(xFieldNode, yFieldNode, null);
+                                        // pass in the type of the field in case the stamp is not
+                                        // precise enough
+                                        ValhallaObjectEqualsNode fixedValhallaObjectEquals = new ValhallaObjectEqualsNode(xFieldNode, yFieldNode, null,
+                                                        (ResolvedJavaType) ((VirtualInstanceNode) xVirtual).getFields()[i].getType());
                                         tool.addNode(fixedValhallaObjectEquals);
                                         result = new IntegerEqualsNode(fixedValhallaObjectEquals, ConstantNode.forInt(1, graph));
                                     }
