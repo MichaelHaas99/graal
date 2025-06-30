@@ -42,6 +42,7 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.StampProvider;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
@@ -79,6 +80,21 @@ public final class LoadHubNode extends FloatingNode implements Lowerable, Canoni
         return new LoadHubNode(stamp, value);
     }
 
+    public static ValueNode create(ValueNode value, StampProvider stampProvider, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection,
+                    ValhallaOptionsProvider valhallaOptionsProvider) {
+        final AbstractPointerStamp stamp = hubStamp(stampProvider, value);
+        return create(value, stamp, metaAccess, constantReflection, valhallaOptionsProvider);
+    }
+
+    public static ValueNode create(ValueNode value, AbstractPointerStamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection,
+                    ValhallaOptionsProvider valhallaOptionsProvider) {
+        ValueNode synonym = findSynonym(value, stamp, metaAccess, constantReflection, valhallaOptionsProvider);
+        if (synonym != null) {
+            return synonym;
+        }
+        return new LoadHubNode(stamp, value);
+    }
+
     public LoadHubNode(@InjectedNodeParameter StampProvider stampProvider, ValueNode value) {
         this(hubStamp(stampProvider, value), value);
     }
@@ -93,20 +109,30 @@ public final class LoadHubNode extends FloatingNode implements Lowerable, Canoni
         NodeView view = NodeView.from(tool);
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         ValueNode curValue = getValue();
-        ValueNode newNode = findSynonym(curValue, stamp(view), metaAccess, tool.getConstantReflection());
+        ValueNode newNode = findSynonym(curValue, stamp(view), metaAccess, tool.getConstantReflection(), tool.getValhallaOptionsProvider());
         if (newNode != null) {
             return newNode;
         }
         return this;
     }
 
-    public static ValueNode findSynonym(ValueNode curValue, Stamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    public static ValueNode findSynonym(ValueNode curValue, Stamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection,
+                    ValhallaOptionsProvider valhallaOptionsProvider) {
         TypeReference type = StampTool.typeReferenceOrNull(curValue);
         /*
          * Regular, null-restricted and flat arrays have different class objects. Avoid folding.
          * TODO check if the array cannot be null-restricted or flat, and if so allow folding.
          */
-        if (type != null && type.isExact() && (!type.getType().isArray() || curValue.isConstant())) {
+        if (type != null && type.isExact() && (!valhallaOptionsProvider.valhallaEnabled() || !type.getType().isArray() || curValue.isConstant())) {
+            return ConstantNode.forConstant(stamp, constantReflection.asObjectHub(type.getType()), metaAccess);
+        }
+        return null;
+    }
+
+    public static ValueNode findSynonym(ValueNode curValue, Stamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+        TypeReference type = StampTool.typeReferenceOrNull(curValue);
+
+        if (type != null && type.isExact()) {
             return ConstantNode.forConstant(stamp, constantReflection.asObjectHub(type.getType()), metaAccess);
         }
         return null;

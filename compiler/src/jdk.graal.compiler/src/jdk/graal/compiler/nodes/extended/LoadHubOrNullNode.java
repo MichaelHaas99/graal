@@ -42,6 +42,7 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.StampProvider;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
@@ -80,16 +81,17 @@ public final class LoadHubOrNullNode extends FloatingNode implements Lowerable, 
         NodeView view = NodeView.from(tool);
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         ValueNode curValue = getValue();
-        ValueNode newNode = findSynonym(curValue, (AbstractPointerStamp) stamp(view), metaAccess, tool.getConstantReflection());
+        ValueNode newNode = findSynonym(curValue, (AbstractPointerStamp) stamp(view), metaAccess, tool.getConstantReflection(), tool.getValhallaOptionsProvider());
         if (newNode != null) {
             return newNode;
         }
         return this;
     }
 
-    public static ValueNode findSynonym(ValueNode curValue, AbstractPointerStamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    public static ValueNode findSynonym(ValueNode curValue, AbstractPointerStamp stamp, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection,
+                    ValhallaOptionsProvider valhallaOptionsProvider) {
         if (StampTool.isPointerNonNull(stamp)) {
-            return LoadHubNode.create(curValue, stamp.asNonNull(), metaAccess, constantReflection);
+            return LoadHubNode.create(curValue, stamp.asNonNull(), metaAccess, constantReflection, valhallaOptionsProvider);
         }
         return null;
     }

@@ -814,7 +814,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         if (monitor.getObjectData() == null) {
             ValueNode objectNonNull = createNullCheckedValue(monitor.object(), monitor, tool);
             monitor.setObject(objectNonNull);
-            monitor.setObjectData(graph.addOrUnique(LoadHubNode.create(objectNonNull, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection())));
+            monitor.setObjectData(graph.addOrUnique(LoadHubNode.create(objectNonNull, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection(), tool.getValhallaOptionsProvider())));
         }
     }
 

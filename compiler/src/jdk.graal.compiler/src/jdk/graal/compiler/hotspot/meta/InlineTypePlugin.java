@@ -587,7 +587,7 @@ public class InlineTypePlugin implements NodePlugin {
             condition = b.getGraph().addOrUniqueWithInputs(InstanceOfNode.createAllowNull(typeReference,
                             value, null, null));
         } else {
-            ValueNode arrayClass = b.add(LoadHubNode.create(array, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection()));
+            ValueNode arrayClass = b.add(LoadHubNode.create(array, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection(), b.getValhallaOptionsProvider()));
             ValueNode componentHub = b.add(LoadArrayComponentHubNode.create(arrayClass, b.getStampProvider(), b.getMetaAccess(), b.getConstantReflection()));
             condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), componentHub, value, true));
         }

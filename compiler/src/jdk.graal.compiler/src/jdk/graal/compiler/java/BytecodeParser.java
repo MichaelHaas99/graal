@@ -1842,7 +1842,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         if (elementKind != JavaKind.Object || StampTool.isPointerAlwaysNull(value) || !needsExplicitStoreCheckException(array, value)) {
             return null;
         }
-        ValueNode arrayClass = genUnique(LoadHubNode.create(array, getStampProvider(), getMetaAccess(), getConstantReflection()));
+        ValueNode arrayClass = genUnique(LoadHubNode.create(array, getStampProvider(), getMetaAccess(), getConstantReflection(), getValhallaOptionsProvider()));
         ValueNode componentHub = append(LoadArrayComponentHubNode.create(arrayClass, getStampProvider(), getMetaAccess(), getConstantReflection()));
         LogicNode condition = genUnique(InstanceOfDynamicNode.create(graph.getAssumptions(), getConstantReflection(), componentHub, value, true));
         return emitBytecodeExceptionCheck(condition, true, BytecodeExceptionKind.ARRAY_STORE, value);
