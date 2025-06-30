@@ -1095,7 +1095,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         }
 
         try (IntrinsicScope s = intrinsicContext != null ? new IntrinsicScope(this) : null) {
-            build(graph.updatedStart() == null ? graph.start() : graph.updatedStart(), startFrameState, states, startFrameStateNonVirtual);
+            if (graph.updatedStart() != null) {
+                build(graph.updatedStart(), startFrameState, states, startFrameStateNonVirtual);
+            } else {
+                build(graph.start(), startFrameState);
+            }
         }
 
         cleanupFinalGraph();
