@@ -29,6 +29,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
     @OptionalInput NodeInputList<ValueNode> oops = new NodeInputList<>(this);
     @OptionalInput NodeInputList<ValueNode> nonNulls = new NodeInputList<>(this);
 
+    @SuppressWarnings("this-escape")
     public CommitAllocationOrReuseOopNode() {
         super(TYPE);
     }

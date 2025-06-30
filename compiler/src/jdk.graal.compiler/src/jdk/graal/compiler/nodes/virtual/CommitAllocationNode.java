@@ -79,10 +79,12 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
     protected ArrayList<Integer> lockIndexes = new ArrayList<>(Arrays.asList(0));
     protected ArrayList<Boolean> ensureVirtual = new ArrayList<>();
 
+    @SuppressWarnings("this-escape")
     public CommitAllocationNode() {
         super(TYPE, StampFactory.forVoid());
     }
 
+    @SuppressWarnings("this-escape")
     public CommitAllocationNode(NodeClass<? extends FixedWithNextNode> c) {
         super(c, StampFactory.forVoid());
     }

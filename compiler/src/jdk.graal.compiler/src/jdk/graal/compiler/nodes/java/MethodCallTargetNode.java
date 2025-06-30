@@ -80,6 +80,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         this(TYPE, invokeKind, targetMethod, arguments, returnStamp, typeProfile);
     }
 
+    @SuppressWarnings("this-escape")
     protected MethodCallTargetNode(NodeClass<? extends MethodCallTargetNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp,
                     JavaTypeProfile typeProfile) {
         super(c, arguments, targetMethod, invokeKind, returnStamp);

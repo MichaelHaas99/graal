@@ -36,6 +36,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
     @OptionalInput private NodeInputList<ValueNode> fieldValues;
 
+    @SuppressWarnings("this-escape")
     public ReturnScalarizedNode(ValueNode result, List<ValueNode> fieldValues) {
         super(TYPE, result);
         this.fieldValues = new NodeInputList<>(this, fieldValues);
