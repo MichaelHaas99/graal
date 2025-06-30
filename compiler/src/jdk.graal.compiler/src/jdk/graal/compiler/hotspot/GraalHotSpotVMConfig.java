@@ -255,7 +255,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int klassAccessFlagsOffset = getFieldOffset("Klass::_access_flags", Integer.class, "AccessFlags");
     public final int klassMiscFlagsOffset = getFieldOffset("Klass::_misc_flags._flags", Integer.class, "u1", 0, JDK >= 24);
     public final int klassLayoutHelperOffset = getFieldOffset("Klass::_layout_helper", Integer.class, "jint");
-    public final int klassProtoTypeHeaderOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord");
+    public final int klassProtoTypeHeaderOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord", 0, JDK >= 24);
     public final int klassKind = getFieldOffset("Klass::_kind", Integer.class, "Klass::KlassKind const", -1, VALHALLA_JDK);
     public final int klassFlatArrayKlassKind = getConstant("Klass::FlatArrayKlassKind", Integer.class, -1, VALHALLA_JDK);
     public final long flatArrayPattern = getConstant("markWord::null_free_flat_array_pattern", Long.class, -1L, VALHALLA_JDK);
