@@ -560,7 +560,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * {@code stateDuring} is computed.
      */
     public FrameState duplicateModifiedDuringCall(int newBci, JavaKind popKind, boolean removeTopVirtualObjectMapping) {
-        return duplicateModified(graph(), newBci, StackState.AfterPop, popKind, null, null, null, removeTopVirtualObjectMapping);
+        return duplicateModified(graph(), newBci, StackState.AfterPop, popKind, null, null, null, true, removeTopVirtualObjectMapping);
     }
 
     public FrameState duplicateModifiedBeforeCall(int newBci,
@@ -591,7 +591,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     JavaKind[] pushedSlotKinds,
                     ValueNode[] pushedValues,
                     List<EscapeObjectState> pushedVirtualObjectMappings) {
-        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true, false);
+        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true);
     }
 
     public FrameState duplicateModified(StructuredGraph graph,
@@ -600,8 +600,8 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                     JavaKind popKind,
                     JavaKind[] pushedSlotKinds,
                     ValueNode[] pushedValues,
-                    List<EscapeObjectState> pushedVirtualObjectMappings, boolean removeTopVirtualObjectMapping) {
-        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, true, removeTopVirtualObjectMapping);
+                    List<EscapeObjectState> pushedVirtualObjectMappings, boolean checkStackDepth) {
+        return duplicateModified(graph, newBci, newStackState, popKind, pushedSlotKinds, pushedValues, pushedVirtualObjectMappings, checkStackDepth, false);
     }
 
     /**
