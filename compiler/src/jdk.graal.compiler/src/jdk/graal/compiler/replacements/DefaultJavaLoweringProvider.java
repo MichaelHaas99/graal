@@ -988,8 +988,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
                             // Truffle requires some leniency in terms of what can be put where:
                             assert valueKind.getStackKind() == storageKind.getStackKind() ||
-                                            (valueKind == JavaKind.Long || valueKind == JavaKind.Double || (valueKind == JavaKind.Int && virtual instanceof VirtualArrayNode) ||
-                                                            (valueKind == JavaKind.Float && virtual instanceof VirtualArrayNode)) : Assertions.errorMessageContext("valueKind", valueKind,
+                                            (valueKind == JavaKind.Long || valueKind == JavaKind.Double) : Assertions.errorMessageContext("valueKind", valueKind,
                                                                             "virtual",
                                                                             virtual);
                             AddressNode address = null;
