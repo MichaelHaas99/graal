@@ -1,4 +1,4 @@
-package jdk.graal.compiler.nodes.extended;
+package jdk.graal.compiler.hotspot.replacements;
 
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
