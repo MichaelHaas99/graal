@@ -344,7 +344,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     values.set(pos + i, entries[i]);
                 }
             }
-            objectMaterialized(virtual, (AllocatedObjectNode) representation, values.subList(pos, pos + entries.length));
+            objectMaterialized(virtual, representation, values.subList(pos, pos + entries.length));
         } else {
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
             otherAllocations.add(representation);
