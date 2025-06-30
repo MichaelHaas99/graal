@@ -24,7 +24,6 @@
  */
 package jdk.graal.compiler.nodes.memory;
 
-import static jdk.graal.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_1;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
@@ -284,8 +283,7 @@ public class ReadNode extends FloatableAccessNode
          * Regular, null-restricted and flat arrays have different class objects. Avoid folding.
          * TODO check if the array cannot be null-restricted or flat, and if so allow folding.
          */
-        if (locationIdentity instanceof CanonicalizableLocation && !StampTool.canBeInlineTypeArray(object, tool.getValhallaOptionsProvider()) &&
-                        !locationIdentity.equals(KLASS_LAYOUT_HELPER_LOCATION)) {
+        if (locationIdentity instanceof CanonicalizableLocation && !StampTool.canBeInlineTypeArray(object, tool.getValhallaOptionsProvider())) {
             CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
             ValueNode result = canonicalize.canonicalizeRead(read, object, offset, view, tool);
             assert result != null;
