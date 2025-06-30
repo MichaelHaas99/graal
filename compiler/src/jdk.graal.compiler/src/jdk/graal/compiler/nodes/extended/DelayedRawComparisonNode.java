@@ -36,16 +36,16 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
     @Input ValueNode offset;
     @Input ValueNode accessKind;
     @Input ValueNode locationIdentity;
-    @Input ValueNode stamp;
+    @Input ValueNode operandStamp;
 
-    public DelayedRawComparisonNode(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity, ValueNode stamp) {
+    public DelayedRawComparisonNode(ValueNode object1, ValueNode object2, ValueNode offset, ValueNode accessKind, ValueNode locationIdentity, ValueNode operandStamp) {
         super(TYPE, StampFactory.forKind(JavaKind.Boolean));
         this.object1 = object1;
         this.object2 = object2;
         this.offset = offset;
         this.accessKind = accessKind;
         this.locationIdentity = locationIdentity;
-        this.stamp = stamp;
+        this.operandStamp = operandStamp;
     }
 
     public ValueNode getObject1() {
@@ -82,12 +82,12 @@ public class DelayedRawComparisonNode extends FixedWithNextNode implements Canon
     }
 
     public boolean isStampConstant() {
-        return stamp.isJavaConstant();
+        return operandStamp.isJavaConstant();
     }
 
     public Stamp getConstantStamp() {
         assert isStampConstant() : "stamp must be a constant";
-        JavaConstant constant = stamp.asJavaConstant();
+        JavaConstant constant = operandStamp.asJavaConstant();
         if (constant instanceof HotSpotObjectConstant) {
             return ((HotSpotObjectConstant) constant).asObject(Stamp.class);
         } else if (constant instanceof SnippetObjectConstant) {
