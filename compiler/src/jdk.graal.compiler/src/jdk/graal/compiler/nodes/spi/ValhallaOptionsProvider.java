@@ -2,6 +2,11 @@ package jdk.graal.compiler.nodes.spi;
 
 public interface ValhallaOptionsProvider {
 
+    ValhallaOptionsProvider DEFAULT = new Default();
+
+    class Default implements ValhallaOptionsProvider {
+    }
+
     default boolean valhallaEnabled() {
         return false;
     }
