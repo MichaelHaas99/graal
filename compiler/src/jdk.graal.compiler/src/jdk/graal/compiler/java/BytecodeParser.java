@@ -4319,7 +4319,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             case EQ:
                 if (a.getStackKind() == JavaKind.Object) {
                     LogicNode node;
-                    if (getValhallaOptionsProvider().valhallaEnabled()) {
+                    if (getValhallaOptionsProvider().valhallaEnabled() && !parsingIntrinsic()) {
+                        // Don't use this node when parsing an intrinsic. This is because we create
+                        // two state splits and therefore IntrinsicContext.createFrameState
+                        // creates an invalid framestate.
                         node = ValhallaObjectEqualsNode.create(this, a, b, NodeView.DEFAULT, getProfileForObjectEquals());
                     } else {
                         node = genObjectEquals(a, b);
