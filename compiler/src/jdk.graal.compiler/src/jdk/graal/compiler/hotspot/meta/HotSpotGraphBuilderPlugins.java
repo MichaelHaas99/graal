@@ -348,7 +348,7 @@ public class HotSpotGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode object = receiver.get(true);
-                b.addPush(JavaKind.Int, new HotSpotIdentityHashCodeNode(object, b.bci()));
+                b.addPush(JavaKind.Int, new HotSpotIdentityHashCodeNode(object, b.bci(), b.getValhallaOptionsProvider()));
                 return true;
             }
         });

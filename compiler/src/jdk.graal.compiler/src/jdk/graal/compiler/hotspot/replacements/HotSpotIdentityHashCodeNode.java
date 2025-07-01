@@ -26,11 +26,13 @@ package jdk.graal.compiler.hotspot.replacements;
 
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.NodeSize;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
@@ -40,22 +42,33 @@ public class HotSpotIdentityHashCodeNode extends IdentityHashCodeNode {
 
     public static final NodeClass<HotSpotIdentityHashCodeNode> TYPE = NodeClass.create(HotSpotIdentityHashCodeNode.class);
 
-    private boolean canBeInlineType = false;
+    private LocationIdentity killedLocationIdentity;
 
-    public HotSpotIdentityHashCodeNode(ValueNode object, int bci) {
+    private HotSpotIdentityHashCodeNode(ValueNode object, int bci) {
         super(TYPE, object, bci);
     }
 
     public HotSpotIdentityHashCodeNode(ValueNode object, int bci, ValhallaOptionsProvider valhallaOptionsProvider) {
         this(object, bci);
-        this.canBeInlineType = StampTool.canBeInlineType(object, valhallaOptionsProvider);
+        updateKilledLocationIdentity(valhallaOptionsProvider);
     }
 
     @Override
     public LocationIdentity getKilledLocationIdentity() {
-        if (canBeInlineType) {
-            return LocationIdentity.any();
+        return killedLocationIdentity;
+    }
+
+    protected void updateKilledLocationIdentity(ValhallaOptionsProvider valhallaOptionsProvider) {
+        if (StampTool.canBeInlineType(object(), valhallaOptionsProvider)) {
+            this.killedLocationIdentity = LocationIdentity.any();
+        } else {
+            this.killedLocationIdentity = HotSpotReplacementsUtil.MARK_WORD_LOCATION;
         }
-        return HotSpotReplacementsUtil.MARK_WORD_LOCATION;
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        updateKilledLocationIdentity(tool.getValhallaOptionsProvider());
+        return super.canonical(tool);
     }
 }
