@@ -76,6 +76,7 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
         return scalarizedArguments;
     }
 
+    @SuppressWarnings("this-escape")
     public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp, JavaTypeProfile typeProfile) {
         this(TYPE, invokeKind, targetMethod, arguments, returnStamp, typeProfile);
     }
