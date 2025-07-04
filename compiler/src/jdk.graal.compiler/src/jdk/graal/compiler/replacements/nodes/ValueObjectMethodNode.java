@@ -49,10 +49,12 @@ public class ValueObjectMethodNode extends AbstractStateSplit implements Invokab
     private final StampPair returnStamp;
     private final LocationIdentity killedLocationIdentity;
 
+    @SuppressWarnings("this-escape")
     public ValueObjectMethodNode(MacroNode.MacroParams p, FrameState stateAfter) {
         this(TYPE, p, stateAfter);
     }
 
+    @SuppressWarnings("this-escape")
     protected ValueObjectMethodNode(NodeClass<? extends ValueObjectMethodNode> c, MacroNode.MacroParams p, FrameState stateAfter) {
         super(c, p.returnStamp != null ? p.returnStamp.getTrustedStamp() : null);
         this.arguments = new NodeInputList<>(this, p.arguments);
