@@ -157,8 +157,7 @@ public class ValueObjectMethodNode extends AbstractStateSplit implements Invokab
     }
 
     private MethodCallTargetNode createCallTarget(StructuredGraph graph) {
-        ValueNode[] arguments = toArgumentArray();
-        return graph.add(new MethodCallTargetNode(getInvokeKind(), getTargetMethod(), arguments, getReturnStamp(), null));
+        return graph.add(new MethodCallTargetNode(getInvokeKind(), getTargetMethod(), toArgumentArray(), getReturnStamp(), null));
     }
 
     @Override

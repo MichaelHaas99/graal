@@ -129,6 +129,7 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
         return profile;
     }
 
+    @SuppressWarnings("this-escape")
     public ValhallaObjectEqualsNode(ValueNode x, ValueNode y, Object profile, ResolvedJavaType operandInlineType) {
         super(TYPE, StampFactory.forInteger(JavaKind.Int, 0, 1));
         assert x != null;
@@ -275,9 +276,11 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
         return LocationIdentity.any();
     }
 
+    private boolean virtualize = false;
+
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (true) {
+        if (!virtualize) {
             return;
         }
         LogicNode node = ObjectEqualsNode.virtualizeComparison(getX(), getY(), graph(), tool);
@@ -312,8 +315,12 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
         operandInlineType = temp;
     }
 
-    private PhiNode performEqualityCheck(LoweringTool tool, ValueNode x, ValueNode y, StructuredGraph newGraph, ResolvedJavaType type, boolean inlineSubstitutabilityCheck,
+    private PhiNode performEqualityCheck(LoweringTool tool, ValueNode leftOperand, ValueNode rightOperand, StructuredGraph newGraph, ResolvedJavaType type, boolean inlineSubstitutabilityCheck,
                     FixedWithNextNode startPrevious) {
+
+        ValueNode newLeftOperand = leftOperand;
+        ValueNode newRightOperand = rightOperand;
+
         // create the merge and phi node
         MergeNode merge = newGraph.add(new MergeNode());
         merge.setStateAfter(newGraph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
@@ -321,28 +328,28 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
 
         FixedWithNextNode previous = startPrevious;
         // do a pointer comparison
-        previous = createIf(newGraph, ObjectEqualsNode.create(x, y, NodeView.DEFAULT), true, previous, merge, phiNode, true);
+        previous = createIf(newGraph, ObjectEqualsNode.create(newLeftOperand, newRightOperand, NodeView.DEFAULT), true, previous, merge, phiNode, true);
 
         // check if one operand is null
-        previous = createIf(newGraph, IsNullNode.create(x), true, previous, merge, phiNode, false);
-        previous = createIf(newGraph, IsNullNode.create(y), true, previous, merge, phiNode, false);
+        previous = createIf(newGraph, IsNullNode.create(newLeftOperand), true, previous, merge, phiNode, false);
+        previous = createIf(newGraph, IsNullNode.create(newRightOperand), true, previous, merge, phiNode, false);
 
         // cast both operands to non-null
-        x = newGraph.addOrUnique(PiNode.create(x, previous));
-        y = newGraph.addOrUnique(PiNode.create(y, previous));
+        newLeftOperand = newGraph.addOrUnique(PiNode.create(newLeftOperand, previous));
+        newRightOperand = newGraph.addOrUnique(PiNode.create(newRightOperand, previous));
 
         // check if both operands have no identity
-        if (!StampTool.isInlineType(x, tool.getValhallaOptionsProvider())) {
-            previous = createIf(newGraph, new HasIdentityNode(x), true, previous, merge, phiNode, false);
+        if (!StampTool.isInlineType(newLeftOperand, tool.getValhallaOptionsProvider())) {
+            previous = createIf(newGraph, new HasIdentityNode(newLeftOperand), true, previous, merge, phiNode, false);
         }
-        if (!StampTool.isInlineType(y, tool.getValhallaOptionsProvider())) {
-            previous = createIf(newGraph, new HasIdentityNode(y), true, previous, merge, phiNode, false);
+        if (!StampTool.isInlineType(newRightOperand, tool.getValhallaOptionsProvider())) {
+            previous = createIf(newGraph, new HasIdentityNode(newRightOperand), true, previous, merge, phiNode, false);
         }
 
         // check if both operands are of the same type
-        ValueNode xHub = LoadHubNode.create(x, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection());
+        ValueNode xHub = LoadHubNode.create(newLeftOperand, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection());
         xHub = newGraph.addOrUnique(xHub);
-        ValueNode yHub = LoadHubNode.create(y, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection());
+        ValueNode yHub = LoadHubNode.create(newRightOperand, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection());
         yHub = newGraph.addOrUnique(yHub);
         previous = createIf(newGraph, PointerEqualsNode.create(xHub, yHub, NodeView.DEFAULT), false, previous, merge, phiNode, false);
 
@@ -350,17 +357,17 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
             ResolvedJavaField[] fields = type.getInstanceFields(true);
             for (int i = 0; i < fields.length; i++) {
                 ResolvedJavaField field = fields[i];
-                LoadFieldNode load0 = newGraph.add(LoadFieldNode.create(newGraph.getAssumptions(), x, field));
+                LoadFieldNode load0 = newGraph.add(LoadFieldNode.create(newGraph.getAssumptions(), newLeftOperand, field));
                 newGraph.addAfterFixed(previous, load0);
-                LoadFieldNode load1 = newGraph.add(LoadFieldNode.create(newGraph.getAssumptions(), y, field));
+                LoadFieldNode load1 = newGraph.add(LoadFieldNode.create(newGraph.getAssumptions(), newRightOperand, field));
                 newGraph.addAfterFixed(load0, load1);
-                Stamp stamp = StampFactory.forDeclaredType(newGraph.getAssumptions(), field.getType(), false).getTrustedStamp();
+                Stamp fieldStamp = StampFactory.forDeclaredType(newGraph.getAssumptions(), field.getType(), false).getTrustedStamp();
                 previous = load1;
                 LogicNode logicNode = null;
-                if (stamp.isIntegerStamp()) {
+                if (fieldStamp.isIntegerStamp()) {
                     logicNode = IntegerEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                     newGraph.getOptions(), null, load0, load1, NodeView.DEFAULT);
-                } else if (stamp.isObjectStamp()) {
+                } else if (fieldStamp.isObjectStamp()) {
                     if (!InlineTypeUtil.mayNeedSubstitutabilityCheck(load0, load1, tool.getValhallaOptionsProvider())) {
                         logicNode = ObjectEqualsNode.create(tool.getConstantReflection(), tool.getMetaAccess(),
                                         newGraph.getOptions(), load0, load1, NodeView.DEFAULT);
@@ -369,7 +376,7 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
                         previous = result.merge();
                         logicNode = new IntegerEqualsNode(result, ConstantNode.forInt(1, newGraph));
                     }
-                } else if (stamp.isFloatStamp()) {
+                } else if (fieldStamp.isFloatStamp()) {
                     ValueNode normalizeNode = FloatNormalizeCompareNode.create(load0, load1, true, JavaKind.Int,
                                     tool.getConstantReflection());
                     ValueNode constantZero = ConstantNode.forBoolean(false, newGraph);
@@ -395,11 +402,11 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
             FixedWithNextNode comparisonNode = null;
             if (bci() == BytecodeFrame.UNKNOWN_BCI) {
                 // need to use foreign call
-                comparisonNode = new ForeignCallNode(tool.getForeignCalls().lookupForeignCall(SUBSTITUTABILITY_CHECK).getDescriptor(), x, y);
+                comparisonNode = new ForeignCallNode(tool.getForeignCalls().lookupForeignCall(SUBSTITUTABILITY_CHECK).getDescriptor(), newLeftOperand, newRightOperand);
             } else {
                 comparisonNode = ValueObjectMethodNode.create(MacroNode.MacroParams.of(CallTargetNode.InvokeKind.Static, substitutabilityMethod,
                                 substitutabilityMethod, bci(),
-                                StampPair.createSingle(stamp(NodeView.DEFAULT)), x, y), newGraph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                                StampPair.createSingle(stamp(NodeView.DEFAULT)), newLeftOperand, newRightOperand), newGraph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
             }
             newGraph.add(comparisonNode);
             newGraph.addAfterFixed(previous, comparisonNode);
@@ -433,7 +440,7 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
                     boolean.class, Object.class,
                     Object.class);
 
-    private BeginNode createIf(StructuredGraph graph, LogicNode condition, boolean stopOnTrue, FixedWithNextNode previous, MergeNode merge, ValuePhiNode phiNode, boolean stopValue) {
+    private static BeginNode createIf(StructuredGraph graph, LogicNode condition, boolean stopOnTrue, FixedWithNextNode previous, MergeNode merge, ValuePhiNode phiNode, boolean stopValue) {
         ConstantNode trueValue = ConstantNode.forBoolean(true, graph);
         ConstantNode falseValue = ConstantNode.forBoolean(false, graph);
         ConstantNode phiValue = stopValue ? trueValue : falseValue;
@@ -456,11 +463,11 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
 
     }
 
-    private BeginNode createBeginNode(StructuredGraph graph) {
+    private static BeginNode createBeginNode(StructuredGraph graph) {
         return graph.add(new BeginNode());
     }
 
-    private EndNode createEndNode(StructuredGraph graph) {
+    private static EndNode createEndNode(StructuredGraph graph) {
         return graph.add(new EndNode());
     }
 
@@ -475,10 +482,12 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
         this.stateDuring = stateDuring;
     }
 
+    private boolean defaultLowerer = false;
+
     // TODO: implement full functionality like in the ObjectEqualsSnippet, remove the snippet
     @Override
     public void lower(LoweringTool tool) {
-        if (false) {
+        if (defaultLowerer) {
             tool.getLowerer().lower(this, tool);
             return;
         }
