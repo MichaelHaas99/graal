@@ -44,10 +44,12 @@ public class HotSpotIdentityHashCodeNode extends IdentityHashCodeNode {
 
     private LocationIdentity killedLocationIdentity;
 
+    @SuppressWarnings("this-escape")
     private HotSpotIdentityHashCodeNode(ValueNode object, int bci) {
         super(TYPE, object, bci);
     }
 
+    @SuppressWarnings("this-escape")
     public HotSpotIdentityHashCodeNode(ValueNode object, int bci, ValhallaOptionsProvider valhallaOptionsProvider) {
         this(object, bci);
         updateKilledLocationIdentity(valhallaOptionsProvider);
