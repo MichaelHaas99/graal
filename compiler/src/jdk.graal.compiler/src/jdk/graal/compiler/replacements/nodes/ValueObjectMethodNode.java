@@ -131,6 +131,7 @@ public class ValueObjectMethodNode extends AbstractStateSplit implements Invokab
     @NodeIntrinsic
     public static native int valueObjectHashCodeMethod(Object argument);
 
+    @SuppressWarnings("try")
     public Invoke replaceWithInvoke() {
         try (DebugCloseable context = withNodeSourcePosition(); InliningLog.UpdateScope updateScope = InliningLog.openUpdateScopeTrackingReplacement(graph().getInliningLog(), this)) {
             InvokeNode invoke = createInvoke();
