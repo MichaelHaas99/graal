@@ -483,6 +483,7 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
     }
 
     private boolean defaultLowerer = false;
+    private boolean optimize = true;
 
     // TODO: implement full functionality like in the ObjectEqualsSnippet, remove the snippet
     @Override
@@ -498,7 +499,7 @@ public class ValhallaObjectEqualsNode extends AbstractStateSplit implements Lowe
         }
         StructuredGraph graph = graph();
         ResolvedJavaMethod substitutabilityMethod = GraalValhallaServices.getIsSubstitutableMethod(tool.getMetaAccess());
-        if (true) {
+        if (optimize) {
             StructuredGraph replacementGraph = getLoweredSnippetGraph(tool);
             InvokeNode invoke;
 
