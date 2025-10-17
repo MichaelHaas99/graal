@@ -866,6 +866,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<PartialEscapeClosure.MergeProcessor.EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
+        protected EconomicMap<VirtualizedNullCacheKey, VirtualObjectNode> virtualizedNullPointerCache;
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -1433,12 +1434,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                             }
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
+                                // choose a nullable virtual object as the representative for all
+                                // states
                                 tempResult = tempVirtual.getObjectId();
                                 stateIndex = i;
                             }
                             tempSourceObjects[i] = tempVirtual.getObjectId();
                         }
                         if (tempResult == -1) {
+                            // no nullable virtual object was present, just choose the first entry
                             tempResult = tempSourceObjects[0];
                             stateIndex = 0;
                         }
@@ -1483,6 +1487,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             int object = getObject.applyAsInt(i);
                             if (object != -1) {
                                 if (virtualizedEntry[valueIndex] != null) {
+                                    // We already merged all virtual objects in this entry of all
+                                    // states before. We may even virtualized in one state but
+                                    // didn't update the materialized entry of this state so don't
+                                    // rely on the real entry
+                                    // TODO: not necessary anymore once a virtual state can be also
+                                    // materialized.
                                     continue;
                                 }
                                 ValueNode field = states[i].getObjectState(object).getEntry(valueIndex);
@@ -1952,6 +1962,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         }
 
+        public record VirtualizedNullCacheKey(
+                        ResolvedJavaType type,
+                        int state) {
+
+        }
+
         // TODO: probably not all values needed to produce a key
         protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode mergeNode,
                         VirtualObjectNode currentResultObject) {
@@ -1999,6 +2015,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return result;
         }
 
+        private VirtualObjectNode getVirtualizedNullPointerCached(ResolvedJavaType type, int state, VirtualObjectNode currentResultObject) {
+            if (virtualizedNullPointerCache == null) {
+                virtualizedNullPointerCache = EconomicMap.create(Equivalence.IDENTITY);
+            }
+            VirtualizedNullCacheKey key = new VirtualizedNullCacheKey(type, state);
+            VirtualObjectNode result = virtualizedNullPointerCache.get(key);
+            if (result == null) {
+                virtualizedNullPointerCache.put(key, currentResultObject);
+                return currentResultObject;
+            }
+            return result;
+        }
+
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex) {
             return virtualizeFromInlineObject(node, states, predecessorIndex, null);
         }
@@ -2014,7 +2043,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * scalarization diamond is inserted. This can avoid materializations in merges, if not all
          * states are virtual and allows further optimizations. The virtual object is only used for
          * merging so it is not used as an alias.
-         * 
+         *
          * @param node the inline object that should be virtualized
          * @param states the predecessor block states of the merge
          * @param predecessorIndex the index of the preprocessor block the inline object origins
@@ -2071,6 +2100,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                 }
             } else if (StampTool.isPointerAlwaysNull(node)) {
+                VirtualObjectNode cached = getVirtualizedNullPointerCached(instanceClass, predecessorIndex, virtualObject);
+                if (cached != virtualObject) {
+                    return (VirtualInstanceNode) cached;
+                }
                 nonNull = ConstantNode.forInt(0, graph());
                 for (int i = 0; i < fields.length; i++) {
                     ConstantNode load = ConstantNode.defaultForKind(fields[i].getJavaKind());
