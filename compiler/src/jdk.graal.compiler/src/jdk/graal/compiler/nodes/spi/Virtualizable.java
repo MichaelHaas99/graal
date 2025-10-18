@@ -42,4 +42,12 @@ public interface Virtualizable {
      * @param tool the tool used to describe the effects of this node
      */
     void virtualize(VirtualizerTool tool);
+
+    /**
+     * Indicates if the method {@link #virtualize(VirtualizerTool)} also handles nullable virtual
+     * inputs.
+     */
+    default boolean virtualizeHandlesNullableVirtualInputs() {
+        return false;
+    }
 }

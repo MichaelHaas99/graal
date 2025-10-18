@@ -255,6 +255,11 @@ public class PiNode extends FloatingGuardedNode implements LIRLowerable, Virtual
     private boolean stopPEAUnproxify = false;
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode) {

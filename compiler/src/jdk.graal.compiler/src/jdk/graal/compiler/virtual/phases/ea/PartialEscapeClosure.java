@@ -289,6 +289,18 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return node instanceof VirtualizableAllocation;
     }
 
+    protected void sanityCheckNullableVirtualInputs(ValueNode node) {
+        for (Node input : node.inputs()) {
+            if (input instanceof ValueNode) {
+                ValueNode alias = tool.getAlias((ValueNode) input);
+                if (alias instanceof VirtualObjectNode virtualObjectNode && !tool.isNonNull(virtualObjectNode)) {
+                    GraalError.guarantee(((Virtualizable) node).virtualizeHandlesNullableVirtualInputs(), "%s does not handle nullable virtual objects in its virtualize method.", node.getNodeClass());
+                    break;
+                }
+            }
+        }
+    }
+
     private boolean processVirtualizable(ValueNode node, FixedNode insertBefore, BlockT state, GraphEffectList effects) {
         tool.reset(state, node, insertBefore, effects);
         switch (currentMode) {
@@ -341,6 +353,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             default:
                 throw GraalError.shouldNotReachHere("Unknown effects closure mode " + currentMode); // ExcludeFromJacocoGeneratedReport
         }
+        sanityCheckNullableVirtualInputs(node);
         return virtualize(node, tool);
     }
 

@@ -210,6 +210,11 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode virtualObjectNode) {

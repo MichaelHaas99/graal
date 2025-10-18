@@ -259,6 +259,11 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable {
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(getValue());
         TriState fold = tryFold(alias.stamp(NodeView.DEFAULT));

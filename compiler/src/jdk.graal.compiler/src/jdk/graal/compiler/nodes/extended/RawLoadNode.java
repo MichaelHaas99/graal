@@ -141,6 +141,11 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode) {

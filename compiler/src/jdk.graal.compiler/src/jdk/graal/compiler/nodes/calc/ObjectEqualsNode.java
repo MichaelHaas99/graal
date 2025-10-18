@@ -308,6 +308,11 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode node = virtualizeComparison(getX(), getY(), graph(), tool);
         if (node == null) {
