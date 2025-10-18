@@ -1351,9 +1351,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 for (int i = 0; i < states.length; i++) {
                     int object = getObject.applyAsInt(i);
                     if (object != -1) {
-                        if (states[i].getObjectState(object).getNonNull() != null) {
+                        ObjectState state = states[i].getObjectState(object);
+                        if (state.getNonNull() != null) {
                             additionalPhisCount = 2;
                             break;
+                        }
+                        if (state.isMaterialized()) {
+                            // we need to continue searching if one state also has a non-null info,
+                            // so no break her
+                            additionalPhisCount = 1;
                         }
                     }
                 }

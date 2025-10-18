@@ -56,6 +56,12 @@ public class ObjectState {
     private LockState locks;
     private boolean ensureVirtualized;
 
+    /**
+     * We store an oop in this field and not in {@code materializedValue} if we are not sure that
+     * the virtual object has a materialized value. E.g. when we merge a virtual object havng a
+     * materialized value and a virtual object having no materialized value. For the virtual object
+     * having no materialized value we pass in a null pointer.
+     */
     private ValueNode oop;
     private ValueNode nonNull;
 
