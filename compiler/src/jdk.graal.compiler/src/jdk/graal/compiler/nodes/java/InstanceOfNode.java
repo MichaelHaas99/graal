@@ -264,7 +264,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable {
         TriState fold = tryFold(alias.stamp(NodeView.DEFAULT));
         if (fold != TriState.UNKNOWN) {
             tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
-        } else if (alias instanceof VirtualObjectNode && !StampTool.isPointerNonNull(alias)) {
+        } else if (alias instanceof VirtualObjectNode virtualObjectNode && !tool.isNonNull(virtualObjectNode)) {
             // in case folding failed because the stamp was nullable retry non-null
             Stamp nonNull = StampFactory.objectNonNull().improveWith(alias.stamp(NodeView.DEFAULT));
             fold = tryFold(nonNull);
@@ -273,7 +273,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable {
                 // null
                 LogicNode result;
                 if (fold.isTrue()) {
-                    result = new IntegerEqualsNode(tool.getNonNull((VirtualObjectNode) alias), ConstantNode.forInt(1));
+                    result = new IntegerEqualsNode(tool.getNonNull(virtualObjectNode), ConstantNode.forInt(1));
                     tool.addNode(result);
                 } else {
                     result = LogicConstantNode.forBoolean(false, graph());

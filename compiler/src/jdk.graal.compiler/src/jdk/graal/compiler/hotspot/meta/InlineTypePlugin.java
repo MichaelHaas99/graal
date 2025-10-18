@@ -43,7 +43,6 @@ import jdk.graal.compiler.nodes.extended.IsFlatArrayNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
-import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
@@ -104,18 +103,6 @@ public class InlineTypePlugin implements NodePlugin {
 
         }
 
-        // do null-check here to avoid it in PEA, if the holder has no identity
-        Stamp stamp = StampFactory.forDeclaredType(b.getAssumptions(), field.getType().resolve(field.getDeclaringClass()), false).getTrustedStamp();
-        if (!GraalValhallaServices.isIdentity(field.getDeclaringClass()) || StampTool.isNullableInlineType(stamp, b.getValhallaOptionsProvider())) {
-            ValueNode nonNullObject = genNullCheck(b, object);
-            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNullObject, field));
-            if (virtualizeFromInlineObject && StampTool.isNullableInlineType(load, b.getValhallaOptionsProvider())) {
-                FixedNode addBefore = b.add(new ValueAnchorNode());
-                load = virtualizeFromInlineObject(b, load, stamp.javaType(b.getMetaAccess()), addBefore);
-            }
-            b.push(field.getJavaKind(), load);
-            return true;
-        }
         return false;
     }
 

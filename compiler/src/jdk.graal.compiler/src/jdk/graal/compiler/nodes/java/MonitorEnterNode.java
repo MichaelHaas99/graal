@@ -75,11 +75,14 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
 
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode virtual) {
-            assert StampTool.isPointerNonNull(virtual) : "null-check should be done before PEA";
+            if (!tool.isNonNull(virtual)) {
+                tool.createNullCheck(virtual);
+                tool.castToNonNull(virtual);
+            }
             if (virtual.hasIdentity()) {
                 tool.addLock(virtual, getMonitorId());
                 tool.delete();
-            } else if (StampTool.isInlineType(virtual, tool.getValhallaOptionsProvider())) {
+            } else if (StampTool.isNullableInlineType(virtual, tool.getValhallaOptionsProvider())) {
                 LogicNode node = LogicConstantNode.forBoolean(false, graph());
                 ValueNode deopt = new FixedGuardNode(node, DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile);
                 tool.replaceWith(deopt);

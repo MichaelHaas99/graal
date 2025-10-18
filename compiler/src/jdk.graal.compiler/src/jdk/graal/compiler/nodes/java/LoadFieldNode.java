@@ -218,14 +218,18 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
             if (fieldIndex != -1) {
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
-                    assert StampTool.isPointerNonNull(virtualObjectNode) : "null-check should be done before PEA";
-                    if (StampTool.isInlineType(virtualObjectNode, tool.getValhallaOptionsProvider()) && !(tool.getAlias(entry) instanceof VirtualObjectNode)) {
-                        ValueNode replacement = new FixedValueAnchorNode(entry);
-                        tool.addNode(replacement);
-                        tool.replaceWith(replacement);
-                    } else {
-                        tool.replaceWith(entry);
+                    if (!tool.isNonNull(virtualObjectNode)) {
+                        tool.createNullCheck(virtualObjectNode);
+                        tool.castToNonNull(virtualObjectNode);
+                        if (!(tool.getAlias(entry) instanceof VirtualObjectNode)) {
+                            ValueNode replacement = new FixedValueAnchorNode(entry);
+                            tool.addNode(replacement);
+                            tool.replaceWith(replacement);
+                            return;
+                        }
                     }
+                    tool.replaceWith(entry);
+
                 } else {
                     assert stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Int && (entry.stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Long || entry.getStackKind() == JavaKind.Double ||
                                     entry.getStackKind() == JavaKind.Illegal) : "Can only allow different stack kind two slot marker writes on one stot fields.";
