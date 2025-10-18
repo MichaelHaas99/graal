@@ -118,7 +118,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             TypeReference type = StampTool.typeReferenceOrNull(alias);
             assert type != null && type.isExact() : "type should not be null for constant hub node in scalarized return";
 
-            if (!StampTool.isPointerNonNull(alias) || !tool.hasNullOop(virtualObjectNode)) {
+            if (!tool.isNonNull(virtualObjectNode) || !tool.hasNullOop(virtualObjectNode)) {
                 // nullable scalarized inline object or non-null scalarized inline object including
                 // oop
                 ValueNode oop = tool.getOop((VirtualObjectNode) alias);

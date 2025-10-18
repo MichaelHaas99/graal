@@ -48,7 +48,6 @@ import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualBoxingNode;
@@ -155,7 +154,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         if (virtual.hasIdentity() || JavaConstant.isNull(other.asConstant())) {
             // virtual has identity or other is constant null, they can only be equal if they are
             // both null
-            if (StampTool.isPointerNonNull(virtual)) {
+            if (tool.isNonNull(virtual)) {
                 // virtual is non-null they can never be the same objects
                 return LogicConstantNode.contradiction(graph);
             } else {
@@ -210,15 +209,15 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                     ValueNode yNonNull = tool.getNonNull(yVirtual);
 
                     LogicNode orWithFieldComparison = LogicConstantNode.contradiction();
-                    if (!StampTool.isPointerNonNull(xVirtual) && !StampTool.isPointerNonNull(yVirtual)) {
+                    if (!tool.isNonNull(xVirtual) && !tool.isNonNull(yVirtual)) {
                         assert xNonNull != null && yNonNull != null : "nullable scalarized object expected non-null information to be set";
                         nonNullComparison = new IntegerEqualsNode(xNonNull, yNonNull);
 
                         // need to make field comparison true, in case both are null
                         orWithFieldComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(0));
-                    } else if (StampTool.isPointerNonNull(xVirtual) && StampTool.isPointerNonNull(yVirtual)) {
+                    } else if (tool.isNonNull(xVirtual) && tool.isNonNull(yVirtual)) {
                         // nothing to do both are non-null
-                    } else if (!StampTool.isPointerNonNull(xVirtual)) {
+                    } else if (!tool.isNonNull(xVirtual)) {
                         // x may be null, y is not therefore x needs to be non-null
                         assert xNonNull != null : "nullable scalarized object expected non-null information to be set";
                         nonNullComparison = new IntegerEqualsNode(xNonNull, ConstantNode.forInt(1));
