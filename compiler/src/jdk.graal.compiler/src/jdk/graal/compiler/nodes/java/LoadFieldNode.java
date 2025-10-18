@@ -46,7 +46,6 @@ import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
-import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -221,12 +220,6 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
                     if (!tool.isNonNull(virtualObjectNode)) {
                         tool.createNullCheck(virtualObjectNode);
                         tool.castToNonNull(virtualObjectNode);
-                        if (!(tool.getAlias(entry) instanceof VirtualObjectNode)) {
-                            ValueNode replacement = new FixedValueAnchorNode(entry);
-                            tool.addNode(replacement);
-                            tool.replaceWith(replacement);
-                            return;
-                        }
                     }
                     tool.replaceWith(entry);
 

@@ -55,7 +55,6 @@ import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
-import jdk.graal.compiler.nodes.extended.FixedValueAnchorNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
@@ -168,13 +167,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
 
-            if (object != null) {
-                if (StampTool.isNullableInlineType(object, tool.getValhallaOptionsProvider())) {
-                    FixedWithNextNode replacement = new FixedValueAnchorNode(cachedValue);
-                    effects.addFixedNodeBefore(replacement, load);
-                    cachedValue = replacement;
-                }
-            }
             // perform the read elimination
             effects.replaceAtUsages(load, cachedValue, load);
             addScalarAlias(load, cachedValue);
