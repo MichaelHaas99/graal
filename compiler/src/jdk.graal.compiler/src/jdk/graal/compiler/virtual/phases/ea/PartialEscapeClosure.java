@@ -1010,15 +1010,22 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         ResolvedJavaType type = StampTool.typeOrNull(virtualObjects.get(object), tool.getMetaAccess());
                         assert type != null : "expected type to be non-null";
                         boolean allMaterialized = true;
+                        boolean virtualize = true;
                         if (!InlineTypeUtil.isCircularInlineType(type)) {
                             for (int i = 0; i < states.length; i++) {
                                 ObjectState objectState = states[i].getObjectState(object);
                                 if (!objectState.isMaterialized()) {
                                     allMaterialized = false;
+                                    if (objectState.isLarval()) {
+                                        // Disallow scalarization of value objects as they are
+                                        // larval and we are not allowed to lose identity.
+                                        virtualize = false;
+                                    }
                                     break;
                                 }
                             }
                         }
+                        virtualize &= !allMaterialized;
 
                         for (int i = 0; i < states.length; i++) {
                             ObjectState obj = states[i].getObjectState(object);
@@ -1042,7 +1049,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             }
 
                             if (!obj.isVirtual()) {
-                                if (!allMaterialized && virtualizeFromInlineObject &&
+                                if (virtualize && virtualizeFromInlineObject &&
                                                 StampTool.isNullableInlineType(obj.getMaterializedValue(), tool.getValhallaOptionsProvider())) {
                                     VirtualInstanceNode virtualObject = virtualizeFromInlineObject(obj.getMaterializedValue(), states, i);
                                     virtualCount++;
@@ -1403,8 +1410,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 }
 
                             }
-                            if (entry instanceof VirtualObjectNode tempVirtual && !states[i].getObjectState(tempVirtual.getObjectId()).isMaterialized()) {
-                                allMaterialized = false;
+                            if (entry instanceof VirtualObjectNode tempVirtual) {
+                                ObjectState objectState = states[i].getObjectState(tempVirtual.getObjectId());
+                                if (!objectState.isMaterialized()) {
+                                    allMaterialized = false;
+                                    if (objectState.isLarval()) {
+                                        // Disallow scalarization of value objects as they are
+                                        // larval and we are not allowed to lose identity.
+                                        virtualize = false;
+                                    }
+                                }
                             }
                         }
                         virtualize &= !allMaterialized;
@@ -1755,8 +1770,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
-                    if (objectState != null && !objectState.isMaterialized()) {
-                        allMaterialized = false;
+                    if (objectState != null) {
+                        if (!objectState.isMaterialized()) {
+                            allMaterialized = false;
+                            if (objectState.isLarval()) {
+                                // Disallow scalarization of value objects being input to this phi,
+                                // as they are larval and we are not allowed to lose identity.
+                                virtualize = false;
+                            }
+                        }
                     }
                 }
             }

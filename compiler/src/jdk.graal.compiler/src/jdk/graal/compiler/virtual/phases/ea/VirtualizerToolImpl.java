@@ -167,6 +167,13 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public void setUnsetFields(VirtualObjectNode virtualObjectNode, List<Boolean> unsetFields) {
+        GraalError.guarantee(unsetFields != null, "unsetFields to track larval state should not be null");
+        GraalError.guarantee(virtualObjectNode.entryCount() == unsetFields.size(), "unsetFields list does not contain a value for each field");
+        state.getObjectState(virtualObjectNode).setUnsetFields(unsetFields);
+    }
+
+    @Override
     public boolean setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value, JavaKind theAccessKind, long offset) {
         ObjectState obj = state.getObjectState(virtual);
         assert obj.isVirtual() : "not virtual: " + obj;

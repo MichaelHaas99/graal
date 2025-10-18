@@ -64,6 +64,7 @@ public class ObjectState {
      */
     private ValueNode oop;
     private ValueNode nonNull;
+    private List<Boolean> unsetFields = List.of();;
 
     private EscapeObjectState cachedState;
 
@@ -125,6 +126,7 @@ public class ObjectState {
         ensureVirtualized = other.ensureVirtualized;
         oop = other.oop;
         nonNull = other.nonNull;
+        unsetFields = other.unsetFields;
     }
 
     public ObjectState cloneState() {
@@ -238,14 +240,21 @@ public class ObjectState {
         assert !isMaterialized();
         cachedState = null;
         entries[index] = value;
+        if (!unsetFields.isEmpty()) {
+            unsetFields.set(index, false);
+        }
     }
 
     public void escape(ValueNode materialized) {
         assert isVirtual();
         assert materialized != null;
         materializedValue = materialized;
-        // we want to keep value objects virtual
-        if (!StampTool.isNullableInlineType(materialized, null)) {
+        /*
+         * We want to keep value objects virtual, though if not every field was yet initialized
+         * (object is larval) we can't. We need to keep the identity until the value object becomes
+         * non-larval.
+         */
+        if (!StampTool.isNullableInlineType(materialized, null) || isLarval()) {
             entries = null;
         }
         cachedState = null;
@@ -289,6 +298,31 @@ public class ObjectState {
 
     public void setOop(ValueNode oop) {
         this.oop = oop;
+    }
+
+    public List<Boolean> getUnsetFields() {
+        return unsetFields;
+    }
+
+    /**
+     * Checks if every field was initialized.
+     * 
+     * @return true if all fields were initialized, false otherwise.
+     */
+    public boolean isLarval() {
+        if (unsetFields.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < unsetFields.size(); i++) {
+            if (unsetFields.get(i)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void setUnsetFields(List<Boolean> unsetFields) {
+        this.unsetFields = unsetFields;
     }
 
     public void clearCachedState() {

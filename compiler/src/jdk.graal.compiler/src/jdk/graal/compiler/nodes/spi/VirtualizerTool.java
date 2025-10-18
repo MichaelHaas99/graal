@@ -147,6 +147,18 @@ public interface VirtualizerTool extends CoreProviders {
      */
     void createNullCheck(VirtualObjectNode virtualObject);
 
+    /**
+     * Calling this function tells the tool to explicitly track the larval state of the virtual
+     * value object. A value object is larval if one field was not initialized yet. This is
+     * necessary when a new value object is created. It is not necessary if it already exists in
+     * scalarized form and we create a virtual object out of it. A scalarized value object has all
+     * its fields initialized.
+     * 
+     * @param unsetFields a list which contains a boolean value for each field, the entry should be
+     *            true if the field was not initialized yet.
+     */
+    void setUnsetFields(VirtualObjectNode virtualObjectNode, List<Boolean> unsetFields);
+
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 
     MonitorIdNode removeLock(VirtualObjectNode virtualObject);
