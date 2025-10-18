@@ -105,18 +105,46 @@ public interface VirtualizerTool extends CoreProviders {
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
+    /**
+     * Checks if the oop stored in the state of the virtual object is a constant null pointer.
+     */
     boolean hasNullOop(VirtualObjectNode virtualObject);
 
+    /**
+     * Extracts the oop stored in the state of the virtual object. In case
+     * {@link #isAllocatedOrNull(VirtualObjectNode)} returns true, the oop will be non-null if
+     * {@link #isNonNull(VirtualObjectNode)} returns true, null otherwise. In case
+     * {@link #isAllocatedOrNull(VirtualObjectNode)} returns false, we don't know anything about the
+     * oop.
+     */
     ValueNode getOop(VirtualObjectNode virtualObject);
 
+    /**
+     * Extracts a node from the state of a virtual object which indicates if it is non-null.
+     */
     ValueNode getNonNull(VirtualObjectNode virtualObject);
 
+    /**
+     * Checks if the virtual value object was already materialized. As they have no identity, they
+     * can stay virtual. This function always returns true for a virtual object which represents a
+     * null value, as its materialized value is just a null pointer.
+     */
     boolean isAllocatedOrNull(VirtualObjectNode virtualObject);
 
+    /**
+     * Checks if the virtual value object is non-null.
+     */
     boolean isNonNull(VirtualObjectNode virtualObject);
 
+    /**
+     * Changes the object state of a virtual object such that {@link #getNonNull(VirtualObjectNode)}
+     * returns a constant one node.
+     */
     void castToNonNull(VirtualObjectNode virtualObject);
 
+    /**
+     * Adds a guard into the graph checking the value of {@link #getNonNull(VirtualObjectNode)}.
+     */
     void createNullCheck(VirtualObjectNode virtualObject);
 
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
