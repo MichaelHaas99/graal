@@ -1685,9 +1685,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     for (int j = 0; j < states.length; j++) {
                         isAllocatedOrNull &= states[j].getObjectState(getObject.applyAsInt(j)).isMaterialized();
                     }
+                    // virtual objects can't be larval anymore
                     newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual, oop, nonNull, isAllocatedOrNull));
                 } else {
-                    newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual));
+                    // virtual objects can be larval also pass the unset fields information
+                    ObjectState objectState = states[0].getObjectState(getObject.applyAsInt(0));
+                    newState.addObject(resultObject, new ObjectState(values, objectState.getLocks(), ensureVirtual, objectState.getUnsetFields()));
                 }
                 return materialized;
             } else {

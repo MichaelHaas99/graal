@@ -92,10 +92,15 @@ public class ObjectState {
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
+        this(entries, locks, ensureVirtualized, List.of());
+    }
+
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, List<Boolean> unsetFields) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
+        this.unsetFields = unsetFields;
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
