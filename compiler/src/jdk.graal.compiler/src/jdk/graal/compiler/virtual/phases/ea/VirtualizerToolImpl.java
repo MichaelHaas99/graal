@@ -135,6 +135,21 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public boolean isNonNull(VirtualObjectNode virtualObject) {
+        if (StampTool.isPointerNonNull(virtualObject)) {
+            return true;
+        }
+        ValueNode nonNull = getNonNull(virtualObject);
+        return nonNull.isConstant() && nonNull.asJavaConstant().asInt() == 1;
+    }
+
+    @Override
+    public void castToNonNull(VirtualObjectNode virtualObject) {
+        ConstantNode one = ConstantNode.forInt(1, closure.cfg.graph);
+        state.getObjectState(virtualObject).setNonNull(one);
+    }
+
+    @Override
     public boolean setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value, JavaKind theAccessKind, long offset) {
         ObjectState obj = state.getObjectState(virtual);
         assert obj.isVirtual() : "not virtual: " + obj;
