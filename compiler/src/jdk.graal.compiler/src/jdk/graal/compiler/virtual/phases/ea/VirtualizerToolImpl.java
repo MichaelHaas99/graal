@@ -119,7 +119,8 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public ValueNode getOop(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).getOop();
+        assert state.getObjectState(virtualObject).isVirtual() : "should only be queried on virtual object state";
+        return state.getObjectState(virtualObject).getMaterializedValueOrOop();
     }
 
     @Override
@@ -129,7 +130,8 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public boolean isAllocatedOrNull(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).isAllocatedOrNull();
+        assert state.getObjectState(virtualObject).isVirtual() : "should only be queried on virtual object state";
+        return state.getObjectState(virtualObject).isMaterialized();
     }
 
     @Override

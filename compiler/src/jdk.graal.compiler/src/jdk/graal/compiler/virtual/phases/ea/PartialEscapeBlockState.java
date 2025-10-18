@@ -335,7 +335,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 if (entries[i] instanceof VirtualObjectNode) {
                     VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
                     ObjectState entryObj = getObjectState(entryVirtual);
-                    if (entryObj.isVirtual()) {
+                    if (!entryObj.isMaterialized()) {
                         materializeWithCommit(fixed, entryVirtual, objects, locks, values, ensureVirtual, otherAllocations, materializeEffects);
                         entryObj = getObjectState(entryVirtual);
                     }
@@ -361,16 +361,15 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
 
         ValueNode[] entries = obj.getEntries();
         ValueNode representation;
-        if (obj.isAllocatedOrNull()) {
-            representation = obj.getOop();
-        } else {
-            representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
-        }
+        representation = virtual.getMaterializedRepresentation(fixed, entries, obj.getLocks());
 
         escape(virtual.getObjectId(), representation);
         obj = getObjectState(virtual);
-        PartialEscapeClosure.updateStatesForMaterialized(this, virtual, obj.getMaterializedValue());
-        if (representation instanceof AllocatedObjectNode && !obj.isAllocatedOrNull()) {
+        // only replace the virtual object in the states if it is not virtual after materialization
+        if (!obj.isVirtual()) {
+            PartialEscapeClosure.updateStatesForMaterialized(this, virtual, obj.getMaterializedValue());
+        }
+        if (representation instanceof AllocatedObjectNode) {
             objects.add((AllocatedObjectNode) representation);
             locks.add(LockState.asList(obj.getLocks()));
             oopsOrHubs.add(obj.getOop());
@@ -384,7 +383,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 if (entries[i] instanceof VirtualObjectNode) {
                     VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
                     ObjectState entryObj = getObjectState(entryVirtual);
-                    if (entryObj.isVirtual()) {
+                    if (!entryObj.isMaterialized()) {
                         materializeWithCommit(fixed, entryVirtual, objects, locks, values, oopsOrHubs, nonNulls, ensureVirtual, otherAllocations, materializeEffects);
                         entryObj = getObjectState(entryVirtual);
                     }
@@ -393,28 +392,12 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     values.set(pos + i, entries[i]);
                 }
             }
-            objectMaterialized(virtual, representation, values.subList(pos, pos + entries.length));
+            if (!obj.isVirtual()) {
+                objectMaterialized(virtual, representation, values.subList(pos, pos + entries.length));
+            }
         } else {
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
-            if (obj.isAllocatedOrNull()) {
-                List<ValueNode> localEntries = new ArrayList<>();
-                // ensure no virtual objects are passed
-                for (ValueNode entry : List.of(entries)) {
-                    if (entry instanceof VirtualObjectNode virtualEntry) {
-                        ObjectState entryState = getObjectState(virtualEntry);
-                        assert !entryState.isVirtual() || entryState.isAllocatedOrNull() : "no virtual states allowed, was created by scalarization from a materialized object";
-                        if (entryState.isAllocatedOrNull()) {
-                            entry = entryState.getOop();
-                        } else {
-                            entry = entryState.getMaterializedValue();
-                        }
-                    }
-                    localEntries.add(entry);
-                }
-                objectMaterialized(virtual, representation, localEntries);
-            } else {
-                otherAllocations.add(representation);
-            }
+            otherAllocations.add(representation);
             assert obj.getLocks() == null;
         }
         materializeEffects.addLog(fixed.graph().getOptimizationLog(),

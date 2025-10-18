@@ -33,6 +33,7 @@ import jdk.graal.compiler.debug.CounterKey;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.LockState;
 import jdk.graal.compiler.nodes.virtual.MaterializedObjectState;
@@ -57,7 +58,6 @@ public class ObjectState {
 
     private ValueNode oop;
     private ValueNode nonNull;
-    private boolean isAllocatedOrNull;
 
     private EscapeObjectState cachedState;
 
@@ -76,9 +76,12 @@ public class ObjectState {
 
     public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
         this(entries, locks, ensureVirtualized);
-        this.oop = oop;
+        if (isAllocatedOrNull) {
+            this.materializedValue = oop;
+        } else {
+            this.oop = oop;
+        }
         this.nonNull = nonNull;
-        this.isAllocatedOrNull = isAllocatedOrNull;
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
@@ -93,9 +96,12 @@ public class ObjectState {
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
-        this.oop = oop;
+        if (isAllocatedOrNull) {
+            this.materializedValue = oop;
+        } else {
+            this.oop = oop;
+        }
         this.nonNull = nonNull;
-        this.isAllocatedOrNull = isAllocatedOrNull;
     }
 
     public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
@@ -113,7 +119,6 @@ public class ObjectState {
         ensureVirtualized = other.ensureVirtualized;
         oop = other.oop;
         nonNull = other.nonNull;
-        isAllocatedOrNull = other.isAllocatedOrNull;
     }
 
     public ObjectState cloneState() {
@@ -163,7 +168,7 @@ public class ObjectState {
         GET_ESCAPED_OBJECT_STATE.increment(debug);
         if (cachedState == null) {
             CREATE_ESCAPED_OBJECT_STATE.increment(debug);
-            if (isVirtual()) {
+            if (!isMaterialized()) {
                 /*
                  * Clear out entries that are default values anyway.
                  *
@@ -185,9 +190,20 @@ public class ObjectState {
 
     }
 
+    /**
+     * Checks if this state is virtual. A materialized state without identity can also be
+     * materialized.
+     */
     public boolean isVirtual() {
-        assert materializedValue == null ^ entries == null : Assertions.errorMessageContext("materializedValues", materializedValue, "entries", entries);
-        return materializedValue == null;
+        return entries != null;
+    }
+
+    /**
+     * Checks if this state is allocated (or null) or has not been allocated yet. A materialized
+     * state without identity can also be virtual.
+     */
+    public boolean isMaterialized() {
+        return materializedValue != null;
     }
 
     /**
@@ -204,12 +220,16 @@ public class ObjectState {
     }
 
     public ValueNode getMaterializedValue() {
-        assert !isVirtual();
+        assert isMaterialized();
         return materializedValue;
     }
 
+    public ValueNode getMaterializedValueOrOop() {
+        return isMaterialized() ? materializedValue : oop;
+    }
+
     public void setEntry(int index, ValueNode value) {
-        assert isVirtual();
+        assert !isMaterialized();
         cachedState = null;
         entries[index] = value;
     }
@@ -218,13 +238,16 @@ public class ObjectState {
         assert isVirtual();
         assert materialized != null;
         materializedValue = materialized;
-        entries = null;
+        // we want to keep value objects virtual
+        if (!StampTool.isNullableInlineType(materialized, null)) {
+            entries = null;
+        }
         cachedState = null;
-        assert !isVirtual();
+        assert isMaterialized();
     }
 
     public void updateMaterializedValue(ValueNode value) {
-        assert !isVirtual();
+        assert isMaterialized();
         assert value != null;
         cachedState = null;
         materializedValue = value;
@@ -254,20 +277,12 @@ public class ObjectState {
         return nonNull;
     }
 
-    public boolean isAllocatedOrNull() {
-        return isAllocatedOrNull;
-    }
-
     public void setNonNull(ValueNode nonNull) {
         this.nonNull = nonNull;
     }
 
     public void setOop(ValueNode oop) {
         this.oop = oop;
-    }
-
-    public void setAllocatedOrNull(boolean isAllocatedOrNull) {
-        this.isAllocatedOrNull = isAllocatedOrNull;
     }
 
     public void clearCachedState() {
