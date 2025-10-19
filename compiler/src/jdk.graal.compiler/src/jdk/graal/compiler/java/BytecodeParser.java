@@ -4472,6 +4472,11 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         frameState.setStateVerification(wasEnabled);
     }
 
+    @Override
+    public void replaceValueInFrameState(ValueNode oldValue, ValueNode newValue) {
+        this.frameState.replaceValue(oldValue, newValue);
+    }
+
     protected NodeSourcePosition createBytecodePosition() {
         NodeSourcePosition bytecodePosition = frameState.createBytecodePosition(bci());
         return bytecodePosition;

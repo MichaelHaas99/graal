@@ -220,6 +220,10 @@ public interface GraphBuilderContext extends GraphBuilderTool {
         setStateAfter(sideEffect);
     }
 
+    default void replaceValueInFrameState(ValueNode oldValue, ValueNode newValue) {
+        throw new UnsupportedOperationException("replacing a value in the framestate is not implemented");
+    }
+
     /**
      * Gets the parsing context for the method that inlines the method being parsed by this context.
      */
@@ -362,15 +366,19 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     default ValueNode nullCheckedValue(ValueNode value, DeoptimizationAction action) {
         if (!StampTool.isPointerNonNull(value)) {
             LogicNode condition = getGraph().unique(IsNullNode.create(value));
-            GuardingNode guardingNode;
-            if (needsExplicitException()) {
-                guardingNode = emitBytecodeExceptionCheck(condition, false, BytecodeExceptionNode.BytecodeExceptionKind.NULL_POINTER);
-            } else {
-                guardingNode = append(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, action, true));
-            }
-            return getGraph().addOrUniqueWithInputs(PiNode.create(value, objectNonNull(), guardingNode.asNode()));
+            return nullCheckedValue(condition, value, action);
         }
         return value;
+    }
+
+    default ValueNode nullCheckedValue(LogicNode condition, ValueNode value, DeoptimizationAction action) {
+        GuardingNode guardingNode;
+        if (needsExplicitException()) {
+            guardingNode = emitBytecodeExceptionCheck(condition, false, BytecodeExceptionNode.BytecodeExceptionKind.NULL_POINTER);
+        } else {
+            guardingNode = append(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, action, true));
+        }
+        return getGraph().addOrUniqueWithInputs(PiNode.create(value, objectNonNull(), guardingNode.asNode()));
     }
 
     /**

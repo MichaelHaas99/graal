@@ -91,7 +91,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         this(type, oop, fieldValues, nonNull, isAllocatedOrNull, false);
     }
 
-    public void setFieldValue(ResolvedJavaField field, ValueNode value) {
+    public ValueNode getField(ResolvedJavaField field) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
         int index = -1;
         // on average fields.length == ~6, so a linear search is fast enough
@@ -102,9 +102,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         }
 
         if (index != -1) {
-            fieldValues.set(index, value);
+            return fieldValues.get(index);
         }
-
+        return null;
     }
 
     public ValueNode getOop() {
@@ -113,6 +113,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public ValueNode getNonNull() {
         return nonNull;
+    }
+
+    public void setNonNull(ValueNode nonNull) {
+        this.updateUsages(this.nonNull, nonNull);
+        this.nonNull = nonNull;
     }
 
     public boolean isAllocatedOrNull() {
@@ -216,6 +221,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 tool.removeIfUnused(input);
             }
         }
+
+        if (usages().count() == 0) {
+            List<Node> inputSnapshot = inputs().snapshot();
+            graph().removeFixed(this);
+            for (Node input : inputSnapshot) {
+                tool.removeIfUnused(input);
+            }
+        }
     }
 
     @Override
@@ -239,6 +252,15 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     private boolean isNull() {
         return nonNull != null && nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0;
+    }
+
+    /**
+     * Checks if we can use this node to perform canonicalization, e.g. replace a load field node
+     * with an input of this node. This is not allowed if we may delete this node at a later stage,
+     * e.g. the invoke node whose scalarized return this node catches is inlined.
+     */
+    public boolean canBeUsedInCanonicalization() {
+        return !handlesScalarizedReturn;
     }
 
     private boolean virtualize = true;

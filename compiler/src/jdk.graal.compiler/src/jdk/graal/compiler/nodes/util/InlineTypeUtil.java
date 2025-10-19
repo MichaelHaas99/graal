@@ -255,6 +255,13 @@ public class InlineTypeUtil {
     private static ValueNode[] createScalarizationCFGForInvokeArg(FixedNode addBefore, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
         boolean isNullFree = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
 
+        if (GraphUtil.unproxify(arg) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+            List<ValueNode> list = new ArrayList<>(inlineTypeNode.getFieldValues());
+            if (!isNullFree) {
+                list.addFirst(inlineTypeNode.getNonNull());
+            }
+            return list.toArray(new ValueNode[list.size()]);
+        }
         return createScalarizationCFG(addBefore, arg,
                         GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true), isNullFree, !isNullFree);
     }

@@ -8,6 +8,7 @@ import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -15,6 +16,7 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -56,9 +58,14 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
         // PEA will replace oop with tagged hub if it is virtual
         ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
         returnNode.fieldValues.clear();
-        returnNode.fieldValues.addAll(List.of(phis));
+        if (GraphUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+            List<ValueNode> list = inlineTypeNode.getFieldValues();
+            returnNode.fieldValues.addAll(list);
+        } else {
+            ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
+            returnNode.fieldValues.addAll(List.of(phis));
+        }
         return returnNode;
     }
 

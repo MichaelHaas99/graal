@@ -55,6 +55,7 @@ import jdk.graal.compiler.nodes.java.StoreFlatElementNode;
 import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
@@ -101,6 +102,18 @@ public class InlineTypePlugin implements NodePlugin {
             genHandleNullFreeInlineTypeField(b, fieldValue, field);
             return true;
 
+        }
+
+        if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+            if (!StampTool.isPointerNonNull(inlineTypeNode)) {
+                b.nullCheckedValue(inlineTypeNode.createNullCheck(), inlineTypeNode, DeoptimizationAction.InvalidateReprofile);
+                InlineTypeNode nonNullNode = (InlineTypeNode) inlineTypeNode.copyWithInputs(false);
+                b.add(nonNullNode);
+                nonNullNode.setNonNull(ConstantNode.forInt(1, b.getGraph()));
+                b.replaceValueInFrameState(inlineTypeNode, nonNullNode);
+            }
+            b.push(field.getJavaKind(), inlineTypeNode.getField(field));
+            return true;
         }
 
         return false;
