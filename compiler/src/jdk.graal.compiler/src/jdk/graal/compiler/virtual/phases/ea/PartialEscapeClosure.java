@@ -878,8 +878,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private EconomicMap<ValuePhiNode, VirtualObjectNode> valueObjectVirtuals;
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
-        protected EconomicMap<PartialEscapeClosure.MergeProcessor.EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
+        protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
         protected EconomicMap<VirtualizedNullCacheKey, VirtualObjectNode> virtualizedNullPointerCache;
+        protected EconomicMap<ValueNodeStateKey, VirtualInstanceNode> mergeAliases = EconomicMap.create(Equivalence.DEFAULT);
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -2004,16 +2005,25 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         int state,
                         int scalarizationDepth,
                         AbstractMergeNode merge) {
-
         }
 
         public record VirtualizedNullCacheKey(
                         ResolvedJavaType type,
                         int state) {
+        }
 
+        protected record ValueNodeStateKey(
+                        ValueNode node,
+                        int state) {
         }
 
         // TODO: probably not all values needed to produce a key
+        /**
+         * Must be used to get a cached virtual object node which is needed when we merge an entry
+         * in an object state. The result of this merge will be virtual again. The virtual object in
+         * this entry should be the same during multiple loop iterations otherwise we won't achieve
+         * a stable state.
+         */
         protected VirtualObjectNode getEntryMergeObject(int resultObject, int object, int entry, int state, int scalarizationDepth, AbstractMergeNode mergeNode,
                         VirtualObjectNode currentResultObject) {
             if (needsCaching) {
@@ -2040,6 +2050,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return duplicate;
         }
 
+        /**
+         * Must be used to get the virtual object aliased with a phi node after merging. We can't
+         * just take a virtual object of the phis inputs as it can be different for each iteration
+         * of a loop. This is the case when we scalarize in the loop block and create a new virtual
+         * object in each iteration. Whereas the first input of the phi would always be stable
+         * (dominator block), we always choose the input of the phi which is nullable to be cached.
+         */
         protected VirtualObjectNode getPhiResultObject(PhiNode phi, VirtualObjectNode currentResultObject) {
             if (needsCaching && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
                 return getPhiResultObjectCached(phi, currentResultObject);
@@ -2062,7 +2079,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
         private VirtualObjectNode getVirtualizedNullPointerCached(ResolvedJavaType type, int state, VirtualObjectNode currentResultObject) {
             if (virtualizedNullPointerCache == null) {
-                virtualizedNullPointerCache = EconomicMap.create(Equivalence.IDENTITY);
+                virtualizedNullPointerCache = EconomicMap.create(Equivalence.DEFAULT);
             }
             VirtualizedNullCacheKey key = new VirtualizedNullCacheKey(type, state);
             VirtualObjectNode result = virtualizedNullPointerCache.get(key);
@@ -2071,6 +2088,30 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 return currentResultObject;
             }
             return result;
+        }
+
+        public VirtualInstanceNode getMergeAlias(ValueNode value, int state) {
+            /*
+             * Special case for loops: we are not allowed to cache scalarizations of nodes in the
+             * loop block, as the effects of this block may be cleared and another iteration will be
+             * started in PEA.
+             */
+            if (processingLoopBlock(state)) {
+                // we are processing the loop block, return null
+                return null;
+            }
+            return mergeAliases.get(new ValueNodeStateKey(value, state));
+        }
+
+        private void setMergeAlias(ValueNode value, int state, VirtualInstanceNode virtualInstanceNode) {
+            if (processingLoopBlock(state)) {
+                return;
+            }
+            mergeAliases.put(new ValueNodeStateKey(value, state), virtualInstanceNode);
+        }
+
+        private boolean processingLoopBlock(int state) {
+            return needsCaching && state != 0;
         }
 
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex) {
@@ -2099,7 +2140,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return the newly create virtual object
          */
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex, Stamp phiStamp, VirtualObjectNode virtualObjectNode) {
+            // TODO maybe we should not call this function when we scalarize in a loop block as this
+            // scalarization will happen at every loop iteration at runtime
+
             assert !(node instanceof VirtualObjectNode) : "should not be virtual";
+
+            // check the cache if we already scalarized the node in the predecessor
+            VirtualInstanceNode mergeAlias = getMergeAlias(node, predecessorIndex);
+            if (mergeAlias != null) {
+                return mergeAlias;
+            }
             HIRBlock predecessor = getPredecessor(predecessorIndex);
             GraphEffectList bEffects = blockEffects.get(predecessor);
 
@@ -2129,20 +2179,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             ValueNode nonNull;
 
             HIRBlock block = getPredecessor(predecessorIndex);
-            ResolvedJavaField[] fields = fieldsWithoutValue.toArray(new ResolvedJavaField[fieldsWithoutValue.size()]);
+            ResolvedJavaField[] fieldsToLoad = fieldsWithoutValue.toArray(new ResolvedJavaField[fieldsWithoutValue.size()]);
 
-            ValueNode[] additionalFieldValues = new ValueNode[fields.length];
-            int additionalFieldValuesIndex = 0;
+            ValueNode[] loadedFieldValues = new ValueNode[fieldsToLoad.length];
+            int loadedFieldValuesIndex = 0;
 
             FixedNode addBeforeFixed = block.getEndNode();
             int entryStateIndex = 0;
             if (StampTool.isPointerNonNull(node)) {
                 nonNull = ConstantNode.forInt(1, graph());
-                for (int i = 0; i < fields.length; i++) {
-                    LoadFieldNode load = LoadFieldNode.create(graph().getAssumptions(), node, fields[i]);
+                for (int i = 0; i < fieldsToLoad.length; i++) {
+                    LoadFieldNode load = LoadFieldNode.create(graph().getAssumptions(), node, fieldsToLoad[i]);
                     bEffects.addFixedNodeBefore(load, addBeforeFixed);
-                    additionalFieldValues[additionalFieldValuesIndex++] = load;
-
+                    loadedFieldValues[loadedFieldValuesIndex++] = load;
                 }
             } else if (StampTool.isPointerAlwaysNull(node)) {
                 VirtualObjectNode cached = getVirtualizedNullPointerCached(instanceClass, predecessorIndex, virtualObject);
@@ -2150,32 +2199,32 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     return (VirtualInstanceNode) cached;
                 }
                 nonNull = ConstantNode.forInt(0, graph());
-                for (int i = 0; i < fields.length; i++) {
-                    ConstantNode load = ConstantNode.defaultForKind(fields[i].getJavaKind());
+                for (int i = 0; i < fieldsToLoad.length; i++) {
+                    ConstantNode load = ConstantNode.defaultForKind(fieldsToLoad[i].getJavaKind());
                     bEffects.addFloatingNode(load, "scalarizing null value");
-                    additionalFieldValues[additionalFieldValuesIndex++] = load;
+                    loadedFieldValues[loadedFieldValuesIndex++] = load;
                 }
             } else {
-                ValuePhiNode[] phis = new ValuePhiNode[fields.length + 1];
+                ValuePhiNode[] phis = new ValuePhiNode[fieldsToLoad.length + 1];
                 ValuePhiNode phi = new ValuePhiNode(StampFactory.forInteger(JavaKind.Int, 0, 1), null, new ValueNode[2]);
                 nonNull = phi;
                 phis[0] = phi;
                 bEffects.addFloatingNode(nonNull, "virtualMergePhiNonNull");
 
-                for (int j = 0; j < fields.length; j++) {
-                    phi = new ValuePhiNode(StampFactory.forDeclaredType(graph().getAssumptions(), fields[j].getType(), false).getTrustedStamp(), null, new ValueNode[2]);
+                for (int j = 0; j < fieldsToLoad.length; j++) {
+                    phi = new ValuePhiNode(StampFactory.forDeclaredType(graph().getAssumptions(), fieldsToLoad[j].getType(), false).getTrustedStamp(), null, new ValueNode[2]);
                     bEffects.addFloatingNode(phi, "virtualMergePhiValues");
-                    additionalFieldValues[additionalFieldValuesIndex++] = phi;
+                    loadedFieldValues[loadedFieldValuesIndex++] = phi;
                     phis[j + 1] = phi;
                 }
 
-                LoadFieldNode[] nonNullValues = new LoadFieldNode[fields.length];
-                for (int i = 0; i < fields.length; i++) {
-                    nonNullValues[i] = LoadFieldNode.create(graph().getAssumptions(), node, fields[i]);
+                LoadFieldNode[] nonNullValues = new LoadFieldNode[fieldsToLoad.length];
+                for (int i = 0; i < fieldsToLoad.length; i++) {
+                    nonNullValues[i] = LoadFieldNode.create(graph().getAssumptions(), node, fieldsToLoad[i]);
                 }
-                ConstantNode[] nullValues = new ConstantNode[fields.length];
-                for (int i = 0; i < fields.length; i++) {
-                    nullValues[i] = ConstantNode.defaultForKind(fields[i].getJavaKind());
+                ConstantNode[] nullValues = new ConstantNode[fieldsToLoad.length];
+                for (int i = 0; i < fieldsToLoad.length; i++) {
+                    nullValues[i] = ConstantNode.defaultForKind(fieldsToLoad[i].getJavaKind());
                 }
 
                 MergeNode mergeNode = new MergeNode();
@@ -2188,7 +2237,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                     @Override
                     void apply(StructuredGraph graph) {
-                        InlineTypeUtil.createScalarizationCFG(block.getEndNode(), node, List.of(fields), false, true, phis, nonNullValues, nullValues, mergeNode);
+                        InlineTypeUtil.createScalarizationCFG(block.getEndNode(), node, List.of(fieldsToLoad), false, true, phis, nonNullValues, nullValues, mergeNode);
                     }
                 });
                 bEffects.add(new EffectList.SimpleEffect("set phi inputs") {
@@ -2204,7 +2253,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         current.setMerge(mergeNode);
                         current.setValueAt(0, ConstantNode.forInt(1, graph));
                         current.setValueAt(1, ConstantNode.forInt(0, graph));
-                        for (int i = 0; i < fields.length; i++) {
+                        for (int i = 0; i < fieldsToLoad.length; i++) {
                             current = phis[i + 1];
                             current.setMerge(mergeNode);
                             current.setValueAt(0, nonNullValues[i]);
@@ -2214,20 +2263,32 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 });
 
             }
-            additionalFieldValuesIndex = 0;
-            for (int i = 0; i < fields.length; i++) {
+
+            // save the loaded values in the entry state of the new virtual object
+            loadedFieldValuesIndex = 0;
+            for (int i = 0; i < fieldsToLoad.length; i++) {
                 while (entryStateIndex < entryState.length && entryState[entryStateIndex] != null) {
+                    // the entry already contains a value continue
                     entryStateIndex++;
                 }
                 if (entryStateIndex == entryState.length) {
                     throw new GraalError("unexpected end of inline object");
                 }
-                entryState[entryStateIndex] = additionalFieldValues[additionalFieldValuesIndex++];
+                // entry has no value yet, extract the loaded value and set it as value of the entry
+                entryState[entryStateIndex] = loadedFieldValues[loadedFieldValuesIndex++];
             }
 
+            // create the new virtual object
             FixedNode position = getPredecessor(predecessorIndex).getEndNode();
             tool.reset(state, position, position, bEffects);
             tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
+            /*
+             * Put the new virtual object as an alias of the node in the given predecessor. This
+             * avoids multiple scalarizations of the same node and in the worst case the creation of
+             * multiple diamonds. They even become dead when they are inserted into the dominator
+             * block of the loop and we re-iterate.
+             */
+            setMergeAlias(node, predecessorIndex, (VirtualInstanceNode) virtualObject);
             return (VirtualInstanceNode) virtualObject;
         }
 
