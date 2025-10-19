@@ -106,6 +106,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     private boolean virtualize = true;
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         if (!virtualize) {
             return;
