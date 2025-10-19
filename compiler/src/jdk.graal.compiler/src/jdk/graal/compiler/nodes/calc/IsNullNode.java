@@ -39,6 +39,7 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.UnaryOpLogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -147,6 +148,11 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
                     continue;
                 }
             }
+
+            if (forValue instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+                return inlineTypeNode.createNullCheck(false);
+            }
+
             /*
              * If we are at original node, just return it. Otherwise create a new node.
              */

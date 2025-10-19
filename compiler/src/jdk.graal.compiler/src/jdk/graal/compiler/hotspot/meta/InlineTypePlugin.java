@@ -105,13 +105,7 @@ public class InlineTypePlugin implements NodePlugin {
         }
 
         if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
-            if (!StampTool.isPointerNonNull(inlineTypeNode)) {
-                b.nullCheckedValue(inlineTypeNode.createNullCheck(), inlineTypeNode, DeoptimizationAction.InvalidateReprofile);
-                InlineTypeNode nonNullNode = (InlineTypeNode) inlineTypeNode.copyWithInputs(false);
-                b.add(nonNullNode);
-                nonNullNode.setNonNull(ConstantNode.forInt(1, b.getGraph()));
-                b.replaceValueInFrameState(inlineTypeNode, nonNullNode);
-            }
+            b.nullCheckedValue(object, InvalidateReprofile);
             b.push(field.getJavaKind(), inlineTypeNode.getField(field));
             return true;
         }
@@ -270,21 +264,35 @@ public class InlineTypePlugin implements NodePlugin {
         List<ValueNode> readOperations = new ArrayList<>();
         List<StoreFlatFieldNode.SingleWriteOperation> writeOperations = new ArrayList<>();
 
+        boolean isAlreadyScalarized = false;
+        if (GraphUtil.unproxify(value) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+            readOperations.addAll(inlineTypeNode.getFieldValues());
+            isAlreadyScalarized = true;
+        }
         for (int i = 0; i < innerFields.length; i++) {
             ResolvedJavaField innerField = innerFields[i];
             assert !GraalValhallaServices.isFlat(innerField) : "the iteration over nested fields is handled by the loop itself";
 
-            // returned fields include a header offset of their holder, calculate the offset without
-            // the header
+            // returned fields include a header offset of their holder, calculate the offset
+            // without the header
             int off = innerField.getOffset() - HotspotGraalValhallaServices.payloadOffset(fieldType);
 
-            // holder has a header, use the offset with the header
-            ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNullValue, innerField));
-            readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
+            if (!isAlreadyScalarized) {
+                // holder has a header, use the offset with the header
+                ValueNode load = b.add(LoadFieldNode.create(b.getAssumptions(), nonNullValue, innerField));
+                readOperations.add(b.maskSubWordValue(load, innerField.getJavaKind()));
+            }
 
             // holder is directly embedded in other object, use the offset without the header
             writeOperations.add(new StoreFlatFieldNode.SingleWriteOperation(
                             GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, destOff + off), field.getDeclaringClass())));
+            // replace the value with the scalarized version in the framestate to trigger further
+            // optimizations during parsing and avoid scalarization the next time
+            if (!isAlreadyScalarized) {
+                InlineTypeNode inlineTypeNode = InlineTypeNode.createNonNullWithoutOop(fieldType, readOperations.toArray(new ValueNode[readOperations.size()]));
+                b.add(inlineTypeNode);
+                b.replaceValueInFrameState(value, inlineTypeNode);
+            }
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(nonNullObject, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);

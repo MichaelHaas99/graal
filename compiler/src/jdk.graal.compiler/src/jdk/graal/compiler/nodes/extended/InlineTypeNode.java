@@ -115,18 +115,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return nonNull;
     }
 
-    public void setNonNull(ValueNode nonNull) {
-        this.updateUsages(this.nonNull, nonNull);
-        this.nonNull = nonNull;
-    }
-
     public boolean isAllocatedOrNull() {
         return isAllocatedOrNull;
     }
 
-    public LogicNode createNullCheck() {
+    public LogicNode createNullCheck(boolean insertIntoGraph) {
         assert !StampTool.isPointerNonNull(this) : "should only be called if node is not non-null";
-        return graph().addOrUnique(new IntegerEqualsNode(nonNull, ConstantNode.forInt(0, graph())));
+        LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(0, graph()));
+        return insertIntoGraph ? graph().addOrUnique(check) : check;
     }
 
     public List<ValueNode> getFieldValues() {
@@ -287,7 +283,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 if (!StampTool.isPointerNonNull(this)) {
                     // Because the node can represent a null value, insert a guard before we
                     // virtualize
-                    tool.addNode(new FixedGuardNode(createNullCheck(), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
+                    tool.addNode(new FixedGuardNode(createNullCheck(true), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
                     if (tempOop == null) {
                         tempNonNull = null;
                     } else {

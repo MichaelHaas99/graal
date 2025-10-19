@@ -366,19 +366,15 @@ public interface GraphBuilderContext extends GraphBuilderTool {
     default ValueNode nullCheckedValue(ValueNode value, DeoptimizationAction action) {
         if (!StampTool.isPointerNonNull(value)) {
             LogicNode condition = getGraph().unique(IsNullNode.create(value));
-            return nullCheckedValue(condition, value, action);
+            GuardingNode guardingNode;
+            if (needsExplicitException()) {
+                guardingNode = emitBytecodeExceptionCheck(condition, false, BytecodeExceptionNode.BytecodeExceptionKind.NULL_POINTER);
+            } else {
+                guardingNode = append(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, action, true));
+            }
+            return getGraph().addOrUniqueWithInputs(PiNode.create(value, objectNonNull(), guardingNode.asNode()));
         }
         return value;
-    }
-
-    default ValueNode nullCheckedValue(LogicNode condition, ValueNode value, DeoptimizationAction action) {
-        GuardingNode guardingNode;
-        if (needsExplicitException()) {
-            guardingNode = emitBytecodeExceptionCheck(condition, false, BytecodeExceptionNode.BytecodeExceptionKind.NULL_POINTER);
-        } else {
-            guardingNode = append(new FixedGuardNode(condition, DeoptimizationReason.NullCheckException, action, true));
-        }
-        return getGraph().addOrUniqueWithInputs(PiNode.create(value, objectNonNull(), guardingNode.asNode()));
     }
 
     /**
