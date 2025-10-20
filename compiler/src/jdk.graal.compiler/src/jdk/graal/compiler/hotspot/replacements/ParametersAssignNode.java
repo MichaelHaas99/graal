@@ -1,5 +1,7 @@
 package jdk.graal.compiler.hotspot.replacements;
 
+import java.util.List;
+
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
@@ -9,13 +11,7 @@ import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
-import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
 
@@ -24,31 +20,25 @@ public class ParametersAssignNode extends FixedWithNextNode implements LIRLowera
 
     public static final NodeClass<ParametersAssignNode> TYPE = NodeClass.create(ParametersAssignNode.class);
 
-    @OptionalInput NodeInputList<ValueNode> oldArguments;
     @OptionalInput NodeInputList<ValueNode> newArguments;
     ResolvedJavaMethod targetMethod;
+    List<Value> values;
 
     @SuppressWarnings("this-escape")
-    public ParametersAssignNode(ValueNode[] oldArguments, ValueNode[] newArguments, ResolvedJavaMethod targetMethod) {
+    public ParametersAssignNode(List<ValueNode> newArguments, ResolvedJavaMethod targetMethod, List<Value> values) {
         super(TYPE, StampFactory.forVoid());
-        this.oldArguments = new NodeInputList<>(this, newArguments);
         this.newArguments = new NodeInputList<>(this, newArguments);
         this.targetMethod = targetMethod;
+        this.values = values;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
-        CallingConvention callingConvention = generator.getLIRGeneratorTool().getRegisterConfig().getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
-                        generator.getLIRGeneratorTool());
-        int i = 0;
-        for (ValueNode param : newArguments) {
-            Value dst = callingConvention.getArgument(i++);
-            if (ValueUtil.isStackSlot(dst)) {
-                StackSlot slot = ValueUtil.asStackSlot(dst);
-                slot.setNewArgument(true);
-                slot.setCallingConventionStackSize(callingConvention.getStackSize());
-            }
+        // process in the reverse order as the stack is likely to be extended and slots are not
+        // block by old arguments
+        for (int i = newArguments.size() - 1; i >= 0; i--) {
+            ValueNode param = newArguments.get(i);
+            Value dst = values.get(i);
             assert dst.getValueKind().equals(generator.getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT))) : dst + " " +
                             generator.getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT));
             generator.getLIRGeneratorTool().emitMove((AllocatableValue) dst, generator.operand(param));

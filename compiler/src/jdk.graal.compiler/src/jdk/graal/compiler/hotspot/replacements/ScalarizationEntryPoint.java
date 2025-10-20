@@ -25,9 +25,11 @@ import jdk.graal.compiler.lir.phases.LIRSuites;
 import jdk.graal.compiler.lir.phases.PostAllocationOptimizationPhase;
 import jdk.graal.compiler.lir.profiling.MoveProfilingPhase;
 import jdk.graal.compiler.nodes.DummyControlSinkNode;
+import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
@@ -36,11 +38,16 @@ import jdk.graal.compiler.phases.tiers.Suites;
 import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
+import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.TriState;
+import jdk.vm.ci.meta.Value;
 
 public class ScalarizationEntryPoint {
 
@@ -55,38 +62,52 @@ public class ScalarizationEntryPoint {
         this.targetMethod = targetMethod;
     }
 
-    protected final StructuredGraph getGraph(DebugContext debug, boolean receiverOnly) {
+    protected final StructuredGraph getGraph(DebugContext debug, boolean receiverOnly, Backend backend) {
         try {
+
             HotSpotGraphKit kit = new HotSpotGraphKit(debug, targetMethod, providers, providers.getGraphBuilderPlugins(), INVALID_COMPILATION_ID, null, false, true);
             StructuredGraph graph = kit.getGraph();
             graph.getGraphState().forceDisableFrameStateVerification();
             List<ValueNode> oldArguments = createParameters(kit, receiverOnly);
-            ParametersAssignNode parameterAssignNode = kit.append(new ParametersAssignNode(new ValueNode[0], new ValueNode[0], targetMethod));
-            List<ValueNode> newArguments = new ArrayList<>();
+            FixedNode addBefore = kit.append(new ValueAnchorNode());
+
+            JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
+            CallingConvention callingConvention = backend.getCodeCache().getRegisterConfig().getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
+                            backend);
+            Value[] values = callingConvention.getArguments();
+            for (int i = 0; i < values.length; i++) {
+                Value dst = values[i];
+                if (ValueUtil.isStackSlot(dst)) {
+                    StackSlot slot = ValueUtil.asStackSlot(dst);
+                    slot.setNewArgument(true);
+                    slot.setCallingConventionStackSize(callingConvention.getStackSize());
+                }
+            }
             if (receiverOnly) {
                 // for the receiver only entry point we only need to scalarize the receiver, the
                 // rest is already scalarized
-                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(parameterAssignNode, oldArguments.get(0), targetMethod.getDeclaringClass().getInstanceFields(true));
-                newArguments.addAll(List.of(scalarizedReceiver));
-                // add the rest
-                newArguments.addAll(oldArguments.subList(1, oldArguments.size()));
+                kit.append(new ParametersAssignNode(oldArguments.subList(1, oldArguments.size()), targetMethod, List.of(values).subList(1, values.length)));
+                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(0), targetMethod.getDeclaringClass().getInstanceFields(true));
+                kit.append(new ParametersAssignNode(List.of(scalarizedReceiver), targetMethod, List.of(values).subList(0, 1)));
             } else {
                 int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
-                for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
+                int index = values.length;
+                for (int signatureIndex = parameterLength - 1; signatureIndex >= 0; signatureIndex--) {
                     boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
                     if (GraalValhallaServices.isScalarizedParameter(targetMethod, signatureIndex, true)) {
                         List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true);
-                        ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(parameterAssignNode, oldArguments.get(signatureIndex),
+                        ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(signatureIndex),
                                         fields, nonNull, !nonNull);
-                        newArguments.addAll(List.of(scalarizedParam));
+                        kit.append(new ParametersAssignNode(List.of(scalarizedParam), targetMethod,
+                                        List.of(values).subList(index - scalarizedParam.length, index)));
+                        index -= scalarizedParam.length;
                     } else {
-                        newArguments.add(oldArguments.get(signatureIndex));
+                        kit.append(new ParametersAssignNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(values).subList(index - 1, index)));
+                        index--;
                     }
 
                 }
             }
-            parameterAssignNode.oldArguments.addAll(oldArguments);
-            parameterAssignNode.newArguments.addAll(newArguments);
             kit.append(new DummyControlSinkNode());
             debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Verified inline entry point%s graph before compilation", receiverOnly ? " receiver only" : "");
             return graph;
@@ -99,7 +120,7 @@ public class ScalarizationEntryPoint {
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
             try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
                 CompilationIdentifier compilationId = INVALID_COMPILATION_ID;
-                final StructuredGraph graph = getGraph(debug, receiverOnly);
+                final StructuredGraph graph = getGraph(debug, receiverOnly, backend);
                 CompilationResult compResult = buildCompilationResult(debug, backend, graph, compilationId);
                 return compResult;
             } catch (Throwable e) {
