@@ -79,7 +79,9 @@ import jdk.graal.compiler.hotspot.replacements.ValhallaEntryPointCreator;
 import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
+import jdk.graal.compiler.lir.amd64.AMD64EntryPointFrameMap;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMap;
+import jdk.graal.compiler.lir.amd64.AMD64FrameMapBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
 import jdk.graal.compiler.lir.asm.DataBuilder;
@@ -127,9 +129,21 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
     @Override
     public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationId, lir, newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method()),
+        FrameMapBuilder builder;
+        if (graph.isEntryPointCFG()) {
+            builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method());
+        } else {
+            builder = newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method());
+        }
+        return new HotSpotLIRGenerationResult(compilationId, lir, builder,
                         registerAllocationConfig,
                         makeCallingConvention(graph, (Stub) stub), (Stub) stub, config.requiresReservedStackCheck(graph.getMethods()));
+    }
+
+    protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
+        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
+        AMD64FrameMap frameMap = new AMD64EntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
+        return new AMD64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
     protected FrameMapBuilder newFrameMapBuilderWithStackRepair(RegisterConfig registerConfig, Stub stub, ResolvedJavaMethod rootMethod) {

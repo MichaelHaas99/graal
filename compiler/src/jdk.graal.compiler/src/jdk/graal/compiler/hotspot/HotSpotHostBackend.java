@@ -137,17 +137,12 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             JavaType retType = sig.getReturnType(null);
             RegisterConfig registerConfig = getCodeCache().getRegisterConfig();
             cc = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, retType, graph.getEntryPointOriginalParameterTypes().toArray(new JavaType[0]), this);
-            JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(graph.method(), true).toArray(new JavaType[0]);
-            // get the calling convention the entry point wants to produce
-            CallingConvention newCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
-                            this);
 
             for (int i = 0; i < cc.getArguments().length; i++) {
                 Value dst = cc.getArgument(i);
                 if (ValueUtil.isStackSlot(dst)) {
                     StackSlot slot = ValueUtil.asStackSlot(dst);
                     slot.setOldArgument(true);
-                    slot.setCallingConventionStackSize(newCC.getStackSize());
                 }
             }
             return cc;
