@@ -15,17 +15,20 @@ import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
 
+/**
+ * Moves input arguments into their designated slots according to the calling convention.
+ */
 @NodeInfo
-public class ParametersAssignNode extends FixedWithNextNode implements LIRLowerable {
+public class MoveArgumentsToDestinationNode extends FixedWithNextNode implements LIRLowerable {
 
-    public static final NodeClass<ParametersAssignNode> TYPE = NodeClass.create(ParametersAssignNode.class);
+    public static final NodeClass<MoveArgumentsToDestinationNode> TYPE = NodeClass.create(MoveArgumentsToDestinationNode.class);
 
     @OptionalInput NodeInputList<ValueNode> newArguments;
     ResolvedJavaMethod targetMethod;
     List<Value> values;
 
     @SuppressWarnings("this-escape")
-    public ParametersAssignNode(List<ValueNode> newArguments, ResolvedJavaMethod targetMethod, List<Value> values) {
+    public MoveArgumentsToDestinationNode(List<ValueNode> newArguments, ResolvedJavaMethod targetMethod, List<Value> values) {
         super(TYPE, StampFactory.forVoid());
         this.newArguments = new NodeInputList<>(this, newArguments);
         this.targetMethod = targetMethod;

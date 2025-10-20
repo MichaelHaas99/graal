@@ -8,6 +8,11 @@ import jdk.graal.compiler.core.common.cfg.BasicBlock;
 import jdk.graal.compiler.core.common.cfg.CodeEmissionOrder;
 import jdk.graal.compiler.options.OptionValues;
 
+/**
+ * Computes the block order for an entry point. For entry points, execution should not terminate in
+ * the middle of the generated machine code. Instead, the final block should emit the final line of
+ * machine code, allowing the entry point to seamlessly continue with subsequent code.
+ */
 public class EntryPointCodeEmissionOrder<T extends BasicBlock<T>> implements CodeEmissionOrder<T> {
 
     protected int originalBlockCount;
@@ -20,7 +25,7 @@ public class EntryPointCodeEmissionOrder<T extends BasicBlock<T>> implements Cod
     }
 
     /**
-     * Computes the block order used for code emission.
+     * Computes the block order used for an entry point code emission.
      *
      * @return sorted list of ids of basic blocks, see {@link AbstractControlFlowGraph} for details
      *         about the data structures

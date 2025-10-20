@@ -49,13 +49,20 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.TriState;
 import jdk.vm.ci.meta.Value;
 
-public class ScalarizationEntryPoint {
+/**
+ * A utility class which helps with scalarization of value objects in entry points. In particular
+ * for the {@code HotSpotMarkId#VERIFIED_INLINE_ENTRY} and
+ * {@code HotSpotMarkId#VERIFIED_INLINE_ENTRY_RO}. To do so it first creates a graph which performs
+ * the scalarization of certain parameters. After that the graph gets compiled and the machine code
+ * can be extracted.
+ */
+public class ValhallaEntryPointCreator {
 
     protected final OptionValues options;
     protected final HotSpotProviders providers;
     protected final ResolvedJavaMethod targetMethod;
 
-    public ScalarizationEntryPoint(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
+    public ValhallaEntryPointCreator(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
         this.options = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningForStubsAndSnippets.getValue(options), RegisterPressure, null,
                         DebugOptions.OptimizationLog, null);
         this.providers = providers;
@@ -84,27 +91,30 @@ public class ScalarizationEntryPoint {
                 }
             }
             if (receiverOnly) {
-                // for the receiver only entry point we only need to scalarize the receiver, the
+                // For the RO entry point we only need to scalarize the receiver, the
                 // rest is already scalarized
-                kit.append(new ParametersAssignNode(oldArguments.subList(1, oldArguments.size()), targetMethod, List.of(values).subList(1, values.length)));
+                kit.append(new MoveArgumentsToDestinationNode(oldArguments.subList(1, oldArguments.size()), targetMethod, List.of(values).subList(1, values.length)));
                 addBefore = kit.append(new ValueAnchorNode());
-                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(0), targetMethod.getDeclaringClass().getInstanceFields(true));
-                kit.append(new ParametersAssignNode(List.of(scalarizedReceiver), targetMethod, List.of(values).subList(0, 1)));
+                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.getFirst(), targetMethod.getDeclaringClass().getInstanceFields(true));
+                kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedReceiver), targetMethod, List.of(values).subList(0, 1)));
             } else {
                 int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
                 int index = values.length;
+                // iterate in reverse order
                 for (int signatureIndex = parameterLength - 1; signatureIndex >= 0; signatureIndex--) {
                     boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
                     if (GraalValhallaServices.isScalarizedParameter(targetMethod, signatureIndex, true)) {
+                        // argument needs to be scalarized
                         List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true);
                         ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(signatureIndex),
                                         fields, nonNull, !nonNull);
-                        kit.append(new ParametersAssignNode(List.of(scalarizedParam), targetMethod,
+                        kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedParam), targetMethod,
                                         List.of(values).subList(index - scalarizedParam.length, index)));
                         index -= scalarizedParam.length;
                         addBefore = kit.append(new ValueAnchorNode());
                     } else {
-                        kit.append(new ParametersAssignNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(values).subList(index - 1, index)));
+                        // no need to scalarized just take the old value
+                        kit.append(new MoveArgumentsToDestinationNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(values).subList(index - 1, index)));
                         index--;
                         addBefore = kit.append(new ValueAnchorNode());
                     }
