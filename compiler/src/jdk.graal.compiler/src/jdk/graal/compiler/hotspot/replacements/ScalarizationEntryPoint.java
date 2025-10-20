@@ -87,6 +87,7 @@ public class ScalarizationEntryPoint {
                 // for the receiver only entry point we only need to scalarize the receiver, the
                 // rest is already scalarized
                 kit.append(new ParametersAssignNode(oldArguments.subList(1, oldArguments.size()), targetMethod, List.of(values).subList(1, values.length)));
+                addBefore = kit.append(new ValueAnchorNode());
                 ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(0), targetMethod.getDeclaringClass().getInstanceFields(true));
                 kit.append(new ParametersAssignNode(List.of(scalarizedReceiver), targetMethod, List.of(values).subList(0, 1)));
             } else {
@@ -101,9 +102,11 @@ public class ScalarizationEntryPoint {
                         kit.append(new ParametersAssignNode(List.of(scalarizedParam), targetMethod,
                                         List.of(values).subList(index - scalarizedParam.length, index)));
                         index -= scalarizedParam.length;
+                        addBefore = kit.append(new ValueAnchorNode());
                     } else {
                         kit.append(new ParametersAssignNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(values).subList(index - 1, index)));
                         index--;
+                        addBefore = kit.append(new ValueAnchorNode());
                     }
 
                 }
