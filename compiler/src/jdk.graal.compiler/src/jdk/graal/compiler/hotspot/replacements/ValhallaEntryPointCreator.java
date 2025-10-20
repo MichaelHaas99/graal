@@ -38,6 +38,7 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
 import jdk.graal.compiler.phases.Speculative;
+import jdk.graal.compiler.phases.common.FloatingReadPhase;
 import jdk.graal.compiler.phases.tiers.Suites;
 import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
@@ -189,6 +190,7 @@ public class ValhallaEntryPointCreator {
         Suites defaultSuites = providers.getSuites().getDefaultSuites(options, providers.getLowerer().getTarget().arch).copy();
 
         defaultSuites.getMidTier().removeSubTypePhases(Speculative.class);
+        defaultSuites.getMidTier().removeSubTypePhases(FloatingReadPhase.class);
         defaultSuites.getLowTier().removeSubTypePhases(Speculative.class);
 
         return new Suites(defaultSuites.getHighTier(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
