@@ -130,6 +130,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             return stub.getLinkage().getIncomingCallingConvention();
         }
 
+        // TODO: is there a better way for this?
         CallingConvention cc;
         if (graph.isEntryPointCFG()) {
             Signature sig = graph.method().getSignature();
@@ -137,6 +138,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             RegisterConfig registerConfig = getCodeCache().getRegisterConfig();
             cc = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, retType, graph.getEntryPointOriginalParameterTypes().toArray(new JavaType[0]), this);
             JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(graph.method(), true).toArray(new JavaType[0]);
+            // get the calling convention the entry point wants to produce
             CallingConvention newCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
                             this);
 

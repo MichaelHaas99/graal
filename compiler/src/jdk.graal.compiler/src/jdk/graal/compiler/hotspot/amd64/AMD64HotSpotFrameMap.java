@@ -181,6 +181,7 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
 
     @Override
     public int offsetForStackSlot(StackSlot slot) {
+        // TODO: is there a better way?
         int returnAddressSize = getTarget().arch.getReturnAddressSize();
         if (slot.isOldArgument()) {
             int stackIncrement = (slot.getCallingConventionStackSize() + returnAddressSize);

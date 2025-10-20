@@ -75,7 +75,7 @@ import jdk.graal.compiler.hotspot.amd64.z.AMD64HotSpotZBarrierSetLIRGenerator;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
-import jdk.graal.compiler.hotspot.replacements.ScalarizationEntryPoint;
+import jdk.graal.compiler.hotspot.replacements.ValhallaEntryPointCreator;
 import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
@@ -472,7 +472,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             spInc = extendStackForInlineArgs(rootMethod, crb, asm, regConfig);
         }
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
-            CompilationResult compilationResult = new ScalarizationEntryPoint(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
+            CompilationResult compilationResult = new ValhallaEntryPointCreator(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
                             receiverOnly);
             byte[] code = compilationResult.getTargetCode();
             for (int i = 0; i < compilationResult.getTargetCodeSize(); i++) {
@@ -1388,7 +1388,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
                     verifiedInlineSet = true;
-                    // new ScalarizationEntryPoint(getRuntime().getOptions(), getProviders(),
+                    // new ValhallaEntryPointCreator(getRuntime().getOptions(), getProviders(),
                     // installedCodeOwner).getCode(getRuntime().getHostBackend(), null);
                 }
             } else if (!installedCodeOwner.isStatic()) {
