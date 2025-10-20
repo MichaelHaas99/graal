@@ -54,7 +54,10 @@ import jdk.vm.ci.meta.Value;
  * for the {@code HotSpotMarkId#VERIFIED_INLINE_ENTRY} and
  * {@code HotSpotMarkId#VERIFIED_INLINE_ENTRY_RO}. To do so it first creates a graph which performs
  * the scalarization of certain parameters. After that the graph gets compiled and the machine code
- * can be extracted.
+ * can be extracted. The big advantage is that (compared to C2) we don't need to use the assembler
+ * in the backend to create the entry point. So we also don't need to think about different GCs when
+ * accessing memory or different underlying architectures. Also new field flattening features can be
+ * implemented on a high-level and the implementation can be reused for the entry point.
  */
 public class ValhallaEntryPointCreator {
 
@@ -113,7 +116,7 @@ public class ValhallaEntryPointCreator {
                         index -= scalarizedParam.length;
                         addBefore = kit.append(new ValueAnchorNode());
                     } else {
-                        // no need to scalarized just take the old value
+                        // no need to scalarize just take the old value
                         kit.append(new MoveArgumentsToDestinationNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(values).subList(index - 1, index)));
                         index--;
                         addBefore = kit.append(new ValueAnchorNode());
