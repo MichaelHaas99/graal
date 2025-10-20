@@ -24,11 +24,13 @@ import jdk.graal.compiler.lir.phases.LIRPhase;
 import jdk.graal.compiler.lir.phases.LIRSuites;
 import jdk.graal.compiler.lir.phases.PostAllocationOptimizationPhase;
 import jdk.graal.compiler.lir.profiling.MoveProfilingPhase;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DummyControlSinkNode;
 import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.MergeNode;
+import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -48,6 +50,7 @@ import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
+import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -117,6 +120,7 @@ public class ValhallaEntryPointCreator {
                         ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(signatureIndex),
                                         fields, nonNull, !nonNull);
 
+                        boolean leftIsNullBranch = false;
                         // try to duplicate into the branches to decrease life intervals
                         for (int i = 0; i < scalarizedParam.length; i++) {
                             ValueNode node = scalarizedParam[i];
@@ -124,9 +128,25 @@ public class ValhallaEntryPointCreator {
                                 if (node instanceof ValuePhiNode phi) {
                                     MergeNode merge = (MergeNode) phi.merge();
                                     EndNode end = merge.forwardEndAt(j);
-                                    MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(List.of(phi.valueAt(j)), targetMethod,
+                                    ValueNode phiValue = phi.valueAt(j);
+                                    // check the non-null info which is the first phi, determine the
+                                    // null branch
+                                    if (i == 0 && j == 0 && phiValue == ConstantNode.forInt(0, graph)) {
+                                        leftIsNullBranch = true;
+                                    }
+                                    if (i > 0 && (leftIsNullBranch && j == 0 || !leftIsNullBranch && j == 1)) {
+                                        // currently processing the null branch
+                                        if (phiValue.stamp(NodeView.DEFAULT).getStackKind() != JavaKind.Object) {
+                                            // Only oop slots need to be zeroed out to avoid
+                                            // problems with the gc. So effectively only the
+                                            // non-null info and oop fields will be set to zero on
+                                            // the null branch. TODO: do we really want this?
+                                            continue;
+                                        }
+                                    }
+                                    MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(List.of(phiValue), targetMethod,
                                                     List.of(values).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
-                                    if (phi.valueAt(j) instanceof FixedWithNextNode fixedNode) {
+                                    if (phiValue instanceof FixedWithNextNode fixedNode) {
                                         graph.addAfterFixed(fixedNode, mover);
                                     } else {
                                         graph.addBeforeFixed(end, mover);
