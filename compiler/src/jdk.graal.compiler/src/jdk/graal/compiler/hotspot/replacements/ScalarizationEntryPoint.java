@@ -13,12 +13,10 @@ import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
-import jdk.graal.compiler.core.phases.EconomyHighTier;
 import jdk.graal.compiler.core.target.Backend;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.DebugOptions;
 import jdk.graal.compiler.debug.GraalError;
-import jdk.graal.compiler.hotspot.HotSpotMarkId;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.stubs.HotSpotGraphKit;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
@@ -33,16 +31,14 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.OptimisticOptimizations;
-import jdk.graal.compiler.phases.PhaseSuite;
 import jdk.graal.compiler.phases.Speculative;
-import jdk.graal.compiler.phases.common.DisableOverflownCountedLoopsPhase;
-import jdk.graal.compiler.phases.tiers.HighTierContext;
 import jdk.graal.compiler.phases.tiers.Suites;
 import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.TriState;
 
@@ -59,49 +55,53 @@ public class ScalarizationEntryPoint {
         this.targetMethod = targetMethod;
     }
 
-    protected final StructuredGraph getGraph(DebugContext debug, HotSpotMarkId markId) {
+    protected final StructuredGraph getGraph(DebugContext debug, boolean receiverOnly) {
         try {
             HotSpotGraphKit kit = new HotSpotGraphKit(debug, targetMethod, providers, providers.getGraphBuilderPlugins(), INVALID_COMPILATION_ID, null, false, true);
             StructuredGraph graph = kit.getGraph();
             graph.getGraphState().forceDisableFrameStateVerification();
-            List<ValueNode> parameters = createParameters(kit, markId);
+            List<ValueNode> oldArguments = createParameters(kit, receiverOnly);
             ParametersAssignNode parameterAssignNode = kit.append(new ParametersAssignNode(new ValueNode[0], new ValueNode[0], targetMethod));
-            List<ValueNode> scalarized = new ArrayList<>();
-            if (markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO) {
-                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(parameterAssignNode, parameters.get(0), targetMethod.getDeclaringClass().getInstanceFields(true));
-                scalarized.addAll(List.of(scalarizedReceiver));
-                scalarized.addAll(parameters.subList(1, parameters.size()));
+            List<ValueNode> newArguments = new ArrayList<>();
+            if (receiverOnly) {
+                // for the receiver only entry point we only need to scalarize the receiver, the
+                // rest is already scalarized
+                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(parameterAssignNode, oldArguments.get(0), targetMethod.getDeclaringClass().getInstanceFields(true));
+                newArguments.addAll(List.of(scalarizedReceiver));
+                // add the rest
+                newArguments.addAll(oldArguments.subList(1, oldArguments.size()));
             } else {
                 int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
                 for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
-                    boolean isNullFree = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
-                    ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(parameterAssignNode, parameters.get(signatureIndex),
-                                    GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true), isNullFree, !isNullFree);
-                    scalarized.addAll(List.of(scalarizedParam));
+                    boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
+                    if (GraalValhallaServices.isScalarizedParameter(targetMethod, signatureIndex, true)) {
+                        List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true);
+                        ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(parameterAssignNode, oldArguments.get(signatureIndex),
+                                        fields, nonNull, !nonNull);
+                        newArguments.addAll(List.of(scalarizedParam));
+                    } else {
+                        newArguments.add(oldArguments.get(signatureIndex));
+                    }
+
                 }
             }
-            parameterAssignNode.oldParams.addAll(parameters);
-            parameterAssignNode.newParams.addAll(scalarized);
+            parameterAssignNode.oldArguments.addAll(oldArguments);
+            parameterAssignNode.newArguments.addAll(newArguments);
             kit.append(new DummyControlSinkNode());
-            debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Entry point graph before compilation");
+            debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Verified inline entry point%s graph before compilation", receiverOnly ? " receiver only" : "");
             return graph;
         } catch (Exception e) {
             throw GraalError.shouldNotReachHere(e); // ExcludeFromJacocoGeneratedReport
         }
     }
 
-    public CompilationResult getCode(final Backend backend, HotSpotMarkId markId) {
+    public CompilationResult getCode(final Backend backend, boolean receiverOnly) {
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
-            try (DebugContext.Scope d = debug.scope("CompilingStub", providers.getCodeCache(), debugScopeContext())) {
+            try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
                 CompilationIdentifier compilationId = INVALID_COMPILATION_ID;
-                final StructuredGraph graph = getGraph(debug, markId);
+                final StructuredGraph graph = getGraph(debug, receiverOnly);
                 CompilationResult compResult = buildCompilationResult(debug, backend, graph, compilationId);
-                try (DebugContext.Scope s = debug.scope("CodeInstall", compResult);
-                                DebugContext.Activation a = debug.activate()) {
-                    return compResult;
-                } catch (Throwable e) {
-                    throw debug.handle(e);
-                }
+                return compResult;
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -111,7 +111,7 @@ public class ScalarizationEntryPoint {
     private CompilationResult buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationIdentifier compilationId) {
         CompilationResult compResult = new CompilationResult(compilationId, toString());
 
-        // Stubs cannot be recompiled so they cannot be compiled with assumptions
+        // Entry points cannot be recompiled so they cannot be compiled with assumptions
         assert graph.getAssumptions() == null;
 
         try (DebugContext.Scope s0 = debug.scope("EntryPointCompilation", graph, providers.getCodeCache())) {
@@ -128,14 +128,10 @@ public class ScalarizationEntryPoint {
     protected Suites createSuites() {
         Suites defaultSuites = providers.getSuites().getDefaultSuites(options, providers.getLowerer().getTarget().arch).copy();
 
-        PhaseSuite<HighTierContext> emptyHighTier = new PhaseSuite<>();
-        emptyHighTier.appendPhase(new DisableOverflownCountedLoopsPhase());
-        emptyHighTier.appendPhase(new EconomyHighTier());
-
         defaultSuites.getMidTier().removeSubTypePhases(Speculative.class);
         defaultSuites.getLowTier().removeSubTypePhases(Speculative.class);
 
-        return new Suites(emptyHighTier, defaultSuites.getMidTier(), defaultSuites.getLowTier());
+        return new Suites(defaultSuites.getHighTier(), defaultSuites.getMidTier(), defaultSuites.getLowTier());
     }
 
     protected LIRSuites createLIRSuites() {
@@ -160,38 +156,38 @@ public class ScalarizationEntryPoint {
         return targetMethod;
     }
 
-    protected List<ValueNode> createParameters(GraphKit kit, HotSpotMarkId markId) {
-        List<ValueNode> params = new ArrayList<>();
-        List<JavaType> targetTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true);
-        List<JavaType> types;
-        if (markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO) {
-            types = new ArrayList<>(GraalValhallaServices.getScalarizedParameters(targetMethod, false));
+    protected List<ValueNode> createParameters(GraphKit kit, boolean receiverOnly) {
+        List<ValueNode> parameters = new ArrayList<>();
+
+        // the types of the current arguments
+        List<JavaType> oldTypes;
+        if (receiverOnly) {
+            // the receiver is in non scalarized form
+            oldTypes = new ArrayList<>(GraalValhallaServices.getScalarizedParameters(targetMethod, false));
 
         } else {
-            types = new ArrayList<>();
+            oldTypes = new ArrayList<>();
             if (!targetMethod.isStatic()) {
-                types.add(targetMethod.getDeclaringClass());
+                // add receiver type
+                oldTypes.add(targetMethod.getDeclaringClass());
             }
+            // add the other types
             for (int i = 0; i < targetMethod.getSignature().getParameterCount(false); i++) {
-                types.add(targetMethod.getSignature().getParameterType(i, targetMethod.getDeclaringClass()));
+                oldTypes.add(targetMethod.getSignature().getParameterType(i, targetMethod.getDeclaringClass()));
             }
         }
 
-        for (int i = 0; i < types.size(); i++) {
-            JavaType type = types.get(i);
-            StampPair stamp = StampFactory.forDeclaredType(kit.getGraph().getAssumptions(), type, false);
+        // create a parameter node for each current argument
+        for (int i = 0; i < oldTypes.size(); i++) {
+            JavaType type = oldTypes.get(i);
+            boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
+            ;
+            StampPair stamp = StampFactory.forDeclaredType(kit.getGraph().getAssumptions(), type, nonNull);
             ParameterNode param = kit.unique(new ParameterNode(i, stamp));
-            params.add(param);
-        }
-        // dummy parameter nodes
-        for (int i = types.size(); i < targetTypes.size(); i++) {
-            StampPair stamp = StampFactory.forDeclaredType(kit.getGraph().getAssumptions(), targetTypes.get(i), false);
-            types.add(targetTypes.get(i));
-            ParameterNode param = kit.unique(new ParameterNode(i, stamp));
-            params.add(param);
+            parameters.add(param);
         }
         kit.getGraph().setEntryPointCFG(true);
-        kit.getGraph().setEntryPointOriginalParameterTypes(types);
-        return params;
+        kit.getGraph().setEntryPointOriginalParameterTypes(oldTypes);
+        return parameters;
     }
 }

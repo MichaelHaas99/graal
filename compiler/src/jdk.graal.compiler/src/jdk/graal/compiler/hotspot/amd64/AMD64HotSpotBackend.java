@@ -472,7 +472,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             spInc = extendStackForInlineArgs(rootMethod, crb, asm, regConfig);
         }
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
-            CompilationResult compilationResult = new ScalarizationEntryPoint(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(), null);
+            CompilationResult compilationResult = new ScalarizationEntryPoint(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
+                            receiverOnly);
             byte[] code = compilationResult.getTargetCode();
             for (int i = 0; i < compilationResult.getTargetCodeSize(); i++) {
                 asm.emitByte(code[i]);

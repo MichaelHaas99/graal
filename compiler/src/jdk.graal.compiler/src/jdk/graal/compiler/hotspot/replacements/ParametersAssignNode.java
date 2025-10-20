@@ -11,6 +11,8 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaType;
@@ -22,15 +24,15 @@ public class ParametersAssignNode extends FixedWithNextNode implements LIRLowera
 
     public static final NodeClass<ParametersAssignNode> TYPE = NodeClass.create(ParametersAssignNode.class);
 
-    @OptionalInput NodeInputList<ValueNode> oldParams;
-    @OptionalInput NodeInputList<ValueNode> newParams;
+    @OptionalInput NodeInputList<ValueNode> oldArguments;
+    @OptionalInput NodeInputList<ValueNode> newArguments;
     ResolvedJavaMethod targetMethod;
 
     @SuppressWarnings("this-escape")
-    public ParametersAssignNode(ValueNode[] oldParams, ValueNode[] newParams, ResolvedJavaMethod targetMethod) {
+    public ParametersAssignNode(ValueNode[] oldArguments, ValueNode[] newArguments, ResolvedJavaMethod targetMethod) {
         super(TYPE, StampFactory.forVoid());
-        this.oldParams = new NodeInputList<>(this, newParams);
-        this.newParams = new NodeInputList<>(this, newParams);
+        this.oldArguments = new NodeInputList<>(this, newArguments);
+        this.newArguments = new NodeInputList<>(this, newArguments);
         this.targetMethod = targetMethod;
     }
 
@@ -40,8 +42,13 @@ public class ParametersAssignNode extends FixedWithNextNode implements LIRLowera
         CallingConvention callingConvention = generator.getLIRGeneratorTool().getRegisterConfig().getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
                         generator.getLIRGeneratorTool());
         int i = 0;
-        for (ValueNode param : newParams) {
+        for (ValueNode param : newArguments) {
             Value dst = callingConvention.getArgument(i++);
+            if (ValueUtil.isStackSlot(dst)) {
+                StackSlot slot = ValueUtil.asStackSlot(dst);
+                slot.setNewArgument(true);
+                slot.setCallingConventionStackSize(callingConvention.getStackSize());
+            }
             assert dst.getValueKind().equals(generator.getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT))) : dst + " " +
                             generator.getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT));
             generator.getLIRGeneratorTool().emitMove((AllocatableValue) dst, generator.operand(param));

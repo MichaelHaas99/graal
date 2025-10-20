@@ -71,17 +71,16 @@ public class EntryPointCodeEmissionOrder<T extends BasicBlock<T>> implements Cod
                  */
                 break;
             }
-            order.add(block);
+            // we want the merge block to be the last block
+            if (block.getId() == originalBlockCount - 1) {
+                lastBlock = block;
+            } else {
+                order.add(block);
+            }
 
             T mostLikelySuccessor = BasicBlockOrderUtils.findAndMarkMostLikelySuccessor(block, order, visitedBlocks, computationTime, worklist);
             BasicBlockOrderUtils.enqueueSuccessors(block, worklist, visitedBlocks);
-            // we want the merge block to be the last block
-            if (mostLikelySuccessor.getId() == originalBlockCount - 1) {
-                lastBlock = mostLikelySuccessor;
-                block = null;
-            } else {
-                block = mostLikelySuccessor;
-            }
+            block = mostLikelySuccessor;
         }
     }
 

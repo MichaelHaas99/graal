@@ -181,6 +181,16 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
 
     @Override
     public int offsetForStackSlot(StackSlot slot) {
+        if (slot.isOldArgument()) {
+            int RAsize = getTarget().arch.getReturnAddressSize();
+            int stackIncrement = (slot.getCallingConventionStackSize() + RAsize);
+            int stackAlignment = getTarget().stackAlignment;
+            stackIncrement = stackIncrement % stackAlignment == 0 ? stackIncrement : ((stackIncrement / stackAlignment) + 1) * stackAlignment;
+            return slot.getRawOffset() + stackIncrement + getTarget().wordSize;
+        }
+        if (slot.isNewArgument()) {
+            return slot.getRawOffset() + getTarget().wordSize;
+        }
         int offset = super.offsetForStackSlot(slot);
         // rbp is always saved in the standard location if it is saved
         assert !slot.equals(rbpSpillSlot) || offset - totalFrameSize() == -16 : Assertions.errorMessage(slot, offset);

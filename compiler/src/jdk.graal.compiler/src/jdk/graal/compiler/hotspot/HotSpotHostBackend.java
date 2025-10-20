@@ -55,12 +55,15 @@ import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.word.Word;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.common.InitTimer;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.Signature;
+import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.runtime.JVMCICompiler;
 
 /**
@@ -132,7 +135,20 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             Signature sig = graph.method().getSignature();
             JavaType retType = sig.getReturnType(null);
             RegisterConfig registerConfig = getCodeCache().getRegisterConfig();
-            return registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, retType, graph.getEntryPointOriginalParameterTypes().toArray(new JavaType[0]), this);
+            cc = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, retType, graph.getEntryPointOriginalParameterTypes().toArray(new JavaType[0]), this);
+            JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(graph.method(), true).toArray(new JavaType[0]);
+            CallingConvention newCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
+                            this);
+
+            for (int i = 0; i < cc.getArguments().length; i++) {
+                Value dst = cc.getArgument(i);
+                if (ValueUtil.isStackSlot(dst)) {
+                    StackSlot slot = ValueUtil.asStackSlot(dst);
+                    slot.setOldArgument(true);
+                    slot.setCallingConventionStackSize(newCC.getStackSize());
+                }
+            }
+            return cc;
         }
         if (getProviders().getValhallaOptionsProvider().callingConventionEnabled()) {
             cc = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, graph.method(), this, true);
