@@ -25,10 +25,14 @@ import jdk.graal.compiler.lir.phases.LIRSuites;
 import jdk.graal.compiler.lir.phases.PostAllocationOptimizationPhase;
 import jdk.graal.compiler.lir.profiling.MoveProfilingPhase;
 import jdk.graal.compiler.nodes.DummyControlSinkNode;
+import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
+import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
@@ -111,8 +115,27 @@ public class ValhallaEntryPointCreator {
                         List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true);
                         ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(signatureIndex),
                                         fields, nonNull, !nonNull);
-                        kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedParam), targetMethod,
-                                        List.of(values).subList(index - scalarizedParam.length, index)));
+
+                        // try to duplicate into the branches to decrease life intervals
+                        for (int i = 0; i < scalarizedParam.length; i++) {
+                            ValueNode node = scalarizedParam[i];
+                            for (int j = 0; j < 2; j++) {
+                                if (node instanceof ValuePhiNode phi) {
+                                    MergeNode merge = (MergeNode) phi.merge();
+                                    EndNode end = merge.forwardEndAt(j);
+                                    MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(List.of(phi.valueAt(j)), targetMethod,
+                                                    List.of(values).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
+                                    if (phi.valueAt(j) instanceof FixedWithNextNode fixedNode) {
+                                        graph.addAfterFixed(fixedNode, mover);
+                                    } else {
+                                        graph.addBeforeFixed(end, mover);
+                                    }
+                                } else {
+                                    kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedParam), targetMethod,
+                                                    List.of(values).subList(index - scalarizedParam.length, index)));
+                                }
+                            }
+                        }
                         index -= scalarizedParam.length;
                         addBefore = kit.append(new ValueAnchorNode());
                     } else {
