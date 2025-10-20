@@ -103,7 +103,7 @@ public class RISCV64HotSpotBackendFactory extends HotSpotBackendFactory {
     protected HotSpotBackend createBackend(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
         return new HotSpotBackend(runtime, providers) {
             @Override
-            public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo, Object stub) {
+            public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo, Object stub, boolean isEntryPoint) {
                 throw GraalError.unimplementedOverride();
             }
 

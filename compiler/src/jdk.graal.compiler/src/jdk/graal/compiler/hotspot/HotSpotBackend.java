@@ -416,7 +416,7 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
         // Only allocatable registers must be described as killed. This works around an issue where
         // the set of allocatable registers is different than the registers actually used for
         // allocation by linear scan on AVX512.
-        RegisterAllocationConfig registerAllocationConfig = newRegisterAllocationConfig(frameMap.getRegisterConfig(), null, stub);
+        RegisterAllocationConfig registerAllocationConfig = newRegisterAllocationConfig(frameMap.getRegisterConfig(), null, stub, false);
         EconomicSet<Register> allocatableRegisters = EconomicSet.create();
         for (Register r : registerAllocationConfig.getAllocatableRegisters()) {
             allocatableRegisters.add(r);

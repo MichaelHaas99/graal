@@ -120,7 +120,7 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
      * @param stub object representing the stub code being generated or {@code null} if non-stub
      *            code is being generated
      */
-    public abstract RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo, Object stub);
+    public abstract RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo, Object stub, boolean isEntryPoint);
 
     /**
      * Creates a new instance of a code emission ordering computation.
