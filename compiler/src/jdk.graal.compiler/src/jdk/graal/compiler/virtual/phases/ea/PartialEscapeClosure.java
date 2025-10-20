@@ -882,8 +882,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
-        protected EconomicMap<VirtualizedNullCacheKey, VirtualObjectNode> virtualizedNullPointerCache;
-        protected EconomicMap<ValueNodeStateKey, VirtualInstanceNode> mergeAliases = EconomicMap.create(Equivalence.DEFAULT);
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -2086,43 +2084,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return result;
         }
 
-        private VirtualObjectNode getVirtualizedNullPointerCached(ResolvedJavaType type, int state, VirtualObjectNode currentResultObject) {
-            if (virtualizedNullPointerCache == null) {
-                virtualizedNullPointerCache = EconomicMap.create(Equivalence.DEFAULT);
-            }
-            VirtualizedNullCacheKey key = new VirtualizedNullCacheKey(type, state);
-            VirtualObjectNode result = virtualizedNullPointerCache.get(key);
-            if (result == null) {
-                virtualizedNullPointerCache.put(key, currentResultObject);
-                return currentResultObject;
-            }
-            return result;
-        }
-
-        public VirtualInstanceNode getMergeAlias(ValueNode value, int state) {
-            /*
-             * Special case for loops: we are not allowed to cache scalarizations of nodes in the
-             * loop block, as the effects of this block may be cleared and another iteration will be
-             * started in PEA.
-             */
-            if (processingLoopBlock(state)) {
-                // we are processing the loop block, return null
-                return null;
-            }
-            return mergeAliases.get(new ValueNodeStateKey(value, state));
-        }
-
-        private void setMergeAlias(ValueNode value, int state, VirtualInstanceNode virtualInstanceNode) {
-            if (processingLoopBlock(state)) {
-                return;
-            }
-            mergeAliases.put(new ValueNodeStateKey(value, state), virtualInstanceNode);
-        }
-
-        private boolean processingLoopBlock(int state) {
-            return needsCaching && state != 0;
-        }
-
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex) {
             return virtualizeFromInlineObject(node, states, predecessorIndex, null);
         }
@@ -2154,11 +2115,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
             assert !(node instanceof VirtualObjectNode) : "should not be virtual";
 
-            // check the cache if we already scalarized the node in the predecessor
-            VirtualInstanceNode mergeAlias = getMergeAlias(node, predecessorIndex);
-            if (mergeAlias != null) {
-                return mergeAlias;
-            }
             HIRBlock predecessor = getPredecessor(predecessorIndex);
             GraphEffectList bEffects = blockEffects.get(predecessor);
 
@@ -2203,10 +2159,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     loadedFieldValues[loadedFieldValuesIndex++] = load;
                 }
             } else if (StampTool.isPointerAlwaysNull(node)) {
-                VirtualObjectNode cached = getVirtualizedNullPointerCached(instanceClass, predecessorIndex, virtualObject);
-                if (cached != virtualObject) {
-                    return (VirtualInstanceNode) cached;
-                }
                 nonNull = ConstantNode.forInt(0, graph());
                 for (int i = 0; i < fieldsToLoad.length; i++) {
                     ConstantNode load = ConstantNode.defaultForKind(fieldsToLoad[i].getJavaKind());
@@ -2291,13 +2243,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             FixedNode position = getPredecessor(predecessorIndex).getEndNode();
             tool.reset(state, position, position, bEffects);
             tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
-            /*
-             * Put the new virtual object as an alias of the node in the given predecessor. This
-             * avoids multiple scalarizations of the same node and in the worst case the creation of
-             * multiple diamonds. They even become dead when they are inserted into the dominator
-             * block of the loop and we re-iterate.
-             */
-            setMergeAlias(node, predecessorIndex, (VirtualInstanceNode) virtualObject);
             return (VirtualInstanceNode) virtualObject;
         }
 
