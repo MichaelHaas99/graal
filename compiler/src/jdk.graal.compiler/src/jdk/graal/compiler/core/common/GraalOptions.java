@@ -330,4 +330,7 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> VirtualizeFromInlineObject = new OptionKey<>(true);
     @Option(help = "Defines how deep we are allowed scalarize from an materialized inline object during PEA", type = OptionType.Debug)
     public static final OptionKey<Integer> ScalarizationDepth = new OptionKey<>(10);
+
+    @Option(help = "Defines if we want to create the additional entry points in Valhalla by creating a graph and emitting code. Otherwise the entry point will be created with the assembler.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> CreateValhallaEntryPointWithGraph = new OptionKey<>(true);
 }

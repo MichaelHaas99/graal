@@ -26,6 +26,7 @@ package jdk.graal.compiler.hotspot.amd64;
 
 import static jdk.graal.compiler.asm.Assembler.guaranteeDifferentRegisters;
 import static jdk.graal.compiler.core.common.GraalOptions.AssemblyGCBarriersSlowPathOnly;
+import static jdk.graal.compiler.core.common.GraalOptions.CreateValhallaEntryPointWithGraph;
 import static jdk.graal.compiler.core.common.GraalOptions.VerifyAssemblyGCBarriers;
 import static jdk.graal.compiler.core.common.GraalOptions.ZapStackOnMethodEntry;
 import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfigAccess.VALHALLA_JDK;
@@ -74,6 +75,7 @@ import jdk.graal.compiler.hotspot.amd64.z.AMD64HotSpotZBarrierSetLIRGenerator;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
+import jdk.graal.compiler.hotspot.replacements.ScalarizationEntryPoint;
 import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
@@ -468,6 +470,14 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         int spInc = 0;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
             spInc = extendStackForInlineArgs(rootMethod, crb, asm, regConfig);
+        }
+        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
+            CompilationResult compilationResult = new ScalarizationEntryPoint(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(), null);
+            byte[] code = compilationResult.getTargetCode();
+            for (int i = 0; i < compilationResult.getTargetCodeSize(); i++) {
+                asm.emitByte(code[i]);
+            }
+            return spInc;
         }
 
         shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
@@ -1377,6 +1387,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     emitEntry(installedCodeOwner, crb, asm, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY, false, true, verifiedEntry);
                     verifiedInlineSet = true;
+                    // new ScalarizationEntryPoint(getRuntime().getOptions(), getProviders(),
+                    // installedCodeOwner).getCode(getRuntime().getHostBackend(), null);
                 }
             } else if (!installedCodeOwner.isStatic()) {
                 // case (1)

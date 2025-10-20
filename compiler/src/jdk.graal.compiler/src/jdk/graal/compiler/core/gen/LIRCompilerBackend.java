@@ -85,17 +85,32 @@ public class LIRCompilerBackend {
             try (DebugContext.Scope s2 = debug.scope("CodeGen", lirGen, lirGen.getLIR())) {
                 int bytecodeSize = graph.method() == null ? 0 : graph.getBytecodeSize();
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
-                emitCode(backend,
-                                graph.getAssumptions(),
-                                graph.method(),
-                                graph.getMethods(),
-                                graph.getSpeculationLog(),
-                                bytecodeSize,
-                                lirGen,
-                                compilationResult,
-                                installedCodeOwner,
-                                factory,
-                                entryPointDecorator);
+                if (graph.isEntryPointCFG()) {
+                    emitScalarizationEntryPointCode(backend,
+                                    graph.getAssumptions(),
+                                    graph.method(),
+                                    graph.getMethods(),
+                                    graph.getSpeculationLog(),
+                                    bytecodeSize,
+                                    lirGen,
+                                    compilationResult,
+                                    installedCodeOwner,
+                                    factory,
+                                    entryPointDecorator);
+                } else {
+                    emitCode(backend,
+                                    graph.getAssumptions(),
+                                    graph.method(),
+                                    graph.getMethods(),
+                                    graph.getSpeculationLog(),
+                                    bytecodeSize,
+                                    lirGen,
+                                    compilationResult,
+                                    installedCodeOwner,
+                                    factory,
+                                    entryPointDecorator);
+                }
+
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -142,7 +157,7 @@ public class LIRCompilerBackend {
             assert startBlock != null;
             assert startBlock.getPredecessorCount() == 0 : Assertions.errorMessage(startBlock);
 
-            CodeEmissionOrder<?> blockOrder = backend.newBlockOrder(blocks.length, startBlock);
+            CodeEmissionOrder<?> blockOrder = graph.isEntryPointCFG() ? backend.newEntryPointBlockOrder(blocks.length, startBlock) : backend.newBlockOrder(blocks.length, startBlock);
             int[] linearScanOrder = LinearScanOrder.computeLinearScanOrder(blocks.length, startBlock);
             LIR lir = new LIR(schedule.getCFG(), linearScanOrder, graph.getOptions(), graph.getDebug());
             if (ComputeCodeEmissionOrder.Options.EarlyCodeEmissionOrder.getValue(graph.getOptions())) {
@@ -234,6 +249,72 @@ public class LIRCompilerBackend {
                 compilationResult.setBytecodeSize(bytecodeSize);
             }
             lirBackend.emitCode(crb, installedCodeOwner, entryPointDecorator);
+            if (assumptions != null && !assumptions.isEmpty()) {
+                compilationResult.setAssumptions(assumptions.toArray());
+            }
+
+            if (speculationLog != null) {
+                compilationResult.setSpeculationLog(speculationLog);
+            }
+            crb.finish();
+            if (debug.isCountEnabled()) {
+                List<DataPatch> ldp = compilationResult.getDataPatches();
+                JavaKind[] kindValues = JavaKind.values();
+                CounterKey[] dms = new CounterKey[kindValues.length];
+                for (int i = 0; i < dms.length; i++) {
+                    dms[i] = DebugContext.counter("DataPatches-%s", kindValues[i]);
+                }
+
+                for (DataPatch dp : ldp) {
+                    JavaKind kind = JavaKind.Illegal;
+                    if (dp.reference instanceof ConstantReference) {
+                        VMConstant constant = ((ConstantReference) dp.reference).getConstant();
+                        if (constant instanceof JavaConstant) {
+                            kind = ((JavaConstant) constant).getJavaKind();
+                        }
+                    }
+                    dms[kind.ordinal()].add(debug, 1);
+                }
+
+                DebugContext.counter("CompilationResults").increment(debug);
+                DebugContext.counter("CodeBytesEmitted").add(debug, compilationResult.getTargetCodeSize());
+                DebugContext.counter("InfopointsEmitted").add(debug, compilationResult.getInfopoints().size());
+                DebugContext.counter("DataPatches").add(debug, ldp.size());
+                DebugContext.counter("ExceptionHandlersEmitted").add(debug, compilationResult.getExceptionHandlers().size());
+            }
+
+            debug.dump(DebugContext.BASIC_LEVEL, compilationResult, "After code generation");
+        }
+    }
+
+    public static void emitScalarizationEntryPointCode(Backend backend,
+                    Assumptions assumptions,
+                    ResolvedJavaMethod rootMethod,
+                    Collection<ResolvedJavaMethod> inlinedMethods,
+                    SpeculationLog speculationLog,
+                    int bytecodeSize,
+                    LIRGenerationResult lirGenRes,
+                    CompilationResult compilationResult,
+                    ResolvedJavaMethod installedCodeOwner,
+                    CompilationResultBuilderFactory factory,
+                    EntryPointDecorator entryPointDecorator) {
+        DebugContext debug = lirGenRes.getLIR().getDebug();
+        try (DebugCloseable a = EmitCode.start(debug); DebugContext.CompilerPhaseScope cps = debug.enterCompilerPhase("Emit code");) {
+            LIRGenerationProvider lirBackend = (LIRGenerationProvider) backend;
+
+            FrameMap frameMap = lirGenRes.getFrameMap();
+            CompilationResultBuilder crb = lirBackend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory, entryPointDecorator);
+
+            /**
+             * {@code rootMethod} needed in
+             * {@link jdk.graal.compiler.hotspot.amd64.AMD64HotSpotBackend.HotSpotFrameContext#leave(CompilationResultBuilder)}
+             * during code emission. Therefore set it before code is emitted.
+             */
+            if (rootMethod != null) {
+                compilationResult.setMethods(rootMethod, inlinedMethods);
+                compilationResult.setBytecodeSize(bytecodeSize);
+            }
+            crb.emitLIR(false);
             if (assumptions != null && !assumptions.isEmpty()) {
                 compilationResult.setAssumptions(assumptions.toArray());
             }

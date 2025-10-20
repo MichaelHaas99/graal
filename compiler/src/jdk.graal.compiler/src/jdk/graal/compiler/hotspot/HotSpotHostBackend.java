@@ -60,6 +60,7 @@ import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.Signature;
 import jdk.vm.ci.runtime.JVMCICompiler;
 
 /**
@@ -127,6 +128,12 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         }
 
         CallingConvention cc;
+        if (graph.isEntryPointCFG()) {
+            Signature sig = graph.method().getSignature();
+            JavaType retType = sig.getReturnType(null);
+            RegisterConfig registerConfig = getCodeCache().getRegisterConfig();
+            return registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, retType, graph.getEntryPointOriginalParameterTypes().toArray(new JavaType[0]), this);
+        }
         if (getProviders().getValhallaOptionsProvider().callingConventionEnabled()) {
             cc = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, graph.method(), this, true);
         } else {

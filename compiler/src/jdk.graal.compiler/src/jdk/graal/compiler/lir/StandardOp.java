@@ -55,6 +55,19 @@ public class StandardOp {
     public interface BlockEndOp {
     }
 
+    public static class DummyBlockEndOp extends LIRInstruction implements BlockEndOp {
+        public static final LIRInstructionClass<DummyBlockEndOp> TYPE = LIRInstructionClass.create(DummyBlockEndOp.class);
+
+        public DummyBlockEndOp() {
+            super(TYPE);
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb) {
+
+        }
+    }
+
     public interface NullCheck {
         Value getCheckedValue();
 

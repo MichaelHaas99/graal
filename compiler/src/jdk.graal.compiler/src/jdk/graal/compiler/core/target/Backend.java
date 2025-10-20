@@ -30,6 +30,7 @@ import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.LIRKind;
 import jdk.graal.compiler.core.common.alloc.DefaultCodeEmissionOrder;
+import jdk.graal.compiler.core.common.alloc.EntryPointCodeEmissionOrder;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
 import jdk.graal.compiler.core.common.cfg.BasicBlock;
 import jdk.graal.compiler.core.common.cfg.CodeEmissionOrder;
@@ -126,6 +127,10 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
      */
     public <T extends BasicBlock<T>> CodeEmissionOrder<T> newBlockOrder(int originalBlockCount, T startBlock) {
         return new DefaultCodeEmissionOrder<>(originalBlockCount, startBlock);
+    }
+
+    public <T extends BasicBlock<T>> CodeEmissionOrder<T> newEntryPointBlockOrder(int originalBlockCount, T startBlock) {
+        return new EntryPointCodeEmissionOrder<>(originalBlockCount, startBlock);
     }
 
     /**

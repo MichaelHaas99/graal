@@ -76,6 +76,7 @@ import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Assumptions.Assumption;
 import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.SpeculationLog;
@@ -562,6 +563,26 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
 
     public StartNode start() {
         return start;
+    }
+
+    private boolean isEntryPointCFG;
+
+    public boolean isEntryPointCFG() {
+        return isEntryPointCFG;
+    }
+
+    public void setEntryPointCFG(boolean entryPointCFG) {
+        isEntryPointCFG = entryPointCFG;
+    }
+
+    private List<JavaType> entryPointOriginalParameterTypes;
+
+    public List<JavaType> getEntryPointOriginalParameterTypes() {
+        return entryPointOriginalParameterTypes;
+    }
+
+    public void setEntryPointOriginalParameterTypes(List<JavaType> entryPointOriginalParameterTypes) {
+        this.entryPointOriginalParameterTypes = entryPointOriginalParameterTypes;
     }
 
     private FixedWithNextNode updatedStart;
