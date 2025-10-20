@@ -290,6 +290,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     }
 
     protected void sanityCheckNullableVirtualInputs(ValueNode node) {
+        if (((Virtualizable) node).virtualizeHandlesNullableVirtualInputs()) {
+            return;
+        }
         for (Node input : node.inputs()) {
             if (input instanceof ValueNode) {
                 ValueNode alias = tool.getAlias((ValueNode) input);

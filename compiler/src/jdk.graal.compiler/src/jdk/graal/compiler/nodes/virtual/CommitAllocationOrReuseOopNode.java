@@ -61,7 +61,7 @@ public class CommitAllocationOrReuseOopNode extends CommitAllocationNode {
              */
             tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i),
                             oops.get(i), nonNulls.get(i), false);
-            tool.setUnsetFields(virtualObject, unsetFields.subList(pos, pos + entryCount));
+            tool.setUnsetFields(virtualObject, getUnsetFields(i));
             pos += entryCount;
         }
         tool.delete();

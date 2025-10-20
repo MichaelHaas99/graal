@@ -37,6 +37,7 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
 import jdk.graal.compiler.nodes.BeginNode;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.ControlSplitNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -399,6 +400,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
             }
             if (!obj.isVirtual()) {
                 objectMaterialized(virtual, representation, values.subList(pos, pos + entries.length));
+            } else if (obj.getNonNull() == null) {
+                // our logic expects the non-null information to be set as soon as we are virtual
+                // with an oop
+                obj.setNonNull(ConstantNode.forInt(1, fixed.graph()));
             }
         } else {
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);

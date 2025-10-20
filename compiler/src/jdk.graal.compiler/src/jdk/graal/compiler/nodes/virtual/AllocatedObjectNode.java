@@ -71,6 +71,11 @@ public final class AllocatedObjectNode extends FloatingNode implements Virtualiz
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         tool.replaceWithVirtual(getVirtualObject());
     }

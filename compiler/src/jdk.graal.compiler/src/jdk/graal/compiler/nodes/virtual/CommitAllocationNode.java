@@ -186,6 +186,11 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         int pos = 0;
         for (int i = 0; i < virtualObjects.size(); i++) {
@@ -196,7 +201,7 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
              * created.
              */
             tool.createVirtualObject(virtualObject, values.subList(pos, pos + entryCount).toArray(new ValueNode[entryCount]), getLocks(i), virtualObject.getNodeSourcePosition(), ensureVirtual.get(i));
-            tool.setUnsetFields(virtualObject, unsetFields.subList(pos, pos + entryCount));
+            tool.setUnsetFields(virtualObject, getUnsetFields(i));
             pos += entryCount;
         }
         tool.delete();
