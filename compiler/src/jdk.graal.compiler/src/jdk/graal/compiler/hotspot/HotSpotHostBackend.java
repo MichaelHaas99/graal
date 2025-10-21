@@ -25,6 +25,7 @@
 package jdk.graal.compiler.hotspot;
 
 import static jdk.graal.compiler.core.common.spi.ForeignCallDescriptor.CallSideEffect.NO_SIDE_EFFECT;
+import static jdk.graal.compiler.hotspot.GraalHotSpotVMConfigAccess.VALHALLA_JDK;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF_NO_VZERO;
 import static jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.NO_LOCATIONS;
 import static jdk.vm.ci.code.CodeUtil.K;
@@ -33,6 +34,9 @@ import static jdk.vm.ci.common.InitTimer.timer;
 
 import java.util.Collections;
 
+import jdk.graal.compiler.asm.Assembler;
+import jdk.graal.compiler.asm.Label;
+import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
@@ -42,9 +46,11 @@ import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotLoweringProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
+import jdk.graal.compiler.hotspot.replacements.ValhallaEntryPointCreator;
 import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
+import jdk.graal.compiler.lir.asm.EntryPointDecorator;
 import jdk.graal.compiler.lir.framemap.FrameMapBuilder;
 import jdk.graal.compiler.lir.framemap.ReferenceMapBuilder;
 import jdk.graal.compiler.lir.gen.LIRGenerationResult;
@@ -62,6 +68,7 @@ import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Signature;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.runtime.JVMCICompiler;
@@ -211,4 +218,295 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
     }
 
     protected abstract FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig, Stub stub);
+
+    /**
+     * Extends the stack if necessary and scalarizes all value class args. See
+     * {@code MacroAssembler::unpack_inline_args}
+     *
+     * @return the stack increment
+     */
+    public int scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+
+        Assembler<?> asm = crb.asm;
+        // VIEP: nothing scalarized yet
+        // VIEP_RO: everything except receiver already scalarized
+        JavaType[] currentParameterTypes = receiverOnly ? GraalValhallaServices.getScalarizedParameters(rootMethod, false).toArray(new JavaType[0])
+                        : rootMethod.getSignature().toParameterTypes(rootMethod.isStatic() ? null : rootMethod.getDeclaringClass());
+        CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
+
+        // VEP: the parameters that are expected
+        JavaType[] expectedParameterTypes = GraalValhallaServices.getScalarizedParameters(rootMethod, true).toArray(new JavaType[0]);
+        CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
+
+        int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
+        int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
+
+        int spInc = 0;
+        if (expectedStackSizeArguments > currentStackSizeArguments) {
+            spInc = entryPointStackExtension(rootMethod, crb);
+        }
+        byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
+                        receiverOnly);
+        for (int i = 0; i < installedCode.length; i++) {
+            asm.emitByte(installedCode[i]);
+        }
+        return spInc;
+    }
+
+    /**
+     * For extending the stack in case the VEP has a larger stack size than the VIEP or VIEP_RO.
+     */
+    public int entryPointStackExtension(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb) {
+        throw new UnsupportedOperationException("stack extension must be implemented");
+    }
+
+    public boolean frameLeaveNeedsStackRepair(ResolvedJavaMethod rootMethod) {
+        if (rootMethod == null || !getProviders().getValhallaOptionsProvider().callingConventionEnabled()) {
+            return false;
+        }
+        CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this);
+        CallingConvention ccScalarized = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
+        CallingConvention ccScalarizedWithoutReceiver = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
+
+        return ccScalarized.getStackSize() > cc.getStackSize() || ccScalarized.getStackSize() > ccScalarizedWithoutReceiver.getStackSize();
+    }
+
+    public boolean frameLeaveNeedsStackRepair(CompilationResult crb) {
+        ResolvedJavaMethod[] methods = crb.getMethods();
+        if (methods == null || crb.getEntryBCI() != -1) {
+            return false;
+        }
+        return frameLeaveNeedsStackRepair(methods[0]);
+    }
+
+    /**
+     *
+     * Helper function to emit an unverified or verified entry.
+     */
+    private void emitEntryPoint(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, HotSpotMarkId markId, Label verifiedEntry, HotSpotMarkId additionalMarkId) {
+        Assembler<?> asm = crb.asm;
+        crb.recordMark(markId);
+        if (additionalMarkId != null) {
+            crb.recordMark(additionalMarkId);
+        }
+        if (!markId.isVerifiedEntryPoint()) {
+            icCheck(rootMethod, crb, markId, additionalMarkId);
+        } else {
+            // create dummy frame
+            crb.frameContext.enter(crb, 0, true);
+            crb.frameContext.leave(crb, false);
+            int stackIncrement = scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+
+            // create real entry point frame
+            crb.frameContext.enter(crb, stackIncrement, false);
+            asm.jmp(verifiedEntry);
+        }
+        asm.align(config.codeEntryAlignment);
+    }
+
+    private void emitEntryPoint(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig refConfig, HotSpotMarkId markId, Label verifiedEntry) {
+        emitEntryPoint(rootMethod, crb, refConfig, markId, verifiedEntry, null);
+    }
+
+    private void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
+        // TODO: update in subclasses
+        throw new UnsupportedOperationException("emit code helper is not implemented");
+    }
+
+    private void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
+        // TODO: just make the implementation in the subclasses common in here
+        throw new UnsupportedOperationException("ic check is not implemented");
+    }
+
+    /**
+     * Emits the code prior to the verified entry point.
+     *
+     * @param installedCodeOwner see {@link LIRGenerationProvider#emitCode}
+     */
+
+    // @formatter:off
+    // The entry points of JVMCI-compiled methods can have the following types:
+    //
+    // (1) Methods with no inline type arguments
+    // (2) Methods with an inline type receiver but no inline type arguments
+    //     VIEP_RO is the same as VIEP
+    // (3) Methods with a non-inline type receiver and some inline type arguments
+    //     VIEP_RO is the same as VEP
+    // (4) Methods with an inline type receiver and other inline type arguments
+    //     Separate VEP, VIEP, and VIEP_RO
+
+    //
+    // (1)               (2)                 (3)                    (4)
+    // UEP/UIEP:         UEP/UIEP:           UIEP:                  UEP:
+    //   check_icache      check_icache       check_icache           check_icache
+    // VEP/VIEP/VIEP_RO  VIEP/VIEP_RO:       VIEP:                  VIEP_RO:
+    //   body              unpack receiver    unpack inline args     unpack receiver
+    //                     jump to VEP        jump to VEP            jump to VEP
+    //                   VEP                 UEP:                   UIEP:
+    //                     body                check_icache           check_icache
+    //                                       VEP/VIEP_RO:           VIEP:
+    //                                         body                   unpack all inline args
+    //                                                                jump to VEP
+    //                                                              VEP:
+    //                                                                body
+    // @formatter:on
+    public Label emitCodePrefix(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, RegisterConfig regConfig) {
+
+        boolean verifiedInlineSet = false;
+        boolean verifiedInlineROSet = false;
+        boolean unverifiedSet = false;
+        boolean unverifiedInlineSet = false;
+
+        Label verifiedEntry = new Label();
+        if (installedCodeOwner != null) {
+            if (crb.compilationResult.getEntryBCI() == -1 && GraalValhallaServices.hasScalarizedParameters(installedCodeOwner)) {
+                // we have parameters that need to be scalarized
+                if (!installedCodeOwner.isStatic()) {
+
+                    if (GraalValhallaServices.hasScalarizedReceiver(installedCodeOwner)) {
+                        // additional entry points for receiver
+
+                        if (GraalValhallaServices.getScalarizedParametersCount(installedCodeOwner) == 1) {
+                            // case (2)
+
+                            // only receiver needs to be scalarized share entries
+
+                            /*
+                             * unverified and no parameter scalarized, falls through to
+                             * VERIFIED_INLINE_ENTRY
+                             */
+                            emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                            HotSpotMarkId.INLINE_ENTRY, null, HotSpotMarkId.UNVERIFIED_ENTRY);
+
+                            /*
+                             * verified but no parameter scalarized yet, produce code that
+                             * scalarizes all of them and jump to verified entry after its frame
+                             * enter
+                             */
+                            emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                            HotSpotMarkId.VERIFIED_INLINE_ENTRY, verifiedEntry, HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                        } else {
+                            // case (4)
+
+                            // receiver specific entry needed
+
+                            /*
+                             * unverified and no parameter scalarized, falls through to
+                             * VERIFIED_INLINE_ENTRY
+                             */
+                            emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                            HotSpotMarkId.INLINE_ENTRY, null);
+
+                            /*
+                             * verified but no parameter scalarized yet, produce code that
+                             * scalarizes all of them and jump to verified entry after its frame
+                             * enter
+                             */
+                            emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                            HotSpotMarkId.VERIFIED_INLINE_ENTRY, verifiedEntry);
+
+                            /*
+                             * unverified and all parameters except receiver scalarized, falls
+                             * through to VERIFIED_INLINE_ENTRY_RO
+                             */
+                            emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                            HotSpotMarkId.UNVERIFIED_ENTRY, null);
+
+                            /*
+                             * verified and all parameters except receiver scalarized, produce code
+                             * that scalarizes the receiver and jump to verified entry after its
+                             * frame enter
+                             */
+                            emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                            HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO, verifiedEntry);
+                        }
+
+                        verifiedInlineSet = true;
+                        verifiedInlineROSet = true;
+                        unverifiedSet = true;
+                        unverifiedInlineSet = true;
+                    } else {
+                        // case (3)
+
+                        // no entry points specific for receiver needed
+
+                        /*
+                         * unverified and no parameter scalarized, falls through to
+                         * VERIFIED_INLINE_ENTRY
+                         */
+                        emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                        HotSpotMarkId.INLINE_ENTRY, null);
+
+                        /*
+                         * verified but no parameter scalarized yet, produce code that scalarizes
+                         * all of them and jump to verified entry after its frame enter
+                         */
+                        emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                        HotSpotMarkId.VERIFIED_INLINE_ENTRY, verifiedEntry);
+
+                        /*
+                         * unverified and all parameters scalarized, falls through to the verified
+                         * entry
+                         */
+                        emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                        HotSpotMarkId.UNVERIFIED_ENTRY, null);
+                        verifiedInlineSet = true;
+                        verifiedInlineROSet = false;
+                        unverifiedSet = true;
+                        unverifiedInlineSet = true;
+                    }
+
+                } else {
+                    // static method, no receiver specific entry points needed
+
+                    // verified but no parameter scalarized yet, produce code that scalarizes
+                    // all of them and jump to verified entry after its frame enter
+                    emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                    HotSpotMarkId.VERIFIED_INLINE_ENTRY, verifiedEntry);
+                    verifiedInlineSet = true;
+                    // new ValhallaEntryPointCreator(getRuntime().getOptions(), getProviders(),
+                    // installedCodeOwner).getCode(getRuntime().getHostBackend(), null);
+                }
+            } else if (!installedCodeOwner.isStatic()) {
+                // case (1)
+
+                // no additional entry points needed
+                if (VALHALLA_JDK) {
+                    emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                    HotSpotMarkId.UNVERIFIED_ENTRY, null, HotSpotMarkId.INLINE_ENTRY);
+                    unverifiedInlineSet = true;
+                } else {
+                    emitEntryPoint(installedCodeOwner, crb, regConfig,
+                                    HotSpotMarkId.UNVERIFIED_ENTRY, null);
+                }
+                unverifiedSet = true;
+            }
+        }
+
+        if (crb.compilationResult.getEntryBCI() != -1) {
+            crb.recordMark(HotSpotMarkId.OSR_ENTRY);
+            return null;
+
+        } else {
+            // set entry points (if not set yet) to verified entry point
+            if (!unverifiedSet) {
+                crb.recordMark(HotSpotMarkId.UNVERIFIED_ENTRY);
+            }
+            if (VALHALLA_JDK) {
+                if (!unverifiedInlineSet) {
+                    crb.recordMark(HotSpotMarkId.INLINE_ENTRY);
+                }
+                if (!verifiedInlineSet) {
+                    crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY);
+                }
+                if (!verifiedInlineROSet) {
+                    crb.recordMark(HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+                }
+            }
+
+            // record the normal entry point
+            crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
+            return verifiedEntry;
+        }
+    }
 }

@@ -109,6 +109,10 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
         return needsValhallaJDK;
     }
 
+    public boolean isVerifiedEntryPoint() {
+        return this == VERIFIED_ENTRY || this == VERIFIED_INLINE_ENTRY || this == VERIFIED_INLINE_ENTRY_RO;
+    }
+
     @Override
     public String getName() {
         return name();
