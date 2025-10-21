@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
+
 import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -48,6 +51,7 @@ import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -68,13 +72,16 @@ import jdk.vm.ci.meta.Value;
  * can be extracted. The big advantage is that (compared to C2) we don't need to use the assembler
  * in the backend to create the entry point. So we also don't need to think about different GCs when
  * accessing memory or different underlying architectures. Also new field flattening features can be
- * implemented on a high-level and the implementation can be reused for the entry point.
+ * implemented on a high-level and the implementation can be reused for the entry point. We also
+ * don't need to recompute the entry point in recompilations.
  */
 public class ValhallaEntryPointCreator {
 
     protected final OptionValues options;
     protected final HotSpotProviders providers;
     protected final ResolvedJavaMethod targetMethod;
+    private byte[] verified_inline_entry_ro;
+    private byte[] verified_inline_entry;
 
     public ValhallaEntryPointCreator(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
         this.options = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningForStubsAndSnippets.getValue(options), RegisterPressure, null,
@@ -177,22 +184,52 @@ public class ValhallaEntryPointCreator {
         }
     }
 
-    // TODO: maybe cache the code?
-    public CompilationResult getCode(final Backend backend, boolean receiverOnly) {
+    private static EconomicMap<ResolvedJavaMethod, ValhallaEntryPointCreator> cache = EconomicMap.create(Equivalence.IDENTITY);
+
+    public static ValhallaEntryPointCreator create(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
+        ValhallaEntryPointCreator creator = cache.get(targetMethod);
+        if (creator != null) {
+            return creator;
+        }
+        creator = new ValhallaEntryPointCreator(options, providers, targetMethod);
+        cache.put(targetMethod, creator);
+        return creator;
+
+    }
+
+    public synchronized byte[] getCode(final Backend backend, boolean receiverOnly) {
+        if (receiverOnly && verified_inline_entry_ro != null) {
+            return verified_inline_entry_ro;
+        }
+        if (!receiverOnly && verified_inline_entry != null) {
+            return verified_inline_entry;
+        }
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
             try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
                 CompilationIdentifier compilationId = INVALID_COMPILATION_ID;
                 final StructuredGraph graph = getGraph(debug, receiverOnly, backend);
                 CompilationResult compResult = buildCompilationResult(debug, backend, graph, compilationId);
                 CodeCacheProvider codeCache = providers.getCodeCache();
+                InstalledCode installedCode;
                 try (DebugContext.Scope s = debug.scope("CodeInstall", compResult);
                                 DebugContext.Activation a = debug.activate()) {
                     HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, null, null, compResult, options);
-                    codeCache.installCode(null, compiledCode, null, null, false);
+                    installedCode = codeCache.installCode(null, compiledCode, null, null, false);
                 } catch (Throwable e) {
                     throw debug.handle(e);
                 }
-                return compResult;
+                // we shouldn't include any alignment of the installed code
+                byte[] codeArray = new byte[compResult.getTargetCodeSize()];
+                byte[] installedCodeArray = installedCode.getCode();
+                for (int i = 0; i < compResult.getTargetCodeSize(); i++) {
+                    codeArray[i] = installedCodeArray[i];
+                }
+                if (receiverOnly) {
+                    verified_inline_entry_ro = codeArray;
+                } else {
+                    verified_inline_entry = codeArray;
+                }
+                return codeArray;
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
