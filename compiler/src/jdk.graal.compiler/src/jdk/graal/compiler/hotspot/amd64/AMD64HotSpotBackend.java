@@ -53,7 +53,6 @@ import jdk.graal.compiler.asm.amd64.AMD64BaseAssembler;
 import jdk.graal.compiler.asm.amd64.AMD64MacroAssembler;
 import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.amd64.AMD64NodeMatchRules;
-import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
@@ -65,6 +64,7 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
 import jdk.graal.compiler.hotspot.HotSpotDataBuilder;
+import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntime;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import jdk.graal.compiler.hotspot.HotSpotHostBackend;
@@ -126,19 +126,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return new AMD64HotSpotFrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
-    @Override
-    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
-        FrameMapBuilder builder;
-        if (graph.isEntryPointCFG()) {
-            builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method());
-        } else {
-            builder = newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method());
-        }
-        return new HotSpotLIRGenerationResult(compilationId, lir, builder,
-                        registerAllocationConfig,
-                        makeCallingConvention(graph, (Stub) stub), (Stub) stub, config.requiresReservedStackCheck(graph.getMethods()));
-    }
-
     protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         AMD64FrameMap frameMap = new AMD64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
@@ -147,7 +134,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
     protected FrameMapBuilder newFrameMapBuilderWithStackRepair(RegisterConfig registerConfig, Stub stub, ResolvedJavaMethod rootMethod) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        AMD64FrameMap frameMap = new AMD64HotSpotFrameMap(getCodeCache(), registerConfigNonNull, this, config.preserveFramePointer(stub != null), needStackRepair(rootMethod));
+        AMD64FrameMap frameMap = new AMD64HotSpotFrameMap(getCodeCache(), registerConfigNonNull, this, config.preserveFramePointer(stub != null), rootMethod,
+                        getProviders().getValhallaOptionsProvider(), this);
         return new AMD64HotSpotFrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
@@ -261,11 +249,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
             ResolvedJavaMethod[] methods = crb.compilationResult.getMethods();
-            if (methods != null && needStackRepair(methods[0]) && crb.compilationResult.getEntryBCI() == -1) {
+            AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
+            if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
                 // method needs stack repair
                 // stack increment doesn't include RBP so add it, RA and padding already included
-                AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
-                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrement())),
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrementSlot())),
                                 frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
 
@@ -347,8 +335,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            ResolvedJavaMethod[] methods = crb.compilationResult.getMethods();
-            if (methods != null && needStackRepair(methods[0]) && allowStackRepair && crb.compilationResult.getEntryBCI() == -1) {
+            if (allowStackRepair && frameMap.frameLeaveNeedsStackRepair()) {
                 // needs stack repair
 
                 if (frameMap.preserveFramePointer()) {
@@ -356,7 +343,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     asm.movq(rbp, new AMD64Address(rsp, frameMap.frameSize()));
                 }
                 // add the stack increment to the rsp, located directly under the rbp
-                asm.addq(rsp, new AMD64Address(rsp, frameMap.offsetForStackSlot(frameMap.getStackIncrement())));
+                asm.addq(rsp, new AMD64Address(rsp, frameMap.offsetForStackSlot(frameMap.getStackIncrementSlot())));
             } else {
                 if (frameMap.preserveFramePointer()) {
                     asm.movq(rsp, rbp);
@@ -482,7 +469,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         int spInc = 0;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
-            spInc = extendStackForInlineArgs(rootMethod, crb, asm, regConfig);
+            spInc = extendStackForInlineArgs(crb, asm, regConfig);
         }
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
             byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
@@ -1112,15 +1099,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * 
      * @return size of Args + RA + Padding
      */
-    public int extendStackForInlineArgs(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
-        List<JavaType> parameterTypes = GraalValhallaServices.getScalarizedParameters(rootMethod, true);
-        CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes.toArray(new JavaType[0]), this);
-
-        int RAsize = crb.target.arch.getReturnAddressSize();
-        int spInc = (cc.getStackSize() + RAsize);
-        int stackAlignment = crb.target.stackAlignment;
-        spInc = spInc % stackAlignment == 0 ? spInc : ((spInc / stackAlignment) + 1) * stackAlignment;
-
+    public int extendStackForInlineArgs(CompilationResultBuilder crb, AMD64MacroAssembler asm, RegisterConfig regConfig) {
+        int spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
         // pop the return address
         asm.pop(r13);
         asm.decrementq(rsp, spInc);
@@ -1242,7 +1222,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             int stackIncrement = unpackInlineArgs(rootMethod, crb, asm, regConfig, receiverOnly);
 
             // create real entry point frame
-            crb.frameContext.enter(crb, stackIncrement, false);
+            HotSpotFrameMap frameMap = (HotSpotFrameMap) crb.frameMap;
+            crb.frameContext.enter(crb, frameMap.getStackIncrement(), false);
             asm.jmp(verifiedEntry);
         }
 

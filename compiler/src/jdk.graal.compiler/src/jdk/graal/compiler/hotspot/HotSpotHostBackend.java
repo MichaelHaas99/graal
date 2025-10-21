@@ -36,7 +36,6 @@ import java.util.Collections;
 
 import jdk.graal.compiler.asm.Assembler;
 import jdk.graal.compiler.asm.Label;
-import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.NumUtil;
 import jdk.graal.compiler.core.common.alloc.RegisterAllocationConfig;
@@ -211,9 +210,17 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         return new HotSpotReferenceMapBuilder(totalFrameSize, config.maxOopMapStackOffset, uncompressedReferenceSize);
     }
 
+
     @Override
     public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationId, lir, newFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), (Stub) stub), registerAllocationConfig,
+        FrameMapBuilder builder;
+        if (graph.isEntryPointCFG()) {
+            builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method());
+        } else {
+            builder = newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method());
+        }
+        return new HotSpotLIRGenerationResult(compilationId, lir, builder,
+                        registerAllocationConfig,
                         makeCallingConvention(graph, (Stub) stub), (Stub) stub, config.requiresReservedStackCheck(graph.getMethods()));
     }
 
@@ -222,10 +229,8 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
     /**
      * Extends the stack if necessary and scalarizes all value class args. See
      * {@code MacroAssembler::unpack_inline_args}
-     *
-     * @return the stack increment
      */
-    public int scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+    public void scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
 
         Assembler<?> asm = crb.asm;
         // VIEP: nothing scalarized yet
@@ -241,42 +246,21 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
         int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
 
-        int spInc = 0;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
-            spInc = entryPointStackExtension(rootMethod, crb);
+            entryPointStackExtension(crb);
         }
         byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
                         receiverOnly);
         for (int i = 0; i < installedCode.length; i++) {
             asm.emitByte(installedCode[i]);
         }
-        return spInc;
     }
 
     /**
      * For extending the stack in case the VEP has a larger stack size than the VIEP or VIEP_RO.
      */
-    public int entryPointStackExtension(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb) {
+    public void entryPointStackExtension(CompilationResultBuilder crb) {
         throw new UnsupportedOperationException("stack extension must be implemented");
-    }
-
-    public boolean frameLeaveNeedsStackRepair(ResolvedJavaMethod rootMethod) {
-        if (rootMethod == null || !getProviders().getValhallaOptionsProvider().callingConventionEnabled()) {
-            return false;
-        }
-        CallingConvention cc = getCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this);
-        CallingConvention ccScalarized = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, true);
-        CallingConvention ccScalarizedWithoutReceiver = GraalValhallaServices.getValhallaCallingConvention(getCodeCache(), HotSpotCallingConventionType.JavaCallee, rootMethod, this, false);
-
-        return ccScalarized.getStackSize() > cc.getStackSize() || ccScalarized.getStackSize() > ccScalarizedWithoutReceiver.getStackSize();
-    }
-
-    public boolean frameLeaveNeedsStackRepair(CompilationResult crb) {
-        ResolvedJavaMethod[] methods = crb.getMethods();
-        if (methods == null || crb.getEntryBCI() != -1) {
-            return false;
-        }
-        return frameLeaveNeedsStackRepair(methods[0]);
     }
 
     /**
@@ -295,10 +279,11 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             // create dummy frame
             crb.frameContext.enter(crb, 0, true);
             crb.frameContext.leave(crb, false);
-            int stackIncrement = scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+            scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
 
             // create real entry point frame
-            crb.frameContext.enter(crb, stackIncrement, false);
+            HotSpotFrameMap frameMap = (HotSpotFrameMap) crb.frameMap;
+            crb.frameContext.enter(crb, frameMap.getStackIncrement(), false);
             asm.jmp(verifiedEntry);
         }
         asm.align(config.codeEntryAlignment);
@@ -508,5 +493,13 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             crb.recordMark(HotSpotMarkId.VERIFIED_ENTRY);
             return verifiedEntry;
         }
+    }
+
+    protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
+        throw new UnsupportedOperationException("entry point frame map builder implemented");
+    }
+
+    protected FrameMapBuilder newFrameMapBuilderWithStackRepair(RegisterConfig registerConfig, Stub stub, ResolvedJavaMethod rootMethod) {
+        throw new UnsupportedOperationException("entry point frame map builder implemented");
     }
 }

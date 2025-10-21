@@ -29,12 +29,16 @@ import static jdk.vm.ci.code.ValueUtil.asStackSlot;
 
 import jdk.graal.compiler.core.common.LIRKind;
 import jdk.graal.compiler.debug.Assertions;
+import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMap;
+import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.ValueKindFactory;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * AMD64 HotSpot specific frame map.
@@ -130,7 +134,7 @@ import jdk.vm.ci.code.StackSlot;
  *
  * </pre>
  */
-public class AMD64HotSpotFrameMap extends AMD64FrameMap {
+public class AMD64HotSpotFrameMap extends AMD64FrameMap implements HotSpotFrameMap {
     /**
      * The spill slot for rbp if {@link #preserveFramePointer} )is false.
      */
@@ -144,7 +148,9 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
     /**
      * The stack increment used for stack repair.
      */
-    private StackSlot stackIncrement;
+    private StackSlot stackIncrementSlot;
+    private boolean frameLeaveNeedsStackRepair;
+    private int stackIncrement;
 
     @SuppressWarnings("this-escape")
     public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer) {
@@ -161,7 +167,8 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
     }
 
     @SuppressWarnings("this-escape")
-    public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer, boolean stackRepair) {
+    public AMD64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, boolean preserveFramePointer,
+                    ResolvedJavaMethod targetMethod, ValhallaOptionsProvider valhallaOptionsProvider, ValueKindFactory<?> valueKindFactory) {
         super(codeCache, registerConfig, referenceMapFactory, preserveFramePointer);
         // HotSpot is picky about the frame layout in the presence of nmethod entry barriers, so
         // always allocate the space for rbp and the deoptimization rescue slot. If we don't
@@ -171,9 +178,12 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
             rbpSpillSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
             assert asStackSlot(rbpSpillSlot).getRawOffset() == -16 : asStackSlot(rbpSpillSlot).getRawOffset();
         }
-        if (stackRepair) {
+        frameLeaveNeedsStackRepair = HotSpotFrameMap.checkFrameLeaveNeedsStackRepair(targetMethod, codeCache, valhallaOptionsProvider, valueKindFactory);
+        if (frameLeaveNeedsStackRepair) {
             // stack increment needs to be located directly under rbp
-            stackIncrement = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+            stackIncrementSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
+            stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory,
+                            initialSpillSize);
         }
         deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
 
@@ -197,9 +207,9 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
         return deoptimizationRescueSlot;
     }
 
-    public StackSlot getStackIncrement() {
-        assert stackIncrement != null;
-        return stackIncrement;
+    public StackSlot getStackIncrementSlot() {
+        assert stackIncrementSlot != null;
+        return stackIncrementSlot;
     }
 
     @Override
@@ -219,5 +229,15 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap {
             }
         }
         return filtered != null ? filtered : savedRegisters;
+    }
+
+    @Override
+    public int getStackIncrement() {
+        return stackIncrement;
+    }
+
+    @Override
+    public boolean frameLeaveNeedsStackRepair() {
+        return frameLeaveNeedsStackRepair;
     }
 }
