@@ -85,8 +85,6 @@ import jdk.graal.compiler.hotspot.nodes.type.KlassPointerStamp;
 import jdk.graal.compiler.hotspot.nodes.type.MethodPointerStamp;
 import jdk.graal.compiler.hotspot.replacements.AssertionSnippets;
 import jdk.graal.compiler.hotspot.replacements.ClassGetHubNode;
-import jdk.graal.compiler.hotspot.replacements.DelayedRawComparisonNode;
-import jdk.graal.compiler.hotspot.replacements.DelayedRawComparisonSnippets;
 import jdk.graal.compiler.hotspot.replacements.DigestBaseSnippets;
 import jdk.graal.compiler.hotspot.replacements.FastNotifyNode;
 import jdk.graal.compiler.hotspot.replacements.HasIdentitySnippets;
@@ -299,7 +297,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected MonitorSnippets.Templates monitorSnippets;
     protected ObjectEqualsSnippets.Templates objectEqualsSnippets;
     protected ValhallaArrayLayoutKindSnippets.Templates valhallaArrayLayoutKindSnippets;
-    protected DelayedRawComparisonSnippets.Templates delayedRawcomparisonSnippets;
     protected HasIdentitySnippets.Templates hasIdentitySnippets;
     protected ReturnResultDeciderSnippets.Templates returnResultDeciderSnippets;
     protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
@@ -356,7 +353,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         monitorSnippets = new MonitorSnippets.Templates(options, runtime, providers, config);
         objectEqualsSnippets = new ObjectEqualsSnippets.Templates(options, providers);
         valhallaArrayLayoutKindSnippets = new ValhallaArrayLayoutKindSnippets.Templates(options, providers, target);
-        delayedRawcomparisonSnippets = new DelayedRawComparisonSnippets.Templates(options, providers);
         returnResultDeciderSnippets = new ReturnResultDeciderSnippets.Templates(options, providers);
         hasIdentitySnippets = new HasIdentitySnippets.Templates(options, providers);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, runtime, providers, config);
@@ -638,8 +634,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerIsFlatArray((IsFlatArrayNode) n, tool);
         } else if (n instanceof IsNullFreeArrayNode) {
             lowerIsNullFreeArray((IsNullFreeArrayNode) n, tool);
-        } else if (n instanceof DelayedRawComparisonNode) {
-            lowerDelayRawComparison((DelayedRawComparisonNode) n, tool);
         } else if (n instanceof ReturnResultDeciderNode) {
             lowerReturnResultDecider((ReturnResultDeciderNode) n, tool);
         } else if (n instanceof HasIdentityNode) {
@@ -832,13 +826,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         }
         valhallaArrayLayoutKindSnippets.lower(node, tool);
 
-    }
-
-    protected void lowerDelayRawComparison(DelayedRawComparisonNode node, LoweringTool tool) {
-        if (!node.isAccessKindConstant()) {
-            return;
-        }
-        delayedRawcomparisonSnippets.lower(node, tool);
     }
 
     protected void lowerReturnResultDecider(ReturnResultDeciderNode node, LoweringTool tool) {
