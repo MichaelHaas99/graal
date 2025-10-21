@@ -86,7 +86,7 @@ public class LIRCompilerBackend {
                 int bytecodeSize = graph.method() == null ? 0 : graph.getBytecodeSize();
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
                 if (graph.isEntryPointCFG()) {
-                    emitScalarizationEntryPointCode(backend,
+                    emitValhallaEntryPointCode(backend,
                                     graph.getAssumptions(),
                                     graph.method(),
                                     graph.getMethods(),
@@ -287,7 +287,7 @@ public class LIRCompilerBackend {
         }
     }
 
-    public static void emitScalarizationEntryPointCode(Backend backend,
+    public static void emitValhallaEntryPointCode(Backend backend,
                     Assumptions assumptions,
                     ResolvedJavaMethod rootMethod,
                     Collection<ResolvedJavaMethod> inlinedMethods,
