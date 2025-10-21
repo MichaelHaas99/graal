@@ -54,10 +54,12 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
 import jdk.graal.compiler.hotspot.HotSpotDataBuilder;
+import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import jdk.graal.compiler.hotspot.HotSpotHostBackend;
 import jdk.graal.compiler.hotspot.HotSpotLIRGenerationResult;
 import jdk.graal.compiler.hotspot.HotSpotMarkId;
+import jdk.graal.compiler.hotspot.amd64.AMD64HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
@@ -191,7 +193,11 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         }
     }
 
-    public static void rawEnter(CompilationResultBuilder crb, FrameMap frameMap, AArch64MacroAssembler masm, GraalHotSpotVMConfig config, boolean isStub) {
+    public void rawEnter(CompilationResultBuilder crb, FrameMap frameMap, AArch64MacroAssembler masm, GraalHotSpotVMConfig config, boolean isStub) {
+        rawEnter(crb, frameMap, masm, config, isStub, -1);
+    }
+
+    public static void rawEnter(CompilationResultBuilder crb, FrameMap frameMap, AArch64MacroAssembler masm, GraalHotSpotVMConfig config, boolean isStub, int stackIncrement) {
         // based on HotSpot's macroAssembler_aarch64.cpp MacroAssembler::build_frame
         try (ScratchRegister sc = masm.getScratchRegister()) {
             if (config.ropProtection) {
@@ -203,6 +209,10 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
             assert frameSize + 2 * wordSize == totalFrameSize : "total framesize should be framesize + 2 words";
             Register scratch = sc.getRegister();
             assert totalFrameSize > 0 : totalFrameSize;
+            // see MacroAssembler::save_stack_increment in macroAssembler_aarch64.cpp
+            AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) frameMap;
+            int spInc = hotSpotFrameMap.frameSize() + stackIncrement;
+            int stackIncrementOffset = frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrementSlot());
             AArch64Address.AddressingMode addressingMode = AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED;
             if (AArch64Address.isValidImmediateAddress(64, addressingMode, frameSize)) {
                 masm.sub(64, sp, sp, totalFrameSize);
@@ -210,11 +220,20 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 if (config.preserveFramePointer(isStub)) {
                     masm.add(64, fp, sp, frameSize);
                 }
+                if (stackIncrement != -1) {
+                    masm.mov(scratch, spInc);
+                    masm.str(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, stackIncrementOffset));
+                }
             } else {
                 int frameRecordSize = 2 * wordSize;
                 masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -frameRecordSize));
                 if (config.preserveFramePointer(isStub)) {
                     masm.mov(64, fp, sp);
+                }
+                if (stackIncrement != -1) {
+                    masm.mov(scratch, spInc);
+                    masm.str(64, scratch, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -wordSize));
+                    frameRecordSize -= wordSize;
                 }
                 masm.sub(64, sp, sp, totalFrameSize - frameRecordSize, scratch);
             }
@@ -244,6 +263,44 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
             if (!isStub && config.nmethodEntryBarrier != 0) {
                 emitNmethodEntryBarrier(crb, masm);
             }
+            if (entryPointDecorator != null) {
+                entryPointDecorator.emitEntryPoint(crb, false);
+            }
+            if (ZapStackOnMethodEntry.getValue(crb.getOptions())) {
+                try (ScratchRegister sc = masm.getScratchRegister()) {
+                    Register scratch = sc.getRegister();
+                    int longSize = 8;
+                    masm.mov(64, scratch, sp);
+                    AArch64Address address = AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_POST_INDEXED, scratch, longSize);
+                    try (ScratchRegister sc2 = masm.getScratchRegister()) {
+                        Register value = sc2.getRegister();
+                        masm.mov(value, 0xBADDECAFFC0FFEEL);
+                        for (int i = 0; i < frameMap.frameSize(); i += longSize) {
+                            masm.str(64, value, address);
+                        }
+                    }
+
+                }
+            }
+            crb.blockComment("[code body]");
+        }
+
+        @Override
+        public void enter(CompilationResultBuilder crb, int stackIncrement, boolean emitEntryBarrier) {
+            AArch64HotSpotFrameMap frameMap = (AArch64HotSpotFrameMap) crb.frameMap;
+            AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
+            if (!isStub) {
+                emitStackOverflowCheck(crb);
+            }
+            crb.blockComment("[method prologue]");
+            rawEnter(crb, frameMap, masm, config, isStub);
+
+            if (emitEntryBarrier) {
+                if (!isStub && config.nmethodEntryBarrier != 0) {
+                    emitNmethodEntryBarrier(crb, masm);
+                }
+            }
+            crb.recordMark(HotSpotMarkId.FRAME_COMPLETE);
             if (entryPointDecorator != null) {
                 entryPointDecorator.emitEntryPoint(crb, false);
             }
@@ -349,6 +406,34 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         }
 
         @Override
+        public void leave(CompilationResultBuilder crb, boolean allowStackRepair) {
+            AArch64HotSpotFrameMap frameMap = (AArch64HotSpotFrameMap) crb.frameMap;
+            if (allowStackRepair && frameMap.frameLeaveNeedsStackRepair()) {
+                AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
+                // see macroAssembler_aarch64.cpp MacroAssembler::remove_frame
+                try (ScratchRegister sc = masm.getScratchRegister()) {
+                    int wordSize = 8;
+                    Register scratch = sc.getRegister();
+                    int stackIncrementOffset = frameMap.offsetForStackSlot(frameMap.getStackIncrementSlot());
+                    AArch64Address.AddressingMode addressingMode = AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED;
+                    if (AArch64Address.isValidImmediateAddress(64, addressingMode, stackIncrementOffset)) {
+                        masm.ldr(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, stackIncrementOffset));
+                    } else {
+                        masm.ldr(64, scratch, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, stackIncrementOffset));
+                    }
+                    masm.add(64, sp, sp, scratch);
+                    masm.ldp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_POST_INDEXED, sp, 2 * wordSize));
+
+                    if (config.ropProtection) {
+                        masm.autia(lr, fp);
+                    }
+                }
+            } else {
+                leave(crb);
+            }
+        }
+
+        @Override
         public void returned(CompilationResultBuilder crb) {
             // nothing to do
         }
@@ -398,6 +483,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         }
     }
 
+    // TODO: adapt for Valhalla
     private void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
         AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
         FrameMap frameMap = crb.frameMap;
@@ -567,5 +653,30 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo, Object stub, boolean isEntryPoint) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new AArch64HotSpotRegisterAllocationConfig(registerConfigNonNull, allocationRestrictedTo, config.preserveFramePointer(stub != null) || isEntryPoint);
+    }
+
+    @Override
+    public FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
+        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
+        FrameMap frameMap = new AArch64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
+        return new AArch64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
+    }
+
+    @Override
+    public FrameMapBuilder newFrameMapBuilderWithStackRepair(RegisterConfig registerConfig, Stub stub, ResolvedJavaMethod rootMethod) {
+        RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
+        FrameMap frameMap = new AArch64FrameMap(getCodeCache(), registerConfigNonNull, this);
+        return new AArch64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
+    }
+
+    @Override
+    public void entryPointStackExtension(CompilationResultBuilder crb) {
+        AArch64HotSpotMacroAssembler masm = (AArch64HotSpotMacroAssembler) crb.asm;
+        HotSpotFrameMap frameMap = (HotSpotFrameMap) crb.frameMap;
+        // see MacroAssembler::extend_stack_for_inline_args in macroAssembler_aarch64.cpp
+        int wordSize = 8;
+        masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -2 * wordSize));
+        masm.sub(64, sp, sp, frameMap.getStackIncrement());
+
     }
 }
