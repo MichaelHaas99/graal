@@ -17,6 +17,7 @@ import jdk.graal.compiler.core.target.Backend;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.DebugOptions;
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.hotspot.HotSpotCompiledCodeBuilder;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.stubs.HotSpotGraphKit;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
@@ -46,9 +47,11 @@ import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
+import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -98,7 +101,6 @@ public class ValhallaEntryPointCreator {
                 if (ValueUtil.isStackSlot(dst)) {
                     StackSlot slot = ValueUtil.asStackSlot(dst);
                     slot.setNewArgument(true);
-                    slot.setCallingConventionStackSize(callingConvention.getStackSize());
                 }
             }
             if (receiverOnly) {
@@ -165,7 +167,6 @@ public class ValhallaEntryPointCreator {
                         index--;
                         addBefore = kit.append(new ValueAnchorNode());
                     }
-
                 }
             }
             kit.append(new DummyControlSinkNode());
@@ -176,12 +177,21 @@ public class ValhallaEntryPointCreator {
         }
     }
 
+    // TODO: maybe cache the code?
     public CompilationResult getCode(final Backend backend, boolean receiverOnly) {
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
             try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
                 CompilationIdentifier compilationId = INVALID_COMPILATION_ID;
                 final StructuredGraph graph = getGraph(debug, receiverOnly, backend);
                 CompilationResult compResult = buildCompilationResult(debug, backend, graph, compilationId);
+                CodeCacheProvider codeCache = providers.getCodeCache();
+                try (DebugContext.Scope s = debug.scope("CodeInstall", compResult);
+                                DebugContext.Activation a = debug.activate()) {
+                    HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, null, null, compResult, options);
+                    codeCache.installCode(null, compiledCode, null, null, false);
+                } catch (Throwable e) {
+                    throw debug.handle(e);
+                }
                 return compResult;
             } catch (Throwable e) {
                 throw debug.handle(e);
