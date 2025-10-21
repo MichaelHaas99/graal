@@ -49,10 +49,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  *            :                                :                               |
  *            | incoming overflow argument n   |                               |
  *            :     ...                        :                               | oldArgumentsStartOffset
- *            | incoming overflow argument 0   |                               |
- *            +--------------------------------+    ^                          |
- *            | LR                             |    |  newArgumentsStartOffset |
- *            | FP                             |    |                          |
+ *            | incoming overflow argument 0   | newArgumentsStartOffset = 0   |
  *  %sp--&gt;  +--------------------------------+---------------------------
  *
  * </pre>
@@ -66,7 +63,7 @@ public class AArch64HotSpotEntryPointFrameMap extends AArch64FrameMap implements
     public AArch64HotSpotEntryPointFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ResolvedJavaMethod targetMethod, ReferenceMapBuilderFactory referenceMapFactory,
                     ValueKindFactory<?> valueKindFactory) {
         super(codeCache, registerConfig, referenceMapFactory);
-        this.initialSpillSize = getTarget().arch.getWordSize() * 2;
+        this.initialSpillSize = 0;
         this.spillSize = initialSpillSize;
         stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory, initialSpillSize);
         oldArgumentsStartOffset = stackIncrement + initialSpillSize;
