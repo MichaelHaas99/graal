@@ -2014,16 +2014,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         AbstractMergeNode merge) {
         }
 
-        public record VirtualizedNullCacheKey(
-                        ResolvedJavaType type,
-                        int state) {
-        }
-
-        protected record ValueNodeStateKey(
-                        ValueNode node,
-                        int state) {
-        }
-
         // TODO: probably not all values needed to produce a key
         /**
          * Must be used to get a cached virtual object node which is needed when we merge an entry
