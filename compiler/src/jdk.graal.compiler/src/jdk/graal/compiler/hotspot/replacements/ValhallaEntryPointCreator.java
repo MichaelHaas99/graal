@@ -3,6 +3,7 @@ package jdk.graal.compiler.hotspot.replacements;
 import static jdk.graal.compiler.core.GraalCompiler.emitFrontEnd;
 import static jdk.graal.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static jdk.graal.compiler.core.common.GraalOptions.RegisterPressure;
+import static jdk.graal.compiler.debug.DebugOptions.DebugValhallaEntryPoints;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -273,7 +274,7 @@ public class ValhallaEntryPointCreator {
     }
 
     private DebugContext openDebugContext(DebugContext outer) {
-        if (true) {
+        if (DebugValhallaEntryPoints.getValue(options)) {
             DebugContext.Description description = new DebugContext.Description(targetMethod, "Entry_Point_" + targetMethod.getName());
             GraalDebugHandlersFactory factory = new GraalDebugHandlersFactory(providers.getSnippetReflection());
             return new DebugContext.Builder(options, factory).globalMetrics(outer.getGlobalMetrics()).description(description).build();

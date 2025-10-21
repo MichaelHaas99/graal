@@ -208,6 +208,8 @@ public class DebugOptions {
     @Option(help = "Path to the directory where the optimization log is saved if OptimizationLog is set to Directory. " +
             "Directories are created if they do no exist.", type = OptionType.Debug)
     public static final OptionKey<String> OptimizationLogPath = new OptionKey<>(null);
+    @Option(help = "Enable debug output for entry point code generation.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> DebugValhallaEntryPoints = new OptionKey<>(false);
     // @formatter:on
 
     /**
