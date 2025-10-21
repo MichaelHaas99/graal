@@ -79,7 +79,6 @@ import jdk.graal.compiler.hotspot.replacements.ValhallaEntryPointCreator;
 import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
-import jdk.graal.compiler.lir.amd64.AMD64EntryPointFrameMap;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMap;
 import jdk.graal.compiler.lir.amd64.AMD64FrameMapBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
@@ -142,7 +141,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
     protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        AMD64FrameMap frameMap = new AMD64EntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
+        AMD64FrameMap frameMap = new AMD64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
         return new AMD64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
