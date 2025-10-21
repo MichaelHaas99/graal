@@ -207,11 +207,6 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap implements HotSpotFrameM
         return deoptimizationRescueSlot;
     }
 
-    public StackSlot getStackIncrementSlot() {
-        assert stackIncrementSlot != null;
-        return stackIncrementSlot;
-    }
-
     @Override
     protected Register[] filterSavedRegisters(Register[] savedRegisters) {
         Register[] filtered = null;
@@ -229,6 +224,11 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap implements HotSpotFrameM
             }
         }
         return filtered != null ? filtered : savedRegisters;
+    }
+
+    public StackSlot getStackIncrementSlot() {
+        assert stackIncrementSlot != null;
+        return stackIncrementSlot;
     }
 
     @Override

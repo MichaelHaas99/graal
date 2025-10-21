@@ -248,7 +248,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            ResolvedJavaMethod[] methods = crb.compilationResult.getMethods();
             AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
             if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
                 // method needs stack repair
