@@ -385,6 +385,9 @@ public class ObjectState {
         result = prime * result + Arrays.hashCode(entries);
         result = prime * result + (locks != null ? locks.monitorId.getLockDepth() : 0);
         result = prime * result + ((materializedValue == null) ? 0 : materializedValue.hashCode());
+        result = prime * result + Arrays.hashCode(unsetFields);
+        result = prime * result + (nonNull != null ? nonNull.hashCode() : 0);
+        result = prime * result + (oop != null ? oop.hashCode() : 0);
         return result;
     }
 
