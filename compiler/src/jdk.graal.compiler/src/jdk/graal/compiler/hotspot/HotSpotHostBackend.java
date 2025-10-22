@@ -293,12 +293,12 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         emitEntryPoint(rootMethod, crb, refConfig, markId, verifiedEntry, null);
     }
 
-    private void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
+    protected void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
         // TODO: update in subclasses
         throw new UnsupportedOperationException("emit code helper is not implemented");
     }
 
-    private void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
+    protected void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
         // TODO: just make the implementation in the subclasses common in here
         throw new UnsupportedOperationException("ic check is not implemented");
     }

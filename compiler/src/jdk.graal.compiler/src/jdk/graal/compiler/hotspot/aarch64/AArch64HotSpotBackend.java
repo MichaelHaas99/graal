@@ -484,20 +484,28 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     }
 
     // TODO: adapt for Valhalla
-    private void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
+    public void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
         AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.getRegisterConfig();
-        emitCodePrefix(crb, installedCodeOwner, masm, regConfig);
+
+        // Emit the prefix
+        Label entry = emitCodePrefix(installedCodeOwner, crb, regConfig);
 
         if (entryPointDecorator != null) {
             entryPointDecorator.emitEntryPoint(crb, true);
+        }
+
+        crb.frameContext.enter(crb, 0, true);
+        // TODO: The new Valhalla entry points could cause problems with the decorator
+        if (entry != null) {
+            crb.asm.bind(entry);
         }
         emitCodeBody(crb, masm);
         emitCodeSuffix(crb, masm);
     }
 
-    private void emitCodePrefix(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, AArch64MacroAssembler masm, RegisterConfig regConfig) {
+    private void emitCodePrefix2(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, AArch64MacroAssembler masm, RegisterConfig regConfig) {
         Label verifiedStub = new Label();
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
@@ -569,7 +577,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
 
     private static void emitCodeBody(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
         emitInvalidatePlaceholder(crb, masm);
-        crb.emitLIR();
+        crb.emitLIR(false);
     }
 
     /**
@@ -677,6 +685,83 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         int wordSize = 8;
         masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -2 * wordSize));
         masm.sub(64, sp, sp, frameMap.getStackIncrement());
+    }
 
+    @Override
+    protected void icCheck(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
+        AArch64HotSpotMacroAssembler masm = (AArch64HotSpotMacroAssembler) crb.asm;
+        RegisterConfig regConfig = crb.frameMap.getRegisterConfig();
+        Label verifiedStub = new Label();
+        HotSpotProviders providers = getProviders();
+        if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
+            JavaType[] parameterTypes = {providers.getMetaAccess().lookupJavaType(Object.class)};
+            CallingConvention cc = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes, this);
+            Register receiver = asRegister(cc.getArgument(0));
+            int size = config.useCompressedClassPointers ? 32 : 64;
+            if (config.icSpeculatedKlassOffset == Integer.MAX_VALUE) {
+                crb.recordMark(markId);
+                if (additionalMarkId != null) {
+                    crb.recordMark(additionalMarkId);
+                }
+                Register klass = rscratch1;
+                if (config.useCompressedClassPointers) {
+                    if (config.useCompactObjectHeaders) {
+                        ((AArch64HotSpotMacroAssembler) masm).loadCompactClassPointer(klass, receiver);
+                    } else {
+                        masm.ldr(size, klass, masm.makeAddress(size, receiver, config.hubOffset));
+                    }
+                    AArch64HotSpotMove.decodeKlassPointer(masm, klass, klass, config.getKlassEncoding());
+                } else {
+                    masm.ldr(size, klass, masm.makeAddress(size, receiver, config.hubOffset));
+                }
+                // c1_LIRAssembler_aarch64.cpp: const Register IC_Klass = rscratch2;
+                Register inlineCacheKlass = AArch64HotSpotRegisterConfig.inlineCacheRegister;
+                masm.cmp(64, inlineCacheKlass, klass);
+
+                masm.branchConditionally(AArch64Assembler.ConditionFlag.EQ, verifiedStub);
+                AArch64Call.directJmp(crb, masm, getForeignCalls().lookupForeignCall(IC_MISS_HANDLER));
+            } else {
+                // JDK-8322630 (removed ICStubs)
+                Register data = AArch64HotSpotRegisterConfig.inlineCacheRegister;
+                Register tmp1 = rscratch1;
+                Register tmp2 = r10; // Safe to use R10 as scratch register in method prologue
+                ForeignCallLinkage icMissHandler = getForeignCalls().lookupForeignCall(IC_MISS_HANDLER);
+
+                // Size of IC check sequence checked with a guarantee below.
+                int inlineCacheCheckSize = AArch64Call.isNearCall(icMissHandler) ? 20 : 32;
+                if (config.useCompactObjectHeaders) {
+                    // Extra instruction for shifting
+                    inlineCacheCheckSize += 4;
+                }
+                masm.align(config.codeEntryAlignment, masm.position() + inlineCacheCheckSize);
+
+                int startICCheck = masm.position();
+                crb.recordMark(markId);
+                if (additionalMarkId != null) {
+                    crb.recordMark(additionalMarkId);
+                }
+                AArch64Address icSpeculatedKlass = masm.makeAddress(size, data, config.icSpeculatedKlassOffset);
+
+                if (config.useCompactObjectHeaders) {
+                    ((AArch64HotSpotMacroAssembler) masm).loadCompactClassPointer(tmp1, receiver);
+                } else {
+                    masm.ldr(size, tmp1, masm.makeAddress(size, receiver, config.hubOffset));
+                }
+
+                masm.ldr(size, tmp2, icSpeculatedKlass);
+                masm.cmp(size, tmp1, tmp2);
+                masm.branchConditionally(AArch64Assembler.ConditionFlag.EQ, verifiedStub);
+                AArch64Call.directJmp(crb, masm, icMissHandler);
+
+                int actualInlineCacheCheckSize = masm.position() - startICCheck;
+                if (actualInlineCacheCheckSize != inlineCacheCheckSize) {
+                    // Code emission pattern has changed: adjust `inlineCacheCheckSize`
+                    // initialization above accordingly.
+                    throw new GraalError("%s != %s", actualInlineCacheCheckSize, inlineCacheCheckSize);
+                }
+            }
+        }
+        masm.align(config.codeEntryAlignment);
+        masm.bind(verifiedStub);
     }
 }

@@ -418,7 +418,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         }
     }
 
-    private void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
+    @Override
+    public void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
         AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
         FrameMap frameMap = crb.frameMap;
         RegisterConfig regConfig = frameMap.getRegisterConfig();
