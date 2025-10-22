@@ -415,7 +415,7 @@ public class ObjectState {
         } else if (!nonNull.equals(other.nonNull)) {
             return false;
         }
-        if (!unsetFields.equals(other.unsetFields)) {
+        if (!Arrays.equals(unsetFields, other.unsetFields)) {
             return false;
         }
 
