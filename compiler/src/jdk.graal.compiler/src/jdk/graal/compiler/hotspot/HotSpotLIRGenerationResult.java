@@ -59,12 +59,14 @@ public class HotSpotLIRGenerationResult extends LIRGenerationResult {
      * that provide the information.
      */
     private EconomicMap<LIRFrameState, SaveRegistersOp> calleeSaveInfo = EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
+    private boolean isEntryPoint;
 
     public HotSpotLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, RegisterAllocationConfig registerAllocationConfig,
-                    CallingConvention callingConvention, Stub stub, boolean requiresReservedStackAccessCheck) {
+                    CallingConvention callingConvention, Stub stub, boolean requiresReservedStackAccessCheck, boolean isEntryPoint) {
         super(compilationId, lir, frameMapBuilder, registerAllocationConfig, callingConvention);
         this.stub = stub;
         this.requiresReservedStackAccessCheck = requiresReservedStackAccessCheck;
+        this.isEntryPoint = isEntryPoint;
     }
 
     public void setSaveOnEntry(StandardOp.SaveRegistersOp saveOnEntry) {
@@ -81,6 +83,10 @@ public class HotSpotLIRGenerationResult extends LIRGenerationResult {
 
     public Stub getStub() {
         return stub;
+    }
+
+    public boolean isEntryPoint() {
+        return isEntryPoint;
     }
 
     public StackSlot getDeoptimizationRescueSlot() {

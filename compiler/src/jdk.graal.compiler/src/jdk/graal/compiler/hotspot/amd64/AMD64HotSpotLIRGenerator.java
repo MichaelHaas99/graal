@@ -563,7 +563,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         super.beforeRegisterAllocation();
         boolean hasDebugInfo = getResult().getLIR().hasDebugInfo();
 
-        if (config.preserveFramePointer(getStub() != null)) {
+        if (config.preserveFramePointer(getStub() != null) || getResult().isEntryPoint()) {
             saveRbp.remove();
         } else {
             AllocatableValue savedRbp = saveRbp.finalize(hasDebugInfo, getStub() != null);

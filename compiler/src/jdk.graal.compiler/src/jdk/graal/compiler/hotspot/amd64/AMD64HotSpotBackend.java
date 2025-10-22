@@ -37,7 +37,6 @@ import static jdk.vm.ci.amd64.AMD64.rax;
 import static jdk.vm.ci.amd64.AMD64.rbp;
 import static jdk.vm.ci.amd64.AMD64.rsp;
 import static jdk.vm.ci.amd64.AMD64.xmm8;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import java.util.Arrays;
@@ -450,7 +449,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * @return the stack increment
      */
     @Override
-    public void scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+    public boolean scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
         AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
 
         // VIEP: nothing scalarized yet
@@ -469,8 +468,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         AllocatableValue[] expectedArguments = expectedCC.getArguments();
 
         int spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
+        boolean performedStackExtension = false;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
             entryPointStackExtension(crb);
+            performedStackExtension = true;
         }
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
             byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
@@ -478,12 +479,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             for (int i = 0; i < installedCode.length; i++) {
                 asm.emitByte(installedCode[i]);
             }
-            return;
+            return performedStackExtension;
         }
 
         shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
                         spInc);
-        return;
+        return performedStackExtension;
     }
 
     /**

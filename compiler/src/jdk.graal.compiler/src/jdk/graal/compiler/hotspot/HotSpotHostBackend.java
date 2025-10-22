@@ -214,6 +214,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
     @Override
     public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
         FrameMapBuilder builder;
+        boolean isEntryPoint = graph.isEntryPointCFG();
         if (graph.isEntryPointCFG()) {
             builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method());
         } else {
@@ -221,7 +222,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         }
         return new HotSpotLIRGenerationResult(compilationId, lir, builder,
                         registerAllocationConfig,
-                        makeCallingConvention(graph, (Stub) stub), (Stub) stub, config.requiresReservedStackCheck(graph.getMethods()));
+                        makeCallingConvention(graph, (Stub) stub), (Stub) stub, config.requiresReservedStackCheck(graph.getMethods()), isEntryPoint);
     }
 
     protected abstract FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig, Stub stub);
@@ -230,7 +231,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
      * Extends the stack if necessary and scalarizes all value class args. See
      * {@code MacroAssembler::unpack_inline_args}
      */
-    public void scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+    public boolean scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
 
         Assembler<?> asm = crb.asm;
         // VIEP: nothing scalarized yet
@@ -246,14 +247,17 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
         int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
 
+        boolean performedStackExtension = false;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
             entryPointStackExtension(crb);
+            performedStackExtension = true;
         }
         byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
                         receiverOnly);
         for (int i = 0; i < installedCode.length; i++) {
             asm.emitByte(installedCode[i]);
         }
+        return performedStackExtension;
     }
 
     /**
@@ -279,11 +283,11 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             // create dummy frame
             crb.frameContext.enter(crb, 0, true);
             crb.frameContext.leave(crb, false);
-            scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+            boolean performedStackExtension = scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
 
             // create real entry point frame
             HotSpotFrameMap frameMap = (HotSpotFrameMap) crb.frameMap;
-            crb.frameContext.enter(crb, frameMap.getStackIncrement(), false);
+            crb.frameContext.enter(crb, performedStackExtension ? frameMap.getStackIncrement() : 0, false);
             asm.jmp(verifiedEntry);
         }
         asm.align(config.codeEntryAlignment);
