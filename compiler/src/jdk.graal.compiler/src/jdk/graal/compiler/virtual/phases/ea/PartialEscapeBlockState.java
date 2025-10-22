@@ -223,7 +223,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         List<ValueNode> nonNulls = new ArrayList<>(8);
         List<ValueNode> otherAllocations = new ArrayList<>(2);
         List<Boolean> ensureVirtual = new ArrayList<>(2);
-        List<List<Boolean>> unsetFields = new ArrayList<>();
+        List<boolean[]> unsetFields = new ArrayList<>();
         materializeWithCommit(fixed, virtual, objects, locks, values, oops, nonNulls, unsetFields, ensureVirtual, otherAllocations, materializeEffects);
         /*
          * because all currently virtualized allocations will be materialized in 1 commit alloc node
@@ -286,7 +286,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     for (List<MonitorIdNode> monitorIds : locks) {
                         commit.addLocks(monitorIds);
                     }
-                    for (List<Boolean> lists : unsetFields) {
+                    for (boolean[] lists : unsetFields) {
                         commit.addUnsetFields(lists);
                     }
                     if (commit instanceof CommitAllocationOrReuseOopNode) {
@@ -360,7 +360,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     }
 
     private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<List<MonitorIdNode>> locks, List<ValueNode> values,
-                    List<ValueNode> oopsOrHubs, List<ValueNode> nonNulls, List<List<Boolean>> unsetFields,
+                    List<ValueNode> oopsOrHubs, List<ValueNode> nonNulls, List<boolean[]> unsetFields,
                     List<Boolean> ensureVirtual, List<ValueNode> otherAllocations, GraphEffectList materializeEffects) {
         ObjectState obj = getObjectState(virtual);
 

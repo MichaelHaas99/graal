@@ -79,8 +79,7 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
     protected ArrayList<Integer> lockIndexes = new ArrayList<>(Arrays.asList(0));
     protected ArrayList<Boolean> ensureVirtual = new ArrayList<>();
 
-    protected ArrayList<Boolean> unsetFields = new ArrayList<>();
-    protected ArrayList<Integer> unsetFieldIndexes = new ArrayList<>(Arrays.asList(0));
+    protected List<boolean[]> unsetFields = new ArrayList<>();
 
     @SuppressWarnings("this-escape")
     public CommitAllocationNode() {
@@ -127,8 +126,8 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
         return ensureVirtual;
     }
 
-    public List<Boolean> getUnsetFields(int objIndex) {
-        return unsetFields.subList(unsetFieldIndexes.get(objIndex), unsetFieldIndexes.get(objIndex + 1));
+    public boolean[] getUnsetFields(int objIndex) {
+        return unsetFields.get(objIndex);
     }
 
     @Override
@@ -180,9 +179,8 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
         lockIndexes.add(locks.size());
     }
 
-    public void addUnsetFields(List<Boolean> unsetFieldsList) {
-        unsetFields.addAll(unsetFieldsList);
-        unsetFieldIndexes.add(unsetFields.size());
+    public void addUnsetFields(boolean[] unsetFieldsList) {
+        unsetFields.add(unsetFieldsList);
     }
 
     @Override
@@ -323,9 +321,7 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
             ArrayList<Integer> newLockIndexes = new ArrayList<>(usedCount + 1);
             ArrayList<Boolean> newEnsureVirtual = new ArrayList<>(usedCount);
             newLockIndexes.add(0);
-            ArrayList<Boolean> newUnsetFields = new ArrayList<>(usedCount);
-            ArrayList<Integer> newUnsetFieldsIndexes = new ArrayList<>(usedCount + 1);
-            newUnsetFieldsIndexes.add(0);
+            List<boolean[]> newUnsetFields = new ArrayList<>(usedCount);
             List<ValueNode> newValues = new ArrayList<>();
             int valuePos = 0;
             for (int objIndex = 0; objIndex < virtualObjects.size(); objIndex++) {
@@ -334,8 +330,7 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
                     newVirtualObjects.add(virtualObject);
                     newLocks.addAll(getLocks(objIndex));
                     newLockIndexes.add(newLocks.size());
-                    newUnsetFields.addAll(getUnsetFields(objIndex));
-                    newUnsetFieldsIndexes.add(newUnsetFields.size());
+                    newUnsetFields.add(getUnsetFields(objIndex));
                     newValues.addAll(values.subList(valuePos, valuePos + virtualObject.entryCount()));
                     newEnsureVirtual.add(ensureVirtual.get(objIndex));
                     transferredObjIndexes.add(objIndex);
@@ -351,7 +346,6 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
             lockIndexes = newLockIndexes;
             ensureVirtual = newEnsureVirtual;
             unsetFields = newUnsetFields;
-            unsetFieldIndexes = newUnsetFieldsIndexes;
             return transferredObjIndexes;
         }
         return null;

@@ -25,9 +25,7 @@
 package jdk.graal.compiler.nodes.java;
 
 import java.lang.ref.Reference;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -89,10 +87,10 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
                             GraalValhallaServices.isIdentity(instanceClass));
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
-            List<Boolean> unsetFields = new ArrayList<>(fields.length);
+            boolean[] unsetFields = new boolean[fields.length];
             for (int i = 0; i < state.length; i++) {
                 state[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), graph());
-                unsetFields.add(true);
+                unsetFields[i] = true;
             }
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false);
             tool.setUnsetFields(virtualObject, unsetFields);

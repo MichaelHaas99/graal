@@ -157,7 +157,7 @@ public interface VirtualizerTool extends CoreProviders {
      * @param unsetFields a list which contains a boolean value for each field, the entry should be
      *            true if the field was not initialized yet.
      */
-    void setUnsetFields(VirtualObjectNode virtualObjectNode, List<Boolean> unsetFields);
+    void setUnsetFields(VirtualObjectNode virtualObjectNode, boolean[] unsetFields);
 
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 

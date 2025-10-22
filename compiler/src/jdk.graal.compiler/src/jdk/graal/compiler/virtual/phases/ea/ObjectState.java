@@ -64,7 +64,7 @@ public class ObjectState {
      */
     private ValueNode oop;
     private ValueNode nonNull;
-    private List<Boolean> unsetFields = List.of();;
+    private boolean[] unsetFields = new boolean[0];
 
     private EscapeObjectState cachedState;
 
@@ -92,15 +92,15 @@ public class ObjectState {
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
-        this(entries, locks, ensureVirtualized, List.of());
+        this(entries, locks, ensureVirtualized, new boolean[0]);
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, List<Boolean> unsetFields) {
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean[] unsetFields) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
-        this.unsetFields = unsetFields;
+        this.unsetFields = unsetFields.clone();
     }
 
     public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
@@ -131,7 +131,7 @@ public class ObjectState {
         ensureVirtualized = other.ensureVirtualized;
         oop = other.oop;
         nonNull = other.nonNull;
-        unsetFields = other.unsetFields;
+        unsetFields = other.unsetFields.clone();
     }
 
     public ObjectState cloneState() {
@@ -245,8 +245,8 @@ public class ObjectState {
         assert !isMaterialized();
         cachedState = null;
         entries[index] = value;
-        if (!unsetFields.isEmpty()) {
-            unsetFields.set(index, false);
+        if (unsetFields.length != 0) {
+            unsetFields[index] = false;
         }
     }
 
@@ -305,8 +305,8 @@ public class ObjectState {
         this.oop = oop;
     }
 
-    public List<Boolean> getUnsetFields() {
-        return unsetFields;
+    public boolean[] getUnsetFields() {
+        return unsetFields.clone();
     }
 
     /**
@@ -315,19 +315,19 @@ public class ObjectState {
      * @return true if all fields were initialized, false otherwise.
      */
     public boolean isLarval() {
-        if (unsetFields.isEmpty()) {
+        if (unsetFields.length != 0) {
             return false;
         }
-        for (int i = 0; i < unsetFields.size(); i++) {
-            if (unsetFields.get(i)) {
+        for (int i = 0; i < unsetFields.length; i++) {
+            if (unsetFields[i]) {
                 return true;
             }
         }
         return false;
     }
 
-    public void setUnsetFields(List<Boolean> unsetFields) {
-        this.unsetFields = unsetFields;
+    public void setUnsetFields(boolean[] unsetFields) {
+        this.unsetFields = unsetFields.clone();
     }
 
     public void clearCachedState() {
@@ -413,6 +413,9 @@ public class ObjectState {
                 return false;
             }
         } else if (!nonNull.equals(other.nonNull)) {
+            return false;
+        }
+        if (!unsetFields.equals(other.unsetFields)) {
             return false;
         }
 
