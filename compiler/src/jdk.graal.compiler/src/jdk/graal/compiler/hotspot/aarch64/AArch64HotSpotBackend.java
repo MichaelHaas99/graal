@@ -194,7 +194,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     }
 
     public void rawEnter(CompilationResultBuilder crb, FrameMap frameMap, AArch64MacroAssembler masm, GraalHotSpotVMConfig config, boolean isStub) {
-        rawEnter(crb, frameMap, masm, config, isStub, -1);
+        rawEnter(crb, frameMap, masm, config, isStub, 0);
     }
 
     public static void rawEnter(CompilationResultBuilder crb, FrameMap frameMap, AArch64MacroAssembler masm, GraalHotSpotVMConfig config, boolean isStub, int stackIncrement) {
@@ -220,7 +220,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 if (config.preserveFramePointer(isStub)) {
                     masm.add(64, fp, sp, frameSize);
                 }
-                if (stackIncrement != -1) {
+                if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
                     masm.mov(scratch, spInc);
                     masm.str(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, stackIncrementOffset));
                 }
@@ -230,7 +230,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 if (config.preserveFramePointer(isStub)) {
                     masm.mov(64, fp, sp);
                 }
-                if (stackIncrement != -1) {
+                if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
                     masm.mov(scratch, spInc);
                     masm.str(64, scratch, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -wordSize));
                     frameRecordSize -= wordSize;
@@ -293,7 +293,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 emitStackOverflowCheck(crb);
             }
             crb.blockComment("[method prologue]");
-            rawEnter(crb, frameMap, masm, config, isStub);
+            rawEnter(crb, frameMap, masm, config, isStub, stackIncrement);
 
             if (emitEntryBarrier) {
                 if (!isStub && config.nmethodEntryBarrier != 0) {
