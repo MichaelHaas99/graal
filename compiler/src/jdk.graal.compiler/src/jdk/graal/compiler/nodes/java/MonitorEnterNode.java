@@ -68,6 +68,11 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         if (!tool.getPlatformConfigurationProvider().areLocksSideEffectFree()) {
             return;

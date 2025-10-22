@@ -180,9 +180,9 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
         lockIndexes.add(locks.size());
     }
 
-    public void addSetFields(List<Boolean> setFieldsList) {
-        unsetFields.addAll(setFieldsList);
-        unsetFieldIndexes.add(setFieldsList.size());
+    public void addUnsetFields(List<Boolean> unsetFieldsList) {
+        unsetFields.addAll(unsetFieldsList);
+        unsetFieldIndexes.add(unsetFields.size());
     }
 
     @Override

@@ -11,6 +11,7 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
@@ -79,6 +80,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.fieldValues = new NodeInputList<>(this, fieldValues);
+        if (type.getInstanceFields(true).length != fieldValues.length) {
+            throw GraalError.shouldNotReachHere("field size does not match value size");
+        }
         this.type = type;
         this.nonNull = nonNull;
         assert nonNull == null && oop == null || nonNull != null && oop != null : "both should be either null or not null";

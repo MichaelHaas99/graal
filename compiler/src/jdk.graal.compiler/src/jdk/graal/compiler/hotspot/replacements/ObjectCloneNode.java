@@ -184,7 +184,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
                     }
 
                     commit.addLocks(Collections.emptyList());
-                    commit.addSetFields(Collections.emptyList());
+                    commit.addUnsetFields(Collections.emptyList());
                     commit.getEnsureVirtual().add(false);
                     assert commit.verify();
                     assert ObjectClone.getConcreteType(stamp(NodeView.DEFAULT)) != null;

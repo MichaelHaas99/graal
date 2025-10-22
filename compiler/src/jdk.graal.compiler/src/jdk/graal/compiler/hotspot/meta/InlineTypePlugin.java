@@ -286,13 +286,13 @@ public class InlineTypePlugin implements NodePlugin {
             // holder is directly embedded in other object, use the offset without the header
             writeOperations.add(new StoreFlatFieldNode.SingleWriteOperation(
                             GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, destOff + off), field.getDeclaringClass())));
-            // replace the value with the scalarized version in the framestate to trigger further
-            // optimizations during parsing and avoid scalarization the next time
-            if (!isAlreadyScalarized) {
-                InlineTypeNode inlineTypeNode = InlineTypeNode.createNonNullWithoutOop(fieldType, readOperations.toArray(new ValueNode[readOperations.size()]));
-                b.add(inlineTypeNode);
-                b.replaceValueInFrameState(value, inlineTypeNode);
-            }
+        }
+        // replace the value with the scalarized version in the framestate to trigger further
+        // optimizations during parsing and avoid scalarization the next time
+        if (!isAlreadyScalarized) {
+            InlineTypeNode inlineTypeNode = InlineTypeNode.createNonNullWithoutOop(fieldType, readOperations.toArray(new ValueNode[readOperations.size()]));
+            b.add(inlineTypeNode);
+            b.replaceValueInFrameState(value, inlineTypeNode);
         }
         StoreFlatFieldNode storeFlatFieldNode = b.add(new StoreFlatFieldNode(nonNullObject, field, writeOperations));
         storeFlatFieldNode.addValues(readOperations);

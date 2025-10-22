@@ -108,6 +108,11 @@ public final class StoreIndexedNode extends AccessIndexedNode implements StateSp
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(array());
         if (alias instanceof VirtualObjectNode) {

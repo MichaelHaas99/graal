@@ -182,6 +182,11 @@ public final class StoreFlatElementNode extends AccessArrayNode implements State
     }
 
     @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(array());
         if (alias instanceof VirtualObjectNode) {

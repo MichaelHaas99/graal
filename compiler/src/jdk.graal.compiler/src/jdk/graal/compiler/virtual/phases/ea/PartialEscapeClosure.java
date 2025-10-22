@@ -710,7 +710,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         boolean change = false;
         for (int i = 0; i < state.getStateCount(); i++) {
             ObjectState objState = state.getObjectStateOptional(i);
-            if (objState != null && objState.isVirtual()) {
+            if (objState != null && !objState.isMaterialized()) {
                 ValueNode[] entries = objState.getEntries();
                 for (int i2 = 0; i2 < entries.length; i2++) {
                     if (entries[i2] == virtual) {

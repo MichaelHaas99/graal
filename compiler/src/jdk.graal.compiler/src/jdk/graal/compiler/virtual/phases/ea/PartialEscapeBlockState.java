@@ -287,7 +287,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                         commit.addLocks(monitorIds);
                     }
                     for (List<Boolean> lists : unsetFields) {
-                        commit.addSetFields(lists);
+                        commit.addUnsetFields(lists);
                     }
                     if (commit instanceof CommitAllocationOrReuseOopNode) {
                         for (ValueNode oop : oops) {
