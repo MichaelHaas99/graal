@@ -274,7 +274,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             crb.recordMark(additionalMarkId);
         }
         if (!markId.isVerifiedEntryPoint()) {
-            icCheck(rootMethod, crb, markId, additionalMarkId);
+            icCheck(rootMethod, crb, regConfig, markId, additionalMarkId);
         } else {
             // create dummy frame
             crb.frameContext.enter(crb, 0, true);
@@ -298,7 +298,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         throw new UnsupportedOperationException("emit code helper is not implemented");
     }
 
-    protected void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
+    protected void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
         // TODO: just make the implementation in the subclasses common in here
         throw new UnsupportedOperationException("ic check is not implemented");
     }

@@ -688,9 +688,8 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     }
 
     @Override
-    protected void icCheck(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
+    protected void icCheck(ResolvedJavaMethod installedCodeOwner, CompilationResultBuilder crb, RegisterConfig regConfig, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {
         AArch64HotSpotMacroAssembler masm = (AArch64HotSpotMacroAssembler) crb.asm;
-        RegisterConfig regConfig = crb.frameMap.getRegisterConfig();
         Label verifiedStub = new Label();
         HotSpotProviders providers = getProviders();
         if (installedCodeOwner != null && !isStatic(installedCodeOwner.getModifiers())) {
