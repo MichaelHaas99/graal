@@ -157,6 +157,7 @@ public class AnalysisToHostedGraphTransplanter {
                 aObjectStartIndex += virtualObject.entryCount();
             }
             assert aValues.size() == aObjectStartIndex;
+            transplantUnsetFields(node);
         }
 
         for (VirtualObjectState node : graph.getNodes().filter(VirtualObjectState.class)) {
@@ -181,6 +182,37 @@ public class AnalysisToHostedGraphTransplanter {
                 if (nodeClassDataFields.get(node, i) == aFields) {
                     nodeClassDataFields.putObjectChecked(node, i, hFields);
                 }
+            }
+        }
+    }
+
+    private void transplantUnsetFields(CommitAllocationNode node) {
+        int i = 0;
+        List<boolean[]> unsetFieldsList = node.getUnsetFields();
+        List<boolean[]> hUnsetFieldsList = new ArrayList<>(unsetFieldsList.size());
+        for (VirtualObjectNode virtualObject : node.getVirtualObjects()) {
+            boolean[] aUnsetFields = unsetFieldsList.get(i);
+            if (aUnsetFields.length != 0) {
+                AnalysisType aType = (AnalysisType) virtualObject.type();
+                HostedField[] hFields = universe.lookup(aType).getInstanceFields(true);
+                boolean[] hUnsetFields = new boolean[hFields.length];
+                int j = 0;
+                for (HostedField hField : hFields) {
+                    int aPosition = hField.wrapped.getPosition();
+                    hUnsetFields[j] = aUnsetFields[aPosition];
+                    j++;
+                }
+                hUnsetFieldsList.add(hUnsetFields);
+            } else {
+                hUnsetFieldsList.add(aUnsetFields);
+            }
+            i++;
+        }
+
+        Fields nodeClassDataFields = node.getNodeClass().getData();
+        for (int j = 0; j < nodeClassDataFields.getCount(); j++) {
+            if (nodeClassDataFields.get(node, j) == unsetFieldsList) {
+                nodeClassDataFields.putObjectChecked(node, j, hUnsetFieldsList);
             }
         }
     }

@@ -130,6 +130,10 @@ public class CommitAllocationNode extends FixedWithNextNode implements Virtualiz
         return unsetFields.get(objIndex);
     }
 
+    public List<boolean[]> getUnsetFields() {
+        return unsetFields;
+    }
+
     @Override
     public boolean verifyNode() {
         assertTrue(virtualObjects.size() + 1 == lockIndexes.size(), "lockIndexes size doesn't match %s, %s", virtualObjects, lockIndexes);
