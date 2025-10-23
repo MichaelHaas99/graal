@@ -35,6 +35,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 /**
  * Not implemented as a Macro node, as it maybe cannot be mapped to an invoke in bytecode.
  */
+// TODO: https://github.com/openjdk/valhalla/pull/910
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 @NodeIntrinsicFactory
 public class ValueObjectMethodNode extends AbstractStateSplit implements Invokable, Lowerable, SingleMemoryKill {

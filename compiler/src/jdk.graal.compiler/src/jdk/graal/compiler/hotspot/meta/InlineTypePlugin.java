@@ -66,6 +66,12 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
+/*
+ * TODOs:
+ * https://github.com/openjdk/valhalla/pull/1452
+ * https://github.com/openjdk/valhalla/pull/1672
+ * https://github.com/openjdk/valhalla/pull/1397
+ */
 public class InlineTypePlugin implements NodePlugin {
 
     boolean virtualizeFromInlineObject;

@@ -2032,6 +2032,10 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     }
 
     protected void genInvokeSpecial(int cpi, int opcode) {
+        /*
+         * TODOs: https://github.com/openjdk/valhalla/pull/1656
+         * https://bugs.openjdk.org/browse/JDK-8367785
+         */
         JavaMethod target = lookupMethod(cpi, opcode);
         genInvokeSpecial(target);
     }
@@ -2388,6 +2392,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             ResolvedJavaMethod targetMethod = callTarget.targetMethod();
             JavaType returnType = maybeEagerlyResolve(targetMethod.getSignature().getReturnType(method.getDeclaringClass()), targetMethod.getDeclaringClass());
             // check if the return type is already resolved
+            // TODO: https://github.com/openjdk/valhalla/pull/1554/files
             if (!typeIsResolved(returnType)) {
                 // could be an inline type which can be returned scalarized we bailout, see
                 // ciTypeFlow::StateVector::do_invoke
