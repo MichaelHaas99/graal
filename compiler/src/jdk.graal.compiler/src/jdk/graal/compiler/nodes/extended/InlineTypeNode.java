@@ -32,6 +32,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualNode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -61,7 +62,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  *
  */
 @NodeInfo(nameTemplate = "InlineType", cycles = CYCLES_8, cyclesRationale = "tlab alloc + header init", size = SIZE_8)
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable, VirtualNode {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
@@ -70,6 +71,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     @OptionalInput ValueNode nonNull;
     private final boolean isAllocatedOrNull;
     private final ResolvedJavaType type;
+    private final ResolvedJavaField[] fields;
     private final boolean handlesScalarizedReturn;
 
     @SuppressWarnings("this-escape")
@@ -77,33 +79,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.nonNull = nonNull;
+        GraalError.guarantee((nonNull == null) == (oop == null), "both should be either null or not null");
         this.isAllocatedOrNull = isAllocatedOrNull;
         GraalError.guarantee(type.getInstanceFields(true).length == entries.length, "field size does not match value size");
         this.entries = new NodeInputList<>(this, entries);
         this.type = type;
-        GraalError.guarantee((nonNull == null) == (oop == null), "both should be either null or not null");
+        this.fields = type.getInstanceFields(true);
         inferStamp();
         this.handlesScalarizedReturn = handlesScalarizedReturn;
     }
 
     public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull) {
         this(type, oop, entries, nonNull, isAllocatedOrNull, false);
-    }
-
-    public ValueNode getField(ResolvedJavaField field) {
-        ResolvedJavaField[] fields = type.getInstanceFields(true);
-        int index = -1;
-        // on average fields.length == ~6, so a linear search is fast enough
-        for (int i = 0; i < fields.length; i++) {
-            if (fields[i].equals(field)) {
-                index = i;
-            }
-        }
-
-        if (index != -1) {
-            return entries.get(index);
-        }
-        return null;
     }
 
     public ValueNode getOop() {
@@ -132,8 +119,17 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return type;
     }
 
+    @Override
+    public ResolvedJavaField[] getFields() {
+        return fields;
+    }
+
     public ValueNode getEntry(int index) {
         return entries.get(index);
+    }
+
+    public ValueNode getEntry(ResolvedJavaField field) {
+        return getEntry(fieldIndex(field));
     }
 
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oop, ValueNode nonNull) {
@@ -258,8 +254,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return !handlesScalarizedReturn;
     }
 
-    private boolean virtualize = true;
-
     @Override
     public void virtualize(VirtualizerTool tool) {
         if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE) && handlesScalarizedReturn) {
@@ -268,16 +262,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             // be deleted.
             return;
         }
-        if (!virtualize) {
-            return;
-        }
 
         if (tool.getMetaAccessExtensionProvider().canVirtualize(type)) {
 
-            ValueNode tempOop = this.oop;
-            ValueNode tempNonNull = this.nonNull;
-
-            // virtualize
             VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false, StampTool.isPointerNonNull(this));
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
@@ -285,18 +272,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 state[i] = getEntry(i);
             }
 
-            // make sure both values are either null or set
-            // after an invoke we already have both
-            // a parameter only includes the non-null information so use the null pointer constant
-            if (tempOop == null && tempNonNull != null) {
-                tempOop = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
-            }
-            if (tempOop != null && tempNonNull == null) {
-                tempNonNull = ConstantNode.forInt(1, graph());
-            }
-
             // create virtual object and hand over oop and non-null info
-            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, tempOop, tempNonNull, isAllocatedOrNull);
+            tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, this.oop, this.nonNull, isAllocatedOrNull);
             tool.replaceWithVirtual(virtualObject);
         }
     }

@@ -106,7 +106,7 @@ public class InlineTypePlugin implements NodePlugin {
 
         if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
             b.nullCheckedValue(object, InvalidateReprofile);
-            b.push(field.getJavaKind(), inlineTypeNode.getField(field));
+            b.push(field.getJavaKind(), inlineTypeNode.getEntry(field));
             return true;
         }
 

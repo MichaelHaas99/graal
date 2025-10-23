@@ -38,7 +38,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(nameTemplate = "VirtualInstance({p#objectId}) {p#type/s}")
-public class VirtualInstanceNode extends VirtualObjectNode {
+public class VirtualInstanceNode extends VirtualObjectNode implements VirtualNode {
 
     public static final NodeClass<VirtualInstanceNode> TYPE = NodeClass.create(VirtualInstanceNode.class);
     protected final ResolvedJavaType type;
@@ -83,10 +83,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
         return fields.length;
     }
 
-    public ResolvedJavaField field(int index) {
-        return fields[index];
-    }
-
+    @Override
     public ResolvedJavaField[] getFields() {
         return fields;
     }
@@ -103,16 +100,6 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     @Override
     public String entryName(int index) {
         return fields[index].getName();
-    }
-
-    public int fieldIndex(ResolvedJavaField field) {
-        // on average fields.length == ~6, so a linear search is fast enough
-        for (int i = 0; i < fields.length; i++) {
-            if (fields[i].equals(field)) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     @Override
