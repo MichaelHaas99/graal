@@ -60,7 +60,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
         returnNode.fieldValues.clear();
         if (GraphUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
-            List<ValueNode> list = inlineTypeNode.getFieldValues();
+            List<ValueNode> list = inlineTypeNode.getEntries();
             returnNode.fieldValues.addAll(list);
         } else {
             ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);

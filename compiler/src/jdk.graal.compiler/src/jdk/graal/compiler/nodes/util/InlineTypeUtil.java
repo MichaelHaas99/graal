@@ -256,7 +256,7 @@ public class InlineTypeUtil {
         boolean isNullFree = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
 
         if (GraphUtil.unproxify(arg) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
-            List<ValueNode> list = new ArrayList<>(inlineTypeNode.getFieldValues());
+            List<ValueNode> list = new ArrayList<>(inlineTypeNode.getEntries());
             if (!isNullFree) {
                 // TODO: maybe remove nullness of getNonNull?
                 ValueNode nonNull = inlineTypeNode.getNonNull();
@@ -417,10 +417,10 @@ public class InlineTypeUtil {
         virtual.setObjectId(0);
         b.append(virtual);
 
-        ValueNode[] newEntries = new ValueNode[result.getFieldValues().size()];
+        ValueNode[] newEntries = new ValueNode[result.getEntries().size()];
 
         for (int i = 0; i < newEntries.length; i++) {
-            ValueNode entry = result.getFieldValues().get(i);
+            ValueNode entry = result.getEntries().get(i);
             newEntries[i] = entry;
         }
 

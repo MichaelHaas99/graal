@@ -266,7 +266,7 @@ public class InlineTypePlugin implements NodePlugin {
 
         boolean isAlreadyScalarized = false;
         if (GraphUtil.unproxify(value) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
-            readOperations.addAll(inlineTypeNode.getFieldValues());
+            readOperations.addAll(inlineTypeNode.getEntries());
             isAlreadyScalarized = true;
         }
         for (int i = 0; i < innerFields.length; i++) {

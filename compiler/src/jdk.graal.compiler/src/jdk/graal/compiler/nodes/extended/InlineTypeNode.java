@@ -17,7 +17,6 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.Invoke;
@@ -33,8 +32,6 @@ import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.vm.ci.meta.DeoptimizationAction;
-import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -42,24 +39,24 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@link InlineTypeNode} represents a (nullable) scalarized inline object. It takes an optional
- * object {@link #oop} (in C2 it is called Oop) and the field values {@link #fieldValues} as well as
- * an non-null information as input. If the object represents a null value then the input
- * {@link #oop} will be null at runtime. If the bit 0 of {@link #oop} is set at runtime, no oop
- * exists and the object needs to be reconstructed by the scalarized field values, if needed. If an
- * oop exists it is up to the compiler to either use the oop or the scalarized field values. The
- * non-null information indicates if the inline object is null or not, and can be used e.g. for null
- * checks or for the debugInfo (in C2 it is called isInit).
+ * object {@link #oop} (in C2 it is called Oop) and the field values {@link #entries} as well as an
+ * non-null information as input. If the object represents a null value then the input {@link #oop}
+ * will be null at runtime. If the bit 0 of {@link #oop} is set at runtime, no oop exists and the
+ * object needs to be reconstructed by the scalarized field values, if needed. If an oop exists it
+ * is up to the compiler to either use the oop or the scalarized field values. The non-null
+ * information indicates if the inline object is null or not, and can be used e.g. for null checks
+ * or for the debugInfo (in C2 it is called isInit).
  *
  * An {@link Invoke} is responsible for setting the {@link #nonNull} output correctly based on the
  * {@link #oop}, because the information doesn't exist as return value. It also sets the tagged hub
  * to a null pointer.
  *
- * For a null-restricted flat field only the {@link #fieldValues} will be set.
+ * For a null-restricted flat field only the {@link #entries} will be set.
  *
- * For a scalarized method parameter, the {@link #fieldValues} and the {@link #nonNull} fields will
- * be directly set by passed parameters. The {@link #oop} will stay empty.
+ * For a scalarized method parameter, the {@link #entries} and the {@link #nonNull} fields will be
+ * directly set by passed parameters. The {@link #oop} will stay empty.
  *
- * For a nullable flat field, the {@link #fieldValues} and the {@link #nonNull} information can be
+ * For a nullable flat field, the {@link #entries} and the {@link #nonNull} information can be
  * loaded directly from the flat field.
  *
  */
@@ -69,30 +66,28 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
     @OptionalInput ValueNode oop;
-    @OptionalInput NodeInputList<ValueNode> fieldValues;
+    @OptionalInput NodeInputList<ValueNode> entries;
     @OptionalInput ValueNode nonNull;
     private final boolean isAllocatedOrNull;
     private final ResolvedJavaType type;
     private final boolean handlesScalarizedReturn;
 
     @SuppressWarnings("this-escape")
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull, boolean isAllocatedOrNull, boolean handlesScalarizedReturn) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull, boolean handlesScalarizedReturn) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
-        this.fieldValues = new NodeInputList<>(this, fieldValues);
-        if (type.getInstanceFields(true).length != fieldValues.length) {
-            throw GraalError.shouldNotReachHere("field size does not match value size");
-        }
-        this.type = type;
         this.nonNull = nonNull;
-        assert nonNull == null && oop == null || nonNull != null && oop != null : "both should be either null or not null";
         this.isAllocatedOrNull = isAllocatedOrNull;
+        GraalError.guarantee(type.getInstanceFields(true).length == entries.length, "field size does not match value size");
+        this.entries = new NodeInputList<>(this, entries);
+        this.type = type;
+        GraalError.guarantee((nonNull == null) == (oop == null), "both should be either null or not null");
         inferStamp();
         this.handlesScalarizedReturn = handlesScalarizedReturn;
     }
 
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull, boolean isAllocatedOrNull) {
-        this(type, oop, fieldValues, nonNull, isAllocatedOrNull, false);
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull) {
+        this(type, oop, entries, nonNull, isAllocatedOrNull, false);
     }
 
     public ValueNode getField(ResolvedJavaField field) {
@@ -106,7 +101,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         }
 
         if (index != -1) {
-            return fieldValues.get(index);
+            return entries.get(index);
         }
         return null;
     }
@@ -129,16 +124,16 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return insertIntoGraph ? graph().addOrUnique(check) : check;
     }
 
-    public List<ValueNode> getFieldValues() {
-        return fieldValues;
+    public List<ValueNode> getEntries() {
+        return entries;
     }
 
     public ResolvedJavaType getType() {
         return type;
     }
 
-    public ValueNode getField(int index) {
-        return fieldValues.get(index);
+    public ValueNode getEntry(int index) {
+        return entries.get(index);
     }
 
     public static InlineTypeNode createWithoutValues(ResolvedJavaType type, ValueNode oop, ValueNode nonNull) {
@@ -191,7 +186,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         // remove inputs of ReadMultiValueNode to MultiValueNode
         ((ReadMultiValueNode) oop).delete();
         ((ReadMultiValueNode) nonNull).delete();
-        for (ValueNode p : fieldValues) {
+        for (ValueNode p : entries) {
             assert p instanceof ReadMultiValueNode : "scalarized value has to be a ProjNode";
             ((ReadMultiValueNode) p).delete();
         }
@@ -264,7 +259,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     private boolean virtualize = true;
-    private boolean insertGuardBeforeVirtualize = false;
 
     @Override
     public void virtualize(VirtualizerTool tool) {
@@ -282,28 +276,13 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
             ValueNode tempOop = this.oop;
             ValueNode tempNonNull = this.nonNull;
-            if (insertGuardBeforeVirtualize) {
-                // outdated
-                if (!StampTool.isPointerNonNull(this)) {
-                    // Because the node can represent a null value, insert a guard before we
-                    // virtualize
-                    tool.addNode(new FixedGuardNode(createNullCheck(true), DeoptimizationReason.TransferToInterpreter, DeoptimizationAction.None, true));
-                    if (tempOop == null) {
-                        tempNonNull = null;
-                    } else {
-                        tempNonNull = ConstantNode.forInt(1, graph());
-                        tool.ensureAdded(tempNonNull);
-                    }
-                }
-
-            }
 
             // virtualize
-            VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false, StampTool.isPointerNonNull(this) || insertGuardBeforeVirtualize);
+            VirtualInstanceNode virtualObject = new VirtualInstanceNode(type, false, StampTool.isPointerNonNull(this));
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {
-                state[i] = getField(i);
+                state[i] = getEntry(i);
             }
 
             // make sure both values are either null or set
