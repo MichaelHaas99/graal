@@ -258,9 +258,8 @@ public class InlineTypeUtil {
         if (GraphUtil.unproxify(arg) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
             List<ValueNode> list = new ArrayList<>(inlineTypeNode.getEntries());
             if (!isNullFree) {
-                // TODO: maybe remove nullness of getNonNull?
                 ValueNode nonNull = inlineTypeNode.getNonNull();
-                if (nonNull == null) {
+                if (StampTool.isPointerNonNull(arg)) {
                     nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
                 }
                 list.addFirst(nonNull);
