@@ -88,6 +88,11 @@ public class AMD64HotSpotEntryPointFrameMap extends AMD64FrameMap implements Hot
     }
 
     @Override
+    public int outgoingSize() {
+        return outgoingSize;
+    }
+
+    @Override
     public int getStackIncrement() {
         return stackIncrement;
     }

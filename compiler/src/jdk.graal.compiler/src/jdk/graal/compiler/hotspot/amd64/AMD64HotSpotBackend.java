@@ -62,6 +62,7 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
 import jdk.graal.compiler.hotspot.HotSpotDataBuilder;
+import jdk.graal.compiler.hotspot.HotSpotEntryPointFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntime;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
@@ -442,6 +443,19 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         emitCodeSuffix(crb, asm);
     }
 
+    @Override
+    public void emitEntryPointCode(CompilationResultBuilder crb) {
+        AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
+        HotSpotEntryPointFrameMap frameMap = (HotSpotEntryPointFrameMap) crb.frameMap;
+        if (frameMap.outgoingSize() > 0) {
+            asm.subq(rsp, frameMap.outgoingSize());
+            super.emitEntryPointCode(crb);
+            asm.addq(rsp, frameMap.outgoingSize());
+        } else {
+            super.emitEntryPointCode(crb);
+        }
+    }
+
     /**
      * Extends the stack if necessary and unpacks all inline type args. See
      * {@code MacroAssembler::unpack_inline_args}
@@ -476,17 +490,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
             ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
                             receiverOnly, crb);
-            if (performedStackExtension) {
-                afterScalarizationAction(crb);
-            }
             return performedStackExtension;
         }
 
         shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
                         spInc);
-        if (performedStackExtension) {
-            afterScalarizationAction(crb);
-        }
         return performedStackExtension;
     }
 
@@ -1095,18 +1103,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         // push the return address
         asm.push(r13);
-        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
-            // extend the stack in case we have outgoing calls e.g. barriers
-            asm.subq(rsp, crb.frameMap.frameSize());
-        }
-    }
-
-    @Override
-    public void afterScalarizationAction(CompilationResultBuilder crb) {
-        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
-            AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
-            asm.addq(rsp, crb.frameMap.frameSize());
-        }
     }
 
     @Override

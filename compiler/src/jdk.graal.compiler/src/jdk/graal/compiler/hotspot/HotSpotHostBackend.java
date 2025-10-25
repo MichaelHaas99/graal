@@ -254,9 +254,6 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         }
         ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
                         receiverOnly, crb);
-        if (performedStackExtension) {
-            afterScalarizationAction(crb);
-        }
         return performedStackExtension;
     }
 
@@ -265,14 +262,6 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
      */
     public void entryPointStackExtension(CompilationResultBuilder crb) {
         throw new UnsupportedOperationException("stack extension must be implemented");
-    }
-
-    /**
-     * To perform an action after the scalarization happened.
-     */
-
-    public void afterScalarizationAction(CompilationResultBuilder crb) {
-        throw new UnsupportedOperationException("perform after scalarize must be implemented");
     }
 
     /**
@@ -308,6 +297,10 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
     protected void emitCodeHelper(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator) {
         // TODO: update in subclasses
         throw new UnsupportedOperationException("emit code helper is not implemented");
+    }
+
+    public void emitEntryPointCode(CompilationResultBuilder crb) {
+        crb.emitLIR(false);
     }
 
     protected void icCheck(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, HotSpotMarkId markId, HotSpotMarkId additionalMarkId) {

@@ -54,6 +54,7 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
 import jdk.graal.compiler.hotspot.HotSpotDataBuilder;
+import jdk.graal.compiler.hotspot.HotSpotEntryPointFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import jdk.graal.compiler.hotspot.HotSpotHostBackend;
@@ -684,15 +685,18 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         // see MacroAssembler::extend_stack_for_inline_args in macroAssembler_aarch64.cpp
         int wordSize = 8;
         masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -2 * wordSize));
-        masm.sub(64, sp, sp, frameMap.getStackIncrement());
-        // extend the stack in case we have outgoing calls e.g. barriers
-        masm.sub(64, sp, sp, crb.frameMap.frameSize());
     }
 
-    @Override
-    public void afterScalarizationAction(CompilationResultBuilder crb) {
+    public void emitEntryPointCode(CompilationResultBuilder crb) {
         AArch64HotSpotMacroAssembler masm = (AArch64HotSpotMacroAssembler) crb.asm;
-        masm.add(64, sp, sp, crb.frameMap.frameSize());
+        HotSpotEntryPointFrameMap frameMap = (HotSpotEntryPointFrameMap) crb.frameMap;
+        if (frameMap.outgoingSize() > 0) {
+            masm.sub(64, sp, sp, frameMap.outgoingSize());
+            super.emitEntryPointCode(crb);
+            masm.add(64, sp, sp, frameMap.outgoingSize());
+        } else {
+            super.emitEntryPointCode(crb);
+        }
     }
 
     @Override

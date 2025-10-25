@@ -293,7 +293,7 @@ public class LIRCompilerBackend {
             FrameMap frameMap = lirGenRes.getFrameMap();
             CompilationResultBuilder crb = lirBackend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory, entryPointDecorator);
             crb.setIsEntryPoint(true);
-            crb.emitLIR(false);
+            lirBackend.emitEntryPointCode(crb);
         }
     }
 }

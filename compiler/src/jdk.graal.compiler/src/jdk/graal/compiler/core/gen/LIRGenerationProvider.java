@@ -69,4 +69,11 @@ public interface LIRGenerationProvider {
      * @param entryPointDecorator optional argument that injects code into the entry point.
      */
     void emitCode(CompilationResultBuilder crb, ResolvedJavaMethod installedCodeOwner, EntryPointDecorator entryPointDecorator);
+
+    /**
+     * Emits the code for a given entry point graph in Valhalla.
+     */
+    default void emitEntryPointCode(CompilationResultBuilder crb) {
+        throw new UnsupportedOperationException("emit entry point code not implemented yet");
+    }
 }
