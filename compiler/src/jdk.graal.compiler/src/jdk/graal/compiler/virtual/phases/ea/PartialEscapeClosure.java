@@ -50,6 +50,7 @@ import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeBitMap;
 import jdk.graal.compiler.graph.NodeInputList;
+import jdk.graal.compiler.graph.NodeMap;
 import jdk.graal.compiler.graph.Position;
 import jdk.graal.compiler.nodes.AbstractEndNode;
 import jdk.graal.compiler.nodes.AbstractMergeNode;
@@ -882,6 +883,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
+        protected NodeMap<ValueNode> loopMergeAliases = cfg.graph.createNodeMap();;
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -1055,7 +1057,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     if (merge.isPhiAtMerge(value)) {
                                         value = ((ValuePhiNode) value).valueAt(i);
                                     }
-                                    ValueNode alias = getAlias(value);
+                                    ValueNode alias = getAlias(value, i);
                                     if (alias instanceof VirtualObjectNode && ((VirtualObjectNode) alias).getObjectId() == object) {
                                         uniqueMaterializedValue = null;
                                         continue;
@@ -1784,7 +1786,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             boolean virtualize = true;
             boolean allMaterialized = true;
             for (int i = 0; i < states.length; i++) {
-                ValueNode alias = getAlias(getPhiValueAt(phi, i));
+                ValueNode alias = getAlias(getPhiValueAt(phi, i), i);
                 if (alias instanceof VirtualObjectNode) {
                     if (!StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider())) {
                         virtualize = false;
@@ -1812,7 +1814,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
             virtualize &= !allMaterialized;
             for (int i = 0; i < states.length; i++) {
-                ValueNode alias = getAlias(getPhiValueAt(phi, i));
+                ValueNode alias = getAlias(getPhiValueAt(phi, i), i);
                 if (alias instanceof VirtualObjectNode) {
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
 
@@ -2074,6 +2076,33 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return result;
         }
 
+        /**
+         * Gets the alias for a node in the dominator block of a loop. This is useful in case we
+         * scalarize this node (which is a value object) during merge processing of a loop. As the
+         * dominator block of a loop was already processed we can alias the node with its scalarized
+         * version for the next iteration. During the next iteration of the loop, when reaching this
+         * node we can directly use its scalarized version. Otherwise, we would again scalarize the
+         * value object, which may creates another diamond in the dominator block. The old diamond
+         * would then be dead and needs to be deleted by DeadCodeElimination.
+         */
+        private ValueNode getAlias(ValueNode value, int blockId) {
+            if (blockId == 0 && needsCaching) {
+                if (value != null && !(value instanceof VirtualObjectNode)) {
+                    if (value.isAlive() && !loopMergeAliases.isNew(value)) {
+                        ValueNode result = loopMergeAliases.get(value);
+                        if (result != null) {
+                            return result;
+                        }
+                    }
+                }
+            }
+            return PartialEscapeClosure.this.getAlias(value);
+        }
+
+        private ValueNode getAlias(ValueNode value) {
+            return PartialEscapeClosure.this.getAlias(value);
+        }
+
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex) {
             return virtualizeFromInlineObject(node, states, predecessorIndex, null);
         }
@@ -2233,6 +2262,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             FixedNode position = getPredecessor(predecessorIndex).getEndNode();
             tool.reset(state, position, position, bEffects);
             tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
+            if (!StampTool.isPointerAlwaysNull(node) && predecessorIndex == 0) {
+                loopMergeAliases.set(node, virtualObject);
+            }
             return (VirtualInstanceNode) virtualObject;
         }
 
