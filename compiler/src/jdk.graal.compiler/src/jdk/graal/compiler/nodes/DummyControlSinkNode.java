@@ -30,6 +30,7 @@ import jdk.graal.compiler.lir.StandardOp;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
+import jdk.vm.ci.meta.Value;
 
 /**
  * Node that can be used to pretend a sink in control flow.
@@ -38,12 +39,15 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 public final class DummyControlSinkNode extends ControlSinkNode implements LIRLowerable {
     public static final NodeClass<DummyControlSinkNode> TYPE = NodeClass.create(DummyControlSinkNode.class);
 
-    public DummyControlSinkNode() {
+    private Value[] newArguments;
+
+    public DummyControlSinkNode(Value[] newArguments) {
         super(TYPE, StampFactory.forVoid());
+        this.newArguments = newArguments;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        generator.getLIRGeneratorTool().append(new StandardOp.DummyBlockEndOp());
+        generator.getLIRGeneratorTool().append(new StandardOp.DummyBlockEndOp(newArguments));
     }
 }

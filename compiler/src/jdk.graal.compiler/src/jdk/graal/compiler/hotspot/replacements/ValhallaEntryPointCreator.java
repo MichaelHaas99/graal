@@ -9,9 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
-
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
@@ -169,7 +166,7 @@ public class ValhallaEntryPointCreator {
                     }
                 }
             }
-            kit.append(new DummyControlSinkNode());
+            kit.append(new DummyControlSinkNode(values));
             debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Verified inline entry point%s graph before compilation", receiverOnly ? " receiver only" : "");
             return graph;
         } catch (Exception e) {
@@ -177,16 +174,9 @@ public class ValhallaEntryPointCreator {
         }
     }
 
-    private static EconomicMap<ResolvedJavaMethod, ValhallaEntryPointCreator> cache = EconomicMap.create(Equivalence.IDENTITY);
 
     public static ValhallaEntryPointCreator create(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
-        ValhallaEntryPointCreator creator = cache.get(targetMethod);
-        if (creator != null) {
-            return creator;
-        }
-        creator = new ValhallaEntryPointCreator(options, providers, targetMethod);
-        cache.put(targetMethod, creator);
-        return creator;
+        return new ValhallaEntryPointCreator(options, providers, targetMethod);
 
     }
 

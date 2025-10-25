@@ -58,8 +58,11 @@ public class StandardOp {
     public static class DummyBlockEndOp extends LIRInstruction implements BlockEndOp {
         public static final LIRInstructionClass<DummyBlockEndOp> TYPE = LIRInstructionClass.create(DummyBlockEndOp.class);
 
-        public DummyBlockEndOp() {
+        @Use({OperandFlag.REG, OperandFlag.STACK, OperandFlag.ILLEGAL}) protected Value[] newArguments;
+
+        public DummyBlockEndOp(Value[] newArguments) {
             super(TYPE);
+            this.newArguments = newArguments;
         }
 
         @Override
