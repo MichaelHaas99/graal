@@ -213,7 +213,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
             // see MacroAssembler::save_stack_increment in macroAssembler_aarch64.cpp
             AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) frameMap;
             int spInc = hotSpotFrameMap.frameSize() + stackIncrement;
-            int stackIncrementOffset = frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrementSlot());
+            int spIncSlotOffset = frameMap.offsetForStackSlot(hotSpotFrameMap.getStackPointerIncrementSlot());
             AArch64Address.AddressingMode addressingMode = AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED;
             if (AArch64Address.isValidImmediateAddress(64, addressingMode, frameSize)) {
                 masm.sub(64, sp, sp, totalFrameSize);
@@ -223,7 +223,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 }
                 if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
                     masm.mov(scratch, spInc);
-                    masm.str(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, stackIncrementOffset));
+                    masm.str(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, spIncSlotOffset));
                 }
             } else {
                 int frameRecordSize = 2 * wordSize;
@@ -415,7 +415,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 try (ScratchRegister sc = masm.getScratchRegister()) {
                     int wordSize = 8;
                     Register scratch = sc.getRegister();
-                    int stackIncrementOffset = frameMap.offsetForStackSlot(frameMap.getStackIncrementSlot());
+                    int stackIncrementOffset = frameMap.offsetForStackSlot(frameMap.getStackPointerIncrementSlot());
                     AArch64Address.AddressingMode addressingMode = AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED;
                     if (AArch64Address.isValidImmediateAddress(64, addressingMode, stackIncrementOffset)) {
                         masm.ldr(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, stackIncrementOffset));

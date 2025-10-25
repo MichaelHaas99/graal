@@ -251,7 +251,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
                 // method needs stack repair
                 // stack increment doesn't include RBP so add it, RA and padding already included
-                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackIncrementSlot())),
+                asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackPointerIncrementSlot())),
                                 frameSize + stackIncrement + (!frameMap.preserveFramePointer() ? 0 : getTarget().wordSize));
             }
 
@@ -341,7 +341,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     asm.movq(rbp, new AMD64Address(rsp, frameMap.frameSize()));
                 }
                 // add the stack increment to the rsp, located directly under the rbp
-                asm.addq(rsp, new AMD64Address(rsp, frameMap.offsetForStackSlot(frameMap.getStackIncrementSlot())));
+                asm.addq(rsp, new AMD64Address(rsp, frameMap.offsetForStackSlot(frameMap.getStackPointerIncrementSlot())));
             } else {
                 if (frameMap.preserveFramePointer()) {
                     asm.movq(rsp, rbp);

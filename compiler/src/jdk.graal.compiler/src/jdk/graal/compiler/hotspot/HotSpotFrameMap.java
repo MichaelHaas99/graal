@@ -46,9 +46,9 @@ public interface HotSpotFrameMap {
         JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
         CallingConvention callingConvention = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
                         valueKindFactory);
-        int spInc = (callingConvention.getStackSize() + preservedSlotsSize);
+        int stackIncrement = (callingConvention.getStackSize() + preservedSlotsSize);
         int stackAlignment = targetDescription.stackAlignment;
-        return spInc % stackAlignment == 0 ? spInc : ((spInc / stackAlignment) + 1) * stackAlignment;
+        return stackIncrement % stackAlignment == 0 ? stackIncrement : ((stackIncrement / stackAlignment) + 1) * stackAlignment;
     }
 
     boolean frameLeaveNeedsStackRepair();

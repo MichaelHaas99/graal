@@ -48,7 +48,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  *            +--------------------------------+                               |
  *            :                                :                               |
  *            | incoming overflow argument n   |                               |
- *            :     ...                        :                               | oldArgumentsStartOffset
+ *            :     ...                        :                               | oldArgumentsStartOffset = stackIncrement
  *            | incoming overflow argument 0   | newArgumentsStartOffset = 0   |
  *  %sp--&gt;  +--------------------------------+---------------------------
  *

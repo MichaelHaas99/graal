@@ -44,13 +44,13 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  *            | incoming overflow argument 0   |
  *   ---------+--------------------------------+                             -----
  *            | return address                 |                               ^
- *            +--------------------------------+                               |
- *            :                                :                               |
- *            | incoming overflow argument n   |                               |
- *            :     ...                        :                               | oldArgumentsStartOffset
- *            | incoming overflow argument 0   |                               |
- *            +--------------------------------+    ^                          |
- *            | return address                 |    |  newArgumentsStartOffset |
+ *            +--------------------------------+                               |                          -----
+ *            :                                :                               |                            ^
+ *            | incoming overflow argument n   |                               |                            |
+ *            :     ...                        :                               | oldArgumentsStartOffset    |  stackIncrement
+ *            | incoming overflow argument 0   |                               |                            |
+ *            +--------------------------------+    ^                          |                            |
+ *            | return address                 |    |  newArgumentsStartOffset |                            |
  *    %sp--&gt;  +--------------------------------+---------------------------
  *
  * </pre>

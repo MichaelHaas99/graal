@@ -37,10 +37,15 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class AArch64HotSpotFrameMap extends AArch64FrameMap implements HotSpotFrameMap {
     /**
-     * The stack increment used for stack repair.
+     * The stack slot which contains the increment for the stack pointer to perform the stack repair
+     * when leaving a method.
      */
-    private StackSlot stackIncrementSlot;
+    private StackSlot stackPointerIncrementSlot;
     private final boolean frameLeaveNeedsStackRepair;
+    /**
+     * The amount by which the stack is extended in an entry point to perform scalarization of value
+     * objects.
+     */
     private int stackIncrement;
 
     public AArch64HotSpotFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ReferenceMapBuilderFactory referenceMapFactory, ResolvedJavaMethod targetMethod,
@@ -48,16 +53,16 @@ public class AArch64HotSpotFrameMap extends AArch64FrameMap implements HotSpotFr
         super(codeCache, registerConfig, referenceMapFactory);
         frameLeaveNeedsStackRepair = HotSpotFrameMap.checkFrameLeaveNeedsStackRepair(targetMethod, codeCache, valhallaOptionsProvider, valueKindFactory);
         if (frameLeaveNeedsStackRepair) {
-            // stack increment needs to be located directly under rbp
-            stackIncrementSlot = allocateSpillSlot(LIRKind.value(AArch64Kind.QWORD));
+            // stack pointer increment needs to be located directly under rbp
+            stackPointerIncrementSlot = allocateSpillSlot(LIRKind.value(AArch64Kind.QWORD));
             stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory,
                             initialSpillSize);
         }
     }
 
-    public StackSlot getStackIncrementSlot() {
-        assert stackIncrementSlot != null;
-        return stackIncrementSlot;
+    public StackSlot getStackPointerIncrementSlot() {
+        assert stackPointerIncrementSlot != null;
+        return stackPointerIncrementSlot;
     }
 
     @Override
