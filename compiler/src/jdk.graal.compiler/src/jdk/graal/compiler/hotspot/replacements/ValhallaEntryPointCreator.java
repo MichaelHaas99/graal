@@ -12,7 +12,6 @@ import java.util.ListIterator;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 
-import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
@@ -69,8 +68,7 @@ import jdk.vm.ci.meta.Value;
  * can be extracted. The big advantage is that (compared to C2) we don't need to use the assembler
  * in the backend to create the entry point. So we also don't need to think about different GCs when
  * accessing memory or different underlying architectures. Also new field flattening features can be
- * implemented on a high-level and the implementation can be reused for the entry point. We also
- * don't need to recompute the entry point in recompilations.
+ * implemented on a high-level and the implementation can be reused for the entry point.
  */
 public class ValhallaEntryPointCreator {
 
@@ -192,19 +190,18 @@ public class ValhallaEntryPointCreator {
 
     }
 
-    public void getCode(final Backend backend, boolean receiverOnly, CompilationResultBuilder builder) {
+    public void emitCode(final Backend backend, boolean receiverOnly, CompilationResultBuilder builder) {
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
             try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
-                CompilationIdentifier compilationId = INVALID_COMPILATION_ID;
                 final StructuredGraph graph = getGraph(debug, receiverOnly, backend);
-                buildCompilationResult(debug, backend, graph, compilationId, builder);
+                buildCompilationResult(debug, backend, graph, builder);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
         }
     }
 
-    private void buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationIdentifier compilationId, CompilationResultBuilder crb) {
+    private void buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationResultBuilder crb) {
 
         // Entry points cannot be recompiled so they cannot be compiled with assumptions
         assert graph.getAssumptions() == null;
@@ -213,8 +210,12 @@ public class ValhallaEntryPointCreator {
             Suites suites = createSuites();
             emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites);
             LIRSuites lirSuites = createLIRSuites();
-            backend.setAsm(crb.asm);
-            backend.emitBackEnd(graph, null, targetMethod, crb.compilationResult, CompilationResultBuilderFactory.Default, null, null, lirSuites);
+            // we want to directly add the entry point code to the nmethod so use the asm of the crb
+            // parameter instead of creating a new assembler
+            CompilationResultBuilderFactory entryPointFactory = (providers, frameMap, asm, dataBuilder, frameContext, options, debug1, compilationResult, nullRegister,
+                            lir) -> CompilationResultBuilderFactory.Default.createBuilder(providers, frameMap, crb.asm, dataBuilder, frameContext, options, debug1, compilationResult, nullRegister,
+                                            lir);
+            backend.emitBackEnd(graph, null, targetMethod, crb.compilationResult, entryPointFactory, null, null, lirSuites);
         } catch (Throwable e) {
             throw debug.handle(e);
         }

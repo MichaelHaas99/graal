@@ -26,7 +26,6 @@ package jdk.graal.compiler.core.target;
 
 import java.util.ArrayList;
 
-import jdk.graal.compiler.asm.Assembler;
 import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.LIRKind;
@@ -336,15 +335,5 @@ public abstract class Backend implements TargetProvider, ValueKindFactory<LIRKin
      */
     public abstract static class CodeInstallationTaskFactory {
         public abstract CodeInstallationTask create();
-    }
-
-    private Assembler<?> asm;
-
-    public Assembler<?> getAsm() {
-        return asm;
-    }
-
-    public void setAsm(Assembler<?> asm) {
-        this.asm = asm;
     }
 }

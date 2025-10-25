@@ -87,14 +87,8 @@ public class LIRCompilerBackend {
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
                 if (graph.isEntryPointCFG()) {
                     emitValhallaEntryPointCode(backend,
-                                    graph.getAssumptions(),
-                                    graph.method(),
-                                    graph.getMethods(),
-                                    graph.getSpeculationLog(),
-                                    bytecodeSize,
                                     lirGen,
                                     compilationResult,
-                                    installedCodeOwner,
                                     factory,
                                     entryPointDecorator);
                 } else {
@@ -288,14 +282,8 @@ public class LIRCompilerBackend {
     }
 
     public static void emitValhallaEntryPointCode(Backend backend,
-                    Assumptions assumptions,
-                    ResolvedJavaMethod rootMethod,
-                    Collection<ResolvedJavaMethod> inlinedMethods,
-                    SpeculationLog speculationLog,
-                    int bytecodeSize,
                     LIRGenerationResult lirGenRes,
                     CompilationResult compilationResult,
-                    ResolvedJavaMethod installedCodeOwner,
                     CompilationResultBuilderFactory factory,
                     EntryPointDecorator entryPointDecorator) {
         DebugContext debug = lirGenRes.getLIR().getDebug();
@@ -305,52 +293,7 @@ public class LIRCompilerBackend {
             FrameMap frameMap = lirGenRes.getFrameMap();
             CompilationResultBuilder crb = lirBackend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory, entryPointDecorator);
             crb.setIsEntryPoint(true);
-            crb.setAsm(backend.getAsm());
-
-            /**
-             * {@code rootMethod} needed in
-             * {@link jdk.graal.compiler.hotspot.amd64.AMD64HotSpotBackend.HotSpotFrameContext#leave(CompilationResultBuilder)}
-             * during code emission. Therefore set it before code is emitted.
-             */
-            if (rootMethod != null) {
-                compilationResult.setMethods(rootMethod, inlinedMethods);
-                compilationResult.setBytecodeSize(bytecodeSize);
-            }
             crb.emitLIR(false);
-            if (assumptions != null && !assumptions.isEmpty()) {
-                compilationResult.setAssumptions(assumptions.toArray());
-            }
-
-            if (speculationLog != null) {
-                compilationResult.setSpeculationLog(speculationLog);
-            }
-            if (debug.isCountEnabled()) {
-                List<DataPatch> ldp = compilationResult.getDataPatches();
-                JavaKind[] kindValues = JavaKind.values();
-                CounterKey[] dms = new CounterKey[kindValues.length];
-                for (int i = 0; i < dms.length; i++) {
-                    dms[i] = DebugContext.counter("DataPatches-%s", kindValues[i]);
-                }
-
-                for (DataPatch dp : ldp) {
-                    JavaKind kind = JavaKind.Illegal;
-                    if (dp.reference instanceof ConstantReference) {
-                        VMConstant constant = ((ConstantReference) dp.reference).getConstant();
-                        if (constant instanceof JavaConstant) {
-                            kind = ((JavaConstant) constant).getJavaKind();
-                        }
-                    }
-                    dms[kind.ordinal()].add(debug, 1);
-                }
-
-                DebugContext.counter("CompilationResults").increment(debug);
-                DebugContext.counter("CodeBytesEmitted").add(debug, compilationResult.getTargetCodeSize());
-                DebugContext.counter("InfopointsEmitted").add(debug, compilationResult.getInfopoints().size());
-                DebugContext.counter("DataPatches").add(debug, ldp.size());
-                DebugContext.counter("ExceptionHandlersEmitted").add(debug, compilationResult.getExceptionHandlers().size());
-            }
-
-            debug.dump(DebugContext.BASIC_LEVEL, compilationResult, "After code generation");
         }
     }
 }

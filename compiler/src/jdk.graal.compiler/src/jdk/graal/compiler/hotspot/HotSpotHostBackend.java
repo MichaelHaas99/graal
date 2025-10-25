@@ -252,7 +252,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             entryPointStackExtension(crb);
             performedStackExtension = true;
         }
-        ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
+        ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
                         receiverOnly, crb);
         if (performedStackExtension) {
             afterScalarizationAction(crb);

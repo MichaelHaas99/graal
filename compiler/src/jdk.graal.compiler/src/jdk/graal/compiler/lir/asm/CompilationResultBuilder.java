@@ -556,10 +556,10 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
 
         ArrayList<LIRInstruction.LIRInstructionSlowPath> slowPaths = lir.getSlowPaths();
         if (slowPaths != null) {
-            Label entryPoint = new Label();
+            Label entryPointEnd = new Label();
             if (isEntryPoint) {
                 // jump over all slow paths
-                this.asm.jmp(entryPoint);
+                this.asm.jmp(entryPointEnd);
             }
             for (LIRInstruction.LIRInstructionSlowPath slowPath : slowPaths) {
                 try {
@@ -572,7 +572,7 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
                     }
                 }
             }
-            this.asm.bind(entryPoint);
+            this.asm.bind(entryPointEnd);
         }
 
         logger.close();
