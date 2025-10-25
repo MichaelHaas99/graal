@@ -394,11 +394,13 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null, entryPointDecorator);
         DataBuilder dataBuilder = new HotSpotDataBuilder(getCodeCache().getTarget());
         CompilationResultBuilder crb = factory.createBuilder(getProviders(), frameMap, masm, dataBuilder, frameContext, options, debug, compilationResult, Register.None, lir);
-        crb.setTotalFrameSize(frameMap.totalFrameSize());
-        crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
-        crb.setMinDataSectionItemAlignment(getMinDataSectionItemAlignment());
+        if (!(frameMap instanceof HotSpotEntryPointFrameMap)) {
+            crb.setTotalFrameSize(frameMap.totalFrameSize());
+            crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
+            crb.setMinDataSectionItemAlignment(getMinDataSectionItemAlignment());
+        }
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
-        if (deoptimizationRescueSlot != null && stub == null) {
+        if (deoptimizationRescueSlot != null && stub == null && !(frameMap instanceof HotSpotEntryPointFrameMap)) {
             crb.compilationResult.setCustomStackAreaOffset(deoptimizationRescueSlot);
         }
 
