@@ -64,11 +64,12 @@ public class AMD64HotSpotEntryPointFrameMap extends AMD64FrameMap implements Hot
     public AMD64HotSpotEntryPointFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ResolvedJavaMethod targetMethod, ReferenceMapBuilderFactory referenceMapFactory,
                     ValueKindFactory<?> valueKindFactory) {
         super(codeCache, registerConfig, referenceMapFactory, false);
-        this.initialSpillSize = returnAddressSize();
-        this.spillSize = initialSpillSize;
-        stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory, initialSpillSize);
-        oldArgumentsStartOffset = stackIncrement + initialSpillSize;
-        newArgumentsStartOffset = initialSpillSize;
+        int returnAddressSize = returnAddressSize();
+        this.initialSpillSize = 0;
+        this.spillSize = 0;
+        stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory, returnAddressSize);
+        oldArgumentsStartOffset = stackIncrement + returnAddressSize;
+        newArgumentsStartOffset = returnAddressSize;
 
     }
 
@@ -85,11 +86,6 @@ public class AMD64HotSpotEntryPointFrameMap extends AMD64FrameMap implements Hot
     @Override
     public int getNewArgumentsStartOffset() {
         return newArgumentsStartOffset;
-    }
-
-    @Override
-    public int outgoingSize() {
-        return outgoingSize;
     }
 
     @Override

@@ -218,7 +218,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
         }
 
         private int getOffset(StackSlot stackSlot) {
-            return stackSlot.getOffset(frameMap.totalFrameSize());
+            return frameMap.offsetForStackSlot(stackSlot);
         }
 
         /**

@@ -697,10 +697,10 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     public void emitEntryPointCode(CompilationResultBuilder crb) {
         AArch64HotSpotMacroAssembler masm = (AArch64HotSpotMacroAssembler) crb.asm;
         HotSpotEntryPointFrameMap frameMap = (HotSpotEntryPointFrameMap) crb.frameMap;
-        if (frameMap.outgoingSize() > 0) {
-            masm.sub(64, sp, sp, frameMap.outgoingSize());
+        if (frameMap.frameSize() > 0) {
+            masm.sub(64, sp, sp, frameMap.frameSize());
             super.emitEntryPointCode(crb);
-            masm.add(64, sp, sp, frameMap.outgoingSize());
+            masm.add(64, sp, sp, frameMap.frameSize());
         } else {
             super.emitEntryPointCode(crb);
         }

@@ -32,7 +32,7 @@ public interface HotSpotEntryPointFrameMap extends HotSpotFrameMap {
 
     int getNewArgumentsStartOffset();
 
-    int outgoingSize();
+    int frameSize();
 
     default int getOffsetForStackSlot(StackSlot slot) {
         /*
@@ -42,13 +42,13 @@ public interface HotSpotEntryPointFrameMap extends HotSpotFrameMap {
          *
          */
         if (slot.isOldArgument()) {
-            return slot.getOffset(outgoingSize() + getOldArgumentsStartOffset());
+            return slot.getOffset(frameSize() + getOldArgumentsStartOffset());
         }
 
         if (slot.isNewArgument()) {
-            return slot.getOffset(outgoingSize() + getNewArgumentsStartOffset());
+            return slot.getOffset(frameSize() + getNewArgumentsStartOffset());
         }
 
-        return slot.getOffset(outgoingSize());
+        return slot.getOffset(frameSize());
     }
 }

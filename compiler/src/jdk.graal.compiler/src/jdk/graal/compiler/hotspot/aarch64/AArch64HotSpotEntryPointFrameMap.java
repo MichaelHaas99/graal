@@ -87,11 +87,6 @@ public class AArch64HotSpotEntryPointFrameMap extends AArch64FrameMap implements
     }
 
     @Override
-    public int outgoingSize() {
-        return outgoingSize;
-    }
-
-    @Override
     public int getStackIncrement() {
         return stackIncrement;
     }
