@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 
@@ -639,13 +640,32 @@ public class InlineTypeUtil {
      * @return true if a circle is possible
      */
     public static boolean isCircularInlineType(ResolvedJavaType type) {
-        return isCircularInlineType(type, EconomicSet.create(Equivalence.DEFAULT));
+        return circularInlineTypeTest(type).isCircular;
     }
 
+    public static CircularTestResult circularInlineTypeTest(ResolvedJavaType type) {
+        CircularTestResult result = circularTestCache.get(type);
+        if (result == null) {
+            result = isCircularInlineType(type, EconomicSet.create(Equivalence.DEFAULT));
+            circularTestCache.put(type, result);
+        }
+        return result;
+    }
+
+    public record CircularTestResult(boolean isCircular, int depth) {
+        public CircularTestResult(int depth) {
+            this(true, depth);
+        }
+    }
+
+    private static final CircularTestResult NON_CIRCULAR = new CircularTestResult(false, Integer.MAX_VALUE);
+    private static final EconomicMap<ResolvedJavaType, CircularTestResult> circularTestCache = EconomicMap.create(Equivalence.IDENTITY);
+
     // TODO: use assumptions in combination with a TypeReference
-    private static boolean isCircularInlineType(ResolvedJavaType type, EconomicSet<ResolvedJavaType> visitedTypes) {
+    private static CircularTestResult isCircularInlineType(ResolvedJavaType type, EconomicSet<ResolvedJavaType> visitedTypes) {
+        int depth = -1;
         if (GraalValhallaServices.isIdentity(type) || type.isPrimitive()) {
-            return false;
+            return NON_CIRCULAR;
         }
         Queue<ResolvedJavaType> queue = new ArrayDeque<>();
         Queue<Integer> counters = new ArrayDeque<>();
@@ -662,7 +682,7 @@ public class InlineTypeUtil {
 
             if (visitedTypes.contains(t)) {
                 // type was already visited
-                return true;
+                return new CircularTestResult(depth);
             }
 
             if (!type.equals(t)) {
@@ -670,7 +690,7 @@ public class InlineTypeUtil {
                 if ((t.isInterface() || !GraalValhallaServices.isIdentity(t) && t.isAbstract()) || t.isJavaLangObject()) {
                     // inline type could be assignable to type, but we can't analyze its fields at
                     // compile time
-                    return true;
+                    return new CircularTestResult(depth);
                 }
                 if (GraalValhallaServices.isIdentity(t)) {
                     // not interested in non-inline types
@@ -691,19 +711,20 @@ public class InlineTypeUtil {
             counters.add(fields.length);
 
             if (counter == 0) {
+                depth++;
                 counter = counters.remove();
             }
             for (ResolvedJavaField field : fields) {
                 JavaType fieldType = field.getType();
                 if (fieldType instanceof UnresolvedJavaType unresolvedJavaType && unresolvedJavaType.getJavaKind() == JavaKind.Object) {
-                    return true;
+                    return new CircularTestResult(depth);
                 }
                 assert fieldType instanceof ResolvedJavaType : "Expected field type to be resolved";
                 queue.add((ResolvedJavaType) fieldType);
             }
 
         }
-        return false;
+        return NON_CIRCULAR;
 
     }
 

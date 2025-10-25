@@ -603,7 +603,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 materializeVirtualLocksBefore(state, materializeBefore, effects, counter, objectState.getLockDepth());
             }
 
-            assert !updateStatesForMaterialized(state, virtual, state.getObjectState(object).getMaterializedValue()) : "method must already have been called before";
+            assert state.getObjectState(object).isVirtual() && state.getObjectState(object).isMaterialized() ||
+                            !updateStatesForMaterialized(state, virtual, state.getObjectState(object).getMaterializedValue()) : "method must already have been called before";
             return true;
         } else {
             return false;
@@ -1028,18 +1029,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         assert type != null : "expected type to be non-null";
                         boolean allMaterialized = true;
                         boolean virtualize = true;
-                        if (!InlineTypeUtil.isCircularInlineType(type)) {
-                            for (int i = 0; i < states.length; i++) {
-                                ObjectState objectState = states[i].getObjectState(object);
-                                if (!objectState.isMaterialized()) {
-                                    allMaterialized = false;
-                                    if (objectState.isLarval()) {
-                                        // Disallow scalarization of value objects as they are
-                                        // larval and we are not allowed to lose identity.
-                                        virtualize = false;
-                                    }
-                                    break;
+                        for (int i = 0; i < states.length; i++) {
+                            ObjectState objectState = states[i].getObjectState(object);
+                            if (!objectState.isMaterialized()) {
+                                allMaterialized = false;
+                                if (objectState.isLarval()) {
+                                    // Disallow scalarization of value objects as they are
+                                    // larval and we are not allowed to lose identity.
+                                    virtualize = false;
                                 }
+                                break;
                             }
                         }
                         virtualize &= !allMaterialized;
@@ -1208,10 +1207,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return true if materialization happened during the merge, false otherwise
          */
         private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
-            return mergeObjectStates(resultObject, sourceObjects, states, 0);
+            return mergeObjectStates(resultObject, sourceObjects, states, 0, -1);
         }
 
-        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int scalarizationDepth) {
+        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int currentScalarizationDepth, int maxScalarizationDepth) {
             boolean compatible = true;
             boolean ensureVirtual = true;
             IntUnaryOperator getObject = index -> sourceObjects == null ? resultObject : sourceObjects[index];
@@ -1394,8 +1393,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 ValueNode firstVirtual = virtualObjects.get(getObject.applyAsInt(0));
                 ResolvedJavaType type = StampTool.typeOrNull(firstVirtual, tool.getMetaAccess());
                 assert type != null : "expected type to be non-null";
-                if (scalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions()) && !(StampTool.isNullableInlineType(firstVirtual, tool.getValhallaOptionsProvider()) &&
-                                InlineTypeUtil.isCircularInlineType(type))) {
+                InlineTypeUtil.CircularTestResult circularTestResult = InlineTypeUtil.circularInlineTypeTest(type);
+                int updatedMaxScalarizationDepth = maxScalarizationDepth;
+                if (currentScalarizationDepth == 0) {
+                    updatedMaxScalarizationDepth = circularTestResult.depth();
+                }
+                // TODO: at the moment only do this if the virtual object to be merged is a value
+                // object, to avoid possible errors in PEA without Valhalla.
+                if (!circularTestResult.isCircular() && currentScalarizationDepth < updatedMaxScalarizationDepth &&
+                                currentScalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions()) &&
+                                StampTool.isNullableInlineType(firstVirtual, tool.getValhallaOptionsProvider())) {
                     // try to keep virtual entries virtual by making entries with materialized
                     // inline objects virtual again, merge each virtual entry recursively.
                     boolean[] virtualizeInfo = new boolean[values.length];
@@ -1464,13 +1471,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             } else if (entry instanceof VirtualInstanceNode virtualInstanceNode) {
                                 tempVirtual = virtualizeFromInlineObject(states[i].getObjectState(virtualInstanceNode.getObjectId()).getMaterializedValue(), states, i,
                                                 StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])),
-                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, null));
-                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, tempVirtual);
+                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, null));
+                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, tempVirtual);
 
                             } else {
                                 tempVirtual = virtualizeFromInlineObject(entry, states, i, StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])),
-                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, null));
-                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, scalarizationDepth, merge, tempVirtual);
+                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, null));
+                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, tempVirtual);
 
                             }
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
@@ -1493,13 +1500,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                         // search the cache for a virtual object, otherwise copy the one set during
                         // iteration to create a new one for the new state
-                        VirtualInstanceNode tempVirtual = (VirtualInstanceNode) getEntryMergeObject(resultObject, -1, valueIndex, -1, scalarizationDepth,
+                        VirtualInstanceNode tempVirtual = (VirtualInstanceNode) getEntryMergeObject(resultObject, -1, valueIndex, -1, currentScalarizationDepth,
                                         merge, null);
                         if (tempVirtual == null) {
                             // nothing found in cache, copy and put it in cache, similar to the
                             // function getValueObjectVirtual
                             tempVirtual = (VirtualInstanceNode) virtualObjects.get(tempResult).duplicate();
-                            getEntryMergeObject(resultObject, -1, valueIndex, -1, scalarizationDepth, merge, tempVirtual);
+                            getEntryMergeObject(resultObject, -1, valueIndex, -1, currentScalarizationDepth, merge, tempVirtual);
                         }
                         // add the virtual object
                         if (tempVirtual.getObjectId() == -1) {
@@ -1512,7 +1519,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                         newState.addObject(tempResult, tempState);
                         virtualizedEntry[valueIndex] = virtualObjects.get(tempResult);
-                        mergeObjectStates(tempResult, tempSourceObjects, states, scalarizationDepth + 1);
+                        mergeObjectStates(tempResult, tempSourceObjects, states, currentScalarizationDepth + 1, updatedMaxScalarizationDepth);
                         values[valueIndex] = virtualizedEntry[valueIndex];
                     }
                 }
@@ -1794,10 +1801,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                     ResolvedJavaType type = StampTool.typeOrNull(alias, tool.getMetaAccess());
                     assert type != null : "expected type to be non-null";
-                    if (InlineTypeUtil.isCircularInlineType(type)) {
-                        virtualize = false;
-                        break;
-                    }
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
                     if (objectState != null) {
