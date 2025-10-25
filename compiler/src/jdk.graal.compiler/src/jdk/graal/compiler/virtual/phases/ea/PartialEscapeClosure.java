@@ -1895,6 +1895,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 }
                             }
                         }
+                        VirtualObjectNode virtual = virtualObjs[0];
+                        if (!virtual.hasIdentity() && states[0].getObjectState(virtual).isLarval()) {
+                            /*
+                             * Don't merge object states of a phi if the inputs are still larval
+                             * (have identity).
+                             */
+                            compatible = false;
+                        }
                     }
                     if (compatible) {
                         VirtualObjectNode virtual = getValueObjectVirtual(phi, virtualObjs[0]);
