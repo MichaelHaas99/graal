@@ -32,15 +32,23 @@ public interface HotSpotEntryPointFrameMap extends HotSpotFrameMap {
 
     int getNewArgumentsStartOffset();
 
+    int frameSize();
+
     default int getOffsetForStackSlot(StackSlot slot) {
-        if (slot.isOldArgument()) {
-            return slot.getRawOffset() + getOldArgumentsStartOffset();
-        }
         /*
          * The stack pointer does not point to the new arguments directly, we may e.g. have the
-         * return address before. As the raw offset of the arguments is 0 we move everything up.
+         * return address before. As the raw offset of the arguments is 0 we move everything up. We
+         * also add the frame size as we may have some calls e.g. for gc barriers.
          *
          */
-        return slot.getRawOffset() + getNewArgumentsStartOffset();
+        if (slot.isOldArgument()) {
+            return slot.getOffset(frameSize() + getOldArgumentsStartOffset());
+        }
+
+        if (slot.isNewArgument()) {
+            return slot.getOffset(frameSize() + getNewArgumentsStartOffset());
+        }
+
+        return slot.getOffset(frameSize());
     }
 }

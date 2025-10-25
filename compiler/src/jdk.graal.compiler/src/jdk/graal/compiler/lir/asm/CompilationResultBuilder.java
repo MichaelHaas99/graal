@@ -124,7 +124,7 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
         }
     }
 
-    public final Assembler<?> asm;
+    public Assembler<?> asm;
     public final DataBuilder dataBuilder;
     public final CompilationResult compilationResult;
     public final Register uncompressedNullRegister;
@@ -214,6 +214,16 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
 
     public void setMaxInterpreterFrameSize(int maxInterpreterFrameSize) {
         compilationResult.setMaxInterpreterFrameSize(maxInterpreterFrameSize);
+    }
+
+    private boolean isEntryPoint;
+
+    public void setIsEntryPoint(boolean isEntryPoint) {
+        this.isEntryPoint = isEntryPoint;
+    }
+
+    public void setAsm(Assembler<?> asm) {
+        this.asm = asm;
     }
 
     /**
@@ -546,6 +556,11 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
 
         ArrayList<LIRInstruction.LIRInstructionSlowPath> slowPaths = lir.getSlowPaths();
         if (slowPaths != null) {
+            Label entryPoint = new Label();
+            if (isEntryPoint) {
+                // jump over all slow paths
+                this.asm.jmp(entryPoint);
+            }
             for (LIRInstruction.LIRInstructionSlowPath slowPath : slowPaths) {
                 try {
                     emitSlowPath(slowPath);
@@ -557,6 +572,7 @@ public class CompilationResultBuilder extends CoreProvidersDelegate {
                     }
                 }
             }
+            this.asm.bind(entryPoint);
         }
 
         logger.close();

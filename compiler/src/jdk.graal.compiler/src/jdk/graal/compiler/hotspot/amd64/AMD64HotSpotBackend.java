@@ -474,16 +474,19 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             performedStackExtension = true;
         }
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
-            byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
-                            receiverOnly);
-            for (int i = 0; i < installedCode.length; i++) {
-                asm.emitByte(installedCode[i]);
+            ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
+                            receiverOnly, crb);
+            if (performedStackExtension) {
+                afterScalarizationAction(crb);
             }
             return performedStackExtension;
         }
 
         shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
                         spInc);
+        if (performedStackExtension) {
+            afterScalarizationAction(crb);
+        }
         return performedStackExtension;
     }
 
@@ -826,6 +829,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         }
         masm.bind(entryPoint);
 
+        masm.subq(AMD64.rsp, 64);
         CallingConvention cc = callTarget.getOutgoingCallingConvention();
         AMD64Address cArg0 = (AMD64Address) crb.asAddress(cc.getArgument(0));
         AMD64Address cArg1 = (AMD64Address) crb.asAddress(cc.getArgument(1));
@@ -838,7 +842,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         masm.movq(cArg1, resultReg);
         AMD64Call.directCall(crb, masm, callTarget, null, false, null);
         masm.movq(resultReg, cArg0);
-
+        masm.addq(AMD64.rsp, 64);
         // Return to inline code
         masm.jmp(continuation);
         masm.bind(continuation);
@@ -1091,6 +1095,18 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
 
         // push the return address
         asm.push(r13);
+        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
+            // extend the stack in case we have outgoing calls e.g. barriers
+            asm.subq(rsp, crb.frameMap.frameSize());
+        }
+    }
+
+    @Override
+    public void afterScalarizationAction(CompilationResultBuilder crb) {
+        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
+            AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
+            asm.addq(rsp, crb.frameMap.frameSize());
+        }
     }
 
     @Override

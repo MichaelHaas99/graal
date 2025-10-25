@@ -252,10 +252,10 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             entryPointStackExtension(crb);
             performedStackExtension = true;
         }
-        byte[] installedCode = ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
-                        receiverOnly);
-        for (int i = 0; i < installedCode.length; i++) {
-            asm.emitByte(installedCode[i]);
+        ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).getCode(getRuntime().getHostBackend(),
+                        receiverOnly, crb);
+        if (performedStackExtension) {
+            afterScalarizationAction(crb);
         }
         return performedStackExtension;
     }
@@ -265,6 +265,14 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
      */
     public void entryPointStackExtension(CompilationResultBuilder crb) {
         throw new UnsupportedOperationException("stack extension must be implemented");
+    }
+
+    /**
+     * To perform an action after the scalarization happened.
+     */
+
+    public void afterScalarizationAction(CompilationResultBuilder crb) {
+        throw new UnsupportedOperationException("perform after scalarize must be implemented");
     }
 
     /**

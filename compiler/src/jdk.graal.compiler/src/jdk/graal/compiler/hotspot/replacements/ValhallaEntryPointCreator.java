@@ -12,7 +12,6 @@ import java.util.ListIterator;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 
-import jdk.graal.compiler.code.CompilationResult;
 import jdk.graal.compiler.core.common.CompilationIdentifier;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
@@ -21,9 +20,9 @@ import jdk.graal.compiler.core.target.Backend;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.DebugOptions;
 import jdk.graal.compiler.debug.GraalError;
-import jdk.graal.compiler.hotspot.HotSpotCompiledCodeBuilder;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.stubs.HotSpotGraphKit;
+import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
 import jdk.graal.compiler.lir.phases.LIRPhase;
 import jdk.graal.compiler.lir.phases.LIRSuites;
@@ -51,12 +50,9 @@ import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
-import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -81,8 +77,6 @@ public class ValhallaEntryPointCreator {
     protected final OptionValues options;
     protected final HotSpotProviders providers;
     protected final ResolvedJavaMethod targetMethod;
-    private byte[] verified_inline_entry_ro;
-    private byte[] verified_inline_entry;
 
     public ValhallaEntryPointCreator(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
         this.options = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningForStubsAndSnippets.getValue(options), RegisterPressure, null,
@@ -198,47 +192,19 @@ public class ValhallaEntryPointCreator {
 
     }
 
-    public synchronized byte[] getCode(final Backend backend, boolean receiverOnly) {
-        if (receiverOnly && verified_inline_entry_ro != null) {
-            return verified_inline_entry_ro;
-        }
-        if (!receiverOnly && verified_inline_entry != null) {
-            return verified_inline_entry;
-        }
+    public void getCode(final Backend backend, boolean receiverOnly, CompilationResultBuilder builder) {
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
             try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
                 CompilationIdentifier compilationId = INVALID_COMPILATION_ID;
                 final StructuredGraph graph = getGraph(debug, receiverOnly, backend);
-                CompilationResult compResult = buildCompilationResult(debug, backend, graph, compilationId);
-                CodeCacheProvider codeCache = providers.getCodeCache();
-                InstalledCode installedCode;
-                try (DebugContext.Scope s = debug.scope("CodeInstall", compResult);
-                                DebugContext.Activation a = debug.activate()) {
-                    HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, null, null, compResult, options);
-                    installedCode = codeCache.installCode(null, compiledCode, null, null, false);
-                } catch (Throwable e) {
-                    throw debug.handle(e);
-                }
-                // we shouldn't include any alignment of the installed code
-                byte[] codeArray = new byte[compResult.getTargetCodeSize()];
-                byte[] installedCodeArray = installedCode.getCode();
-                for (int i = 0; i < compResult.getTargetCodeSize(); i++) {
-                    codeArray[i] = installedCodeArray[i];
-                }
-                if (receiverOnly) {
-                    verified_inline_entry_ro = codeArray;
-                } else {
-                    verified_inline_entry = codeArray;
-                }
-                return codeArray;
+                buildCompilationResult(debug, backend, graph, compilationId, builder);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
         }
     }
 
-    private CompilationResult buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationIdentifier compilationId) {
-        CompilationResult compResult = new CompilationResult(compilationId, toString());
+    private void buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationIdentifier compilationId, CompilationResultBuilder crb) {
 
         // Entry points cannot be recompiled so they cannot be compiled with assumptions
         assert graph.getAssumptions() == null;
@@ -247,11 +213,11 @@ public class ValhallaEntryPointCreator {
             Suites suites = createSuites();
             emitFrontEnd(providers, backend, graph, providers.getSuites().getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites);
             LIRSuites lirSuites = createLIRSuites();
-            backend.emitBackEnd(graph, null, targetMethod, compResult, CompilationResultBuilderFactory.Default, null, null, lirSuites);
+            backend.setAsm(crb.asm);
+            backend.emitBackEnd(graph, null, targetMethod, crb.compilationResult, CompilationResultBuilderFactory.Default, null, null, lirSuites);
         } catch (Throwable e) {
             throw debug.handle(e);
         }
-        return compResult;
     }
 
     protected Suites createSuites() {

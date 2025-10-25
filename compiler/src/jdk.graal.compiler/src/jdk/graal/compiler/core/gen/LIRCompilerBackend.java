@@ -304,6 +304,8 @@ public class LIRCompilerBackend {
 
             FrameMap frameMap = lirGenRes.getFrameMap();
             CompilationResultBuilder crb = lirBackend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory, entryPointDecorator);
+            crb.setIsEntryPoint(true);
+            crb.setAsm(backend.getAsm());
 
             /**
              * {@code rootMethod} needed in
@@ -322,7 +324,6 @@ public class LIRCompilerBackend {
             if (speculationLog != null) {
                 compilationResult.setSpeculationLog(speculationLog);
             }
-            crb.finish();
             if (debug.isCountEnabled()) {
                 List<DataPatch> ldp = compilationResult.getDataPatches();
                 JavaKind[] kindValues = JavaKind.values();

@@ -685,6 +685,14 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         int wordSize = 8;
         masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -2 * wordSize));
         masm.sub(64, sp, sp, frameMap.getStackIncrement());
+        // extend the stack in case we have outgoing calls e.g. barriers
+        masm.sub(64, sp, sp, crb.frameMap.frameSize());
+    }
+
+    @Override
+    public void afterScalarizationAction(CompilationResultBuilder crb) {
+        AArch64HotSpotMacroAssembler masm = (AArch64HotSpotMacroAssembler) crb.asm;
+        masm.add(64, sp, sp, crb.frameMap.frameSize());
     }
 
     @Override
