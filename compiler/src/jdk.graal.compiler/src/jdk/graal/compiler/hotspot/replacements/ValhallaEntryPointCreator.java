@@ -123,38 +123,46 @@ public class ValhallaEntryPointCreator {
                         // try to duplicate into the branches to decrease life intervals
                         for (int i = 0; i < scalarizedParam.length; i++) {
                             ValueNode node = scalarizedParam[i];
-                            for (int j = 0; j < 2; j++) {
+                            boolean onlyDefine = false;
                                 if (node instanceof ValuePhiNode phi) {
-                                    MergeNode merge = (MergeNode) phi.merge();
-                                    EndNode end = merge.forwardEndAt(j);
-                                    ValueNode phiValue = phi.valueAt(j);
-                                    // check the non-null info which is the first phi, determine the
-                                    // null branch
-                                    if (i == 0 && j == 0 && phiValue == ConstantNode.forInt(0, graph)) {
-                                        leftIsNullBranch = true;
-                                    }
-                                    if (i > 0 && (leftIsNullBranch && j == 0 || !leftIsNullBranch && j == 1)) {
-                                        // currently processing the null branch
-                                        if (phiValue.stamp(NodeView.DEFAULT).getStackKind() != JavaKind.Object) {
-                                            // Only oop slots need to be zeroed out to avoid
-                                            // problems with the gc. So effectively only the
-                                            // non-null info and oop fields will be set to zero on
-                                            // the null branch. TODO: do we really want this?
-                                            continue;
+                                    for (int j = 0; j < 2; j++) {
+                                        MergeNode merge = (MergeNode) phi.merge();
+                                        EndNode end = merge.forwardEndAt(j);
+                                        ValueNode phiValue = phi.valueAt(j);
+                                        // check the non-null info which is the first phi, determine
+                                        // the null branch
+                                        if (i == 0 && j == 0 && phiValue == ConstantNode.forInt(0, graph)) {
+                                            leftIsNullBranch = true;
+                                        }
+                                        if (i > 0 && (leftIsNullBranch && j == 0 || !leftIsNullBranch && j == 1)) {
+                                            // currently processing the null branch
+                                            if (phiValue.stamp(NodeView.DEFAULT).getStackKind() != JavaKind.Object) {
+                                                /*
+                                                 * Only oop slots need to be zeroed out to avoid
+                                                 * problems with the gc. So effectively only the
+                                                 * non-null info and oop fields will be set to zero
+                                                 * on the null branch. We need to define the value
+                                                 * though otherwise we get a problem with merging
+                                                 * values with different types. E.g. the type of an
+                                                 * original parameter is different to the value we
+                                                 * replace the parameter value with. TODO: do we
+                                                 * really want this?
+                                                 */
+                                                onlyDefine = true;
+                                            }
+                                        }
+                                        MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(onlyDefine ? List.of() : List.of(phiValue), targetMethod,
+                                                        List.of(values).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
+                                        if (phiValue instanceof FixedWithNextNode fixedNode) {
+                                            graph.addAfterFixed(fixedNode, mover);
+                                        } else {
+                                            graph.addBeforeFixed(end, mover);
                                         }
                                     }
-                                    MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(List.of(phiValue), targetMethod,
-                                                    List.of(values).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
-                                    if (phiValue instanceof FixedWithNextNode fixedNode) {
-                                        graph.addAfterFixed(fixedNode, mover);
-                                    } else {
-                                        graph.addBeforeFixed(end, mover);
-                                    }
                                 } else {
-                                    kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedParam), targetMethod,
-                                                    List.of(values).subList(index - scalarizedParam.length, index)));
+                                    kit.append(new MoveArgumentsToDestinationNode(List.of(node), targetMethod,
+                                                    List.of(values).subList(index - scalarizedParam.length + i, index + i + 1)));
                                 }
-                            }
                         }
                         index -= scalarizedParam.length;
                         addBefore = kit.append(new ValueAnchorNode());

@@ -5,6 +5,7 @@ import java.util.List;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
+import jdk.graal.compiler.lir.StandardOp;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.NodeView;
@@ -37,6 +38,11 @@ public class MoveArgumentsToDestinationNode extends FixedWithNextNode implements
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
+        if (newArguments.isEmpty()) {
+            assert values.size() == 1 : "values should only contain one value";
+            generator.getLIRGeneratorTool().append(new StandardOp.ValueDefOp(values.get(0)));
+            return;
+        }
         // process in the reverse order as the stack is likely to be extended and slots are not
         // block by old arguments
         for (int i = newArguments.size() - 1; i >= 0; i--) {

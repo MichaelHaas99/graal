@@ -71,6 +71,22 @@ public class StandardOp {
         }
     }
 
+    public static class ValueDefOp extends LIRInstruction {
+        public static final LIRInstructionClass<ValueDefOp> TYPE = LIRInstructionClass.create(ValueDefOp.class);
+
+        @Def({OperandFlag.REG, OperandFlag.STACK, OperandFlag.ILLEGAL}) protected Value newArgument;
+
+        public ValueDefOp(Value newArgument) {
+            super(TYPE);
+            this.newArgument = newArgument;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb) {
+
+        }
+    }
+
     public interface NullCheck {
         Value getCheckedValue();
 
