@@ -1481,11 +1481,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 ObjectState state = states[i].getObjectState(virtualInstanceNode.getObjectId());
                                 tempVirtual = virtualizeFromInlineObject(state.getMaterializedValue(), states, i,
                                                 StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])), virtualInstanceNode, state);
-                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, tempVirtual);
 
                             } else {
                                 tempVirtual = virtualizeFromInlineObject(entry, states, i, StampFactory.object(TypeReference.create(tool.getAssumptions(), types[valueIndex])),
                                                 getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, null), null);
+                                // cache the new virtual object
                                 getEntryMergeObject(resultObject, getObject.applyAsInt(i), valueIndex, i, currentScalarizationDepth, merge, tempVirtual);
 
                             }
