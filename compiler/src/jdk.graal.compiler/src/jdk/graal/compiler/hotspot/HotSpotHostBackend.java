@@ -269,6 +269,11 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
 
             // create real entry point frame
             HotSpotFrameMap frameMap = (HotSpotFrameMap) crb.frameMap;
+            /*
+             * Calling frameMap.getStackIncrement is not valid if no stack extension was performed,
+             * so we just use the value 0. This is because the function just returns the stack size
+             * of the new arguments if we are not compiling an actual entry point.
+             */
             crb.frameContext.enter(crb, performedStackExtension ? frameMap.getStackIncrement() : 0, false);
             asm.jmp(verifiedEntry);
         }
