@@ -333,4 +333,6 @@ public final class GraalOptions {
 
     @Option(help = "Defines if we want to create the additional entry points in Valhalla by creating a graph and emitting code. Otherwise the entry point will be created with the assembler.", type = OptionType.Debug)
     public static final OptionKey<Boolean> CreateValhallaEntryPointWithGraph = new OptionKey<>(true);
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> CheckNullableVirtualInputs = new OptionKey<>(false);
 }

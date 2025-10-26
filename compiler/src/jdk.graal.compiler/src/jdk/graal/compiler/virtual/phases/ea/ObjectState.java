@@ -250,6 +250,11 @@ public class ObjectState {
         }
     }
 
+    public void setEntries(ValueNode[] entries) {
+        this.entries = entries;
+        this.unsetFields = new boolean[0];
+    }
+
     public void escape(ValueNode materialized) {
         assert isVirtual();
         assert materialized != null;
@@ -315,7 +320,7 @@ public class ObjectState {
      * @return true if all fields were initialized, false otherwise.
      */
     public boolean isLarval() {
-        if (unsetFields.length != 0) {
+        if (unsetFields.length == 0) {
             return false;
         }
         for (int i = 0; i < unsetFields.length; i++) {
