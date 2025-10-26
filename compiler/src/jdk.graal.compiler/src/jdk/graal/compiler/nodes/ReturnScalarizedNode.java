@@ -211,11 +211,19 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
         for (int i = 0; i < fields.length; i++) {
             int fieldIndex = alias.fieldIndex(fields[i]);
             ValueNode entry = tool.getEntry(alias, fieldIndex);
-            if (entry instanceof VirtualObjectNode) {
-                tool.ensureMaterialized((VirtualObjectNode) entry);
-            }
-            tool.replaceFirstInput(fieldValues.get(i), tool.getAlias(entry));
+            replaceInputWithMaterializedValue(tool, entry, i);
         }
+    }
+
+    private void replaceInputWithMaterializedValue(VirtualizerTool tool, ValueNode entry, int index) {
+        if (entry instanceof VirtualObjectNode virtualObjectNode) {
+            tool.ensureMaterialized(virtualObjectNode);
+        }
+        ValueNode alias = tool.getAlias(entry);
+        if (alias instanceof VirtualObjectNode virtualObjectNode) {
+            tool.replaceFirstInput(fieldValues.get(index), tool.getOop(virtualObjectNode));
+        }
+        tool.replaceFirstInput(fieldValues.get(index), tool.getAlias(entry));
     }
 
 }
