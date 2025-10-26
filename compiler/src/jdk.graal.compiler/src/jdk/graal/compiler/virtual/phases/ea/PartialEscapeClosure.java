@@ -1453,6 +1453,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                         // Disallow scalarization of value objects as they are
                                         // larval and we are not allowed to lose identity.
                                         virtualize = false;
+                                        break;
                                     }
                                 }
                             }
