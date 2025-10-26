@@ -28,6 +28,10 @@ import jdk.vm.ci.code.StackSlot;
 
 public interface HotSpotEntryPointFrameMap extends HotSpotFrameMap {
 
+    default boolean entryPointNeedsStackExtension() {
+        return getStackIncrement() > 0;
+    }
+
     int getOldArgumentsStartOffset();
 
     int getNewArgumentsStartOffset();

@@ -188,7 +188,7 @@ public class AMD64HotSpotFrameMap extends AMD64FrameMap implements HotSpotFrameM
             // stack increment needs to be located directly under rbp
             stackPointerIncrementSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
             stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory,
-                            initialSpillSize);
+                            initialSpillSize, false);
         }
         deoptimizationRescueSlot = allocateSpillSlot(LIRKind.value(AMD64Kind.QWORD));
 

@@ -61,11 +61,11 @@ public class AArch64HotSpotEntryPointFrameMap extends AArch64FrameMap implements
     private final int newArgumentsStartOffset;
 
     public AArch64HotSpotEntryPointFrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig, ResolvedJavaMethod targetMethod, ReferenceMapBuilderFactory referenceMapFactory,
-                    ValueKindFactory<?> valueKindFactory) {
+                    ValueKindFactory<?> valueKindFactory, boolean receiverOnly) {
         super(codeCache, registerConfig, referenceMapFactory);
         this.initialSpillSize = 0;
         this.spillSize = initialSpillSize;
-        stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory, initialSpillSize);
+        stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory, initialSpillSize, receiverOnly);
         oldArgumentsStartOffset = stackIncrement + initialSpillSize;
         newArgumentsStartOffset = initialSpillSize;
 

@@ -667,9 +667,9 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     }
 
     @Override
-    public FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
+    public FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod, boolean receiverOnly) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        FrameMap frameMap = new AArch64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
+        FrameMap frameMap = new AArch64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this, receiverOnly);
         return new AArch64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 

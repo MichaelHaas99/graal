@@ -56,7 +56,7 @@ public class AArch64HotSpotFrameMap extends AArch64FrameMap implements HotSpotFr
             // stack pointer increment needs to be located directly under rbp
             stackPointerIncrementSlot = allocateSpillSlot(LIRKind.value(AArch64Kind.QWORD));
             stackIncrement = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, getTarget(), valueKindFactory,
-                            initialSpillSize);
+                            initialSpillSize, false);
         }
     }
 

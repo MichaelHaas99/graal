@@ -16,6 +16,7 @@ import jdk.graal.compiler.core.target.Backend;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.DebugOptions;
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.stubs.HotSpotGraphKit;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
@@ -46,6 +47,8 @@ import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
@@ -80,6 +83,44 @@ public class ValhallaEntryPointCreator {
         this.targetMethod = targetMethod;
     }
 
+    /**
+     * There is no need to perform a move if the dst and src value are already equal. For stack
+     * slots this is only valid if no stack extension was performed.
+     */
+    private boolean needMove(Value oldValue, Value newValue, boolean entryPointNeedsStackExtension) {
+        if (ValueUtil.isStackSlot(oldValue) && ValueUtil.isStackSlot(newValue) && !entryPointNeedsStackExtension) {
+            StackSlot oldSlot = ValueUtil.asStackSlot(oldValue);
+            StackSlot newSlot = ValueUtil.asStackSlot(newValue);
+            if (oldSlot.getRawOffset() == newSlot.getRawOffset()) {
+                return false;
+            }
+        }
+        if (ValueUtil.isRegister(oldValue) && ValueUtil.isRegister(newValue)) {
+            Register oldRst = ValueUtil.asRegister(oldValue);
+            Register newRst = ValueUtil.asRegister(newValue);
+            if (oldRst.equals(newRst)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void appendMoveArgumentsForRO(List<ValueNode> oldArguments, List<Value> oldValues, List<Value> newValues, boolean entryPointNeedsStackExtension, HotSpotGraphKit kit) {
+        List<ValueNode> updatedOldArguments = new ArrayList<>();
+        List<Value> updatedNewValues = new ArrayList<>();
+        for (int i = 0; i < oldArguments.size(); i++) {
+            if (needMove(oldValues.get(i), newValues.get(i), entryPointNeedsStackExtension)) {
+                updatedOldArguments.add(oldArguments.get(i));
+                updatedNewValues.add(newValues.get(i));
+            }
+        }
+        if (updatedOldArguments.isEmpty()) {
+            return;
+        }
+        kit.append(new MoveArgumentsToDestinationNode(updatedOldArguments, targetMethod, updatedNewValues));
+
+    }
+
     protected final StructuredGraph getGraph(DebugContext debug, boolean receiverOnly, Backend backend) {
         try {
 
@@ -88,13 +129,20 @@ public class ValhallaEntryPointCreator {
             graph.getGraphState().forceDisableFrameStateVerification();
             List<ValueNode> oldArguments = createParameters(kit, receiverOnly);
             FixedNode addBefore = kit.append(new ValueAnchorNode());
+            RegisterConfig registerConfig = backend.getCodeCache().getRegisterConfig();
 
-            JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
-            CallingConvention callingConvention = backend.getCodeCache().getRegisterConfig().getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
+            JavaType[] oldParameterTypes = receiverOnly ? GraalValhallaServices.getScalarizedParameters(targetMethod, false).toArray(new JavaType[0])
+                            : targetMethod.getSignature().toParameterTypes(targetMethod.isStatic() ? null : targetMethod.getDeclaringClass());
+            CallingConvention oldCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, oldParameterTypes, backend);
+            Value[] oldValues = oldCC.getArguments();
+            boolean entryPointNeedsStackExtension = HotSpotFrameMap.computeStackIncrement(targetMethod, registerConfig, backend.getTarget(), backend, 0, receiverOnly) > 0;
+
+            JavaType[] newParameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
+            CallingConvention newCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, newParameterTypes,
                             backend);
-            Value[] values = callingConvention.getArguments();
-            for (int i = 0; i < values.length; i++) {
-                Value dst = values[i];
+            Value[] newValues = newCC.getArguments();
+            for (int i = 0; i < newValues.length; i++) {
+                Value dst = newValues[i];
                 if (ValueUtil.isStackSlot(dst)) {
                     StackSlot slot = ValueUtil.asStackSlot(dst);
                     slot.setNewArgument(true);
@@ -103,13 +151,16 @@ public class ValhallaEntryPointCreator {
             if (receiverOnly) {
                 // For the RO entry point we only need to scalarize the receiver, the
                 // rest is already scalarized
-                kit.append(new MoveArgumentsToDestinationNode(oldArguments.subList(1, oldArguments.size()), targetMethod, List.of(values).subList(1, values.length)));
+                int scalarizedReceiverLength = GraalValhallaServices.getScalarizedReceiver(targetMethod).size();
+                appendMoveArgumentsForRO(oldArguments.subList(1, oldArguments.size()), List.of(oldValues).subList(1, oldValues.length),
+                                List.of(newValues).subList(scalarizedReceiverLength, newValues.length),
+                                entryPointNeedsStackExtension, kit);
                 addBefore = kit.append(new ValueAnchorNode());
                 ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.getFirst(), targetMethod.getDeclaringClass().getInstanceFields(true));
-                kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedReceiver), targetMethod, List.of(values).subList(0, 1)));
+                kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedReceiver), targetMethod, List.of(newValues).subList(0, scalarizedReceiverLength)));
             } else {
                 int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
-                int index = values.length;
+                int index = newValues.length;
                 // iterate in reverse order
                 for (int signatureIndex = parameterLength - 1; signatureIndex >= 0; signatureIndex--) {
                     boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
@@ -152,7 +203,7 @@ public class ValhallaEntryPointCreator {
                                             }
                                         }
                                         MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(onlyDefine ? List.of() : List.of(phiValue), targetMethod,
-                                                        List.of(values).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
+                                                        List.of(newValues).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
                                         if (phiValue instanceof FixedWithNextNode fixedNode) {
                                             graph.addAfterFixed(fixedNode, mover);
                                         } else {
@@ -161,20 +212,26 @@ public class ValhallaEntryPointCreator {
                                     }
                                 } else {
                                     kit.append(new MoveArgumentsToDestinationNode(List.of(node), targetMethod,
-                                                    List.of(values).subList(index - scalarizedParam.length + i, index + i + 1)));
+                                                    List.of(newValues[index - scalarizedParam.length + i])));
                                 }
                         }
                         index -= scalarizedParam.length;
                         addBefore = kit.append(new ValueAnchorNode());
                     } else {
+                        Value newValue = newValues[index - 1];
+                        Value oldValue = oldValues[signatureIndex];
+                        if (!needMove(oldValue, newValue, entryPointNeedsStackExtension)) {
+                            index--;
+                            continue;
+                        }
                         // no need to scalarize just take the old value
-                        kit.append(new MoveArgumentsToDestinationNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(values).subList(index - 1, index)));
+                        kit.append(new MoveArgumentsToDestinationNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(newValue)));
                         index--;
                         addBefore = kit.append(new ValueAnchorNode());
                     }
                 }
             }
-            kit.append(new DummyControlSinkNode(values));
+            kit.append(new DummyControlSinkNode(newValues));
             debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Verified inline entry point%s graph before compilation", receiverOnly ? " receiver only" : "");
             return graph;
         } catch (Exception e) {
@@ -283,6 +340,7 @@ public class ValhallaEntryPointCreator {
         }
         kit.getGraph().setEntryPointCFG(true);
         kit.getGraph().setEntryPointOriginalParameterTypes(oldTypes);
+        kit.getGraph().setReceiverOnly(receiverOnly);
         return parameters;
     }
 }

@@ -39,18 +39,34 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public interface HotSpotFrameMap {
 
+    /**
+     * Returns the stack increment to use when extending the stack frame.
+     */
     int getStackIncrement();
 
     static int computeStackIncrement(ResolvedJavaMethod targetMethod, RegisterConfig registerConfig, TargetDescription targetDescription, ValueKindFactory<?> valueKindFactory,
-                    int preservedSlotsSize) {
-        JavaType[] parameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
-        CallingConvention callingConvention = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, parameterTypes,
-                        valueKindFactory);
-        int stackIncrement = (callingConvention.getStackSize() + preservedSlotsSize);
-        int stackAlignment = targetDescription.stackAlignment;
-        return stackIncrement % stackAlignment == 0 ? stackIncrement : ((stackIncrement / stackAlignment) + 1) * stackAlignment;
+                    int preservedSlotsSize, boolean receiverOnly) {
+        JavaType[] currentParameterTypes = receiverOnly ? GraalValhallaServices.getScalarizedParameters(targetMethod, false).toArray(new JavaType[0])
+                        : targetMethod.getSignature().toParameterTypes(targetMethod.isStatic() ? null : targetMethod.getDeclaringClass());
+        CallingConvention currentCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, valueKindFactory);
+
+        JavaType[] expectedParameterTypes = GraalValhallaServices.getScalarizedParameters(targetMethod, true).toArray(new JavaType[0]);
+        CallingConvention expectedCC = registerConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, valueKindFactory);
+
+        int currentStackSizeArguments = currentCC.getStackSize();
+        int expectedStackSizeArguments = expectedCC.getStackSize();
+
+        if (expectedStackSizeArguments > currentStackSizeArguments) {
+            int stackIncrement = (expectedCC.getStackSize() + preservedSlotsSize);
+            int stackAlignment = targetDescription.stackAlignment;
+            return stackIncrement % stackAlignment == 0 ? stackIncrement : ((stackIncrement / stackAlignment) + 1) * stackAlignment;
+        }
+        return 0;
     }
 
+    /**
+     * Checks if we need to repair the stack when leaving a method frame.
+     */
     boolean frameLeaveNeedsStackRepair();
 
     static boolean checkFrameLeaveNeedsStackRepair(ResolvedJavaMethod targetMethod, CodeCacheProvider codeCache, ValhallaOptionsProvider valhallaOptionsProvider,

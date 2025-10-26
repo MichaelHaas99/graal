@@ -216,7 +216,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         FrameMapBuilder builder;
         boolean isEntryPoint = graph.isEntryPointCFG();
         if (graph.isEntryPointCFG()) {
-            builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method());
+            builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method(), graph.isReceiverOnly());
         } else {
             builder = newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method());
         }
@@ -233,28 +233,13 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
      */
     public boolean scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
 
-        Assembler<?> asm = crb.asm;
-        // VIEP: nothing scalarized yet
-        // VIEP_RO: everything except receiver already scalarized
-        JavaType[] currentParameterTypes = receiverOnly ? GraalValhallaServices.getScalarizedParameters(rootMethod, false).toArray(new JavaType[0])
-                        : rootMethod.getSignature().toParameterTypes(rootMethod.isStatic() ? null : rootMethod.getDeclaringClass());
-        CallingConvention currentCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, currentParameterTypes, this);
-
-        // VEP: the parameters that are expected
-        JavaType[] expectedParameterTypes = GraalValhallaServices.getScalarizedParameters(rootMethod, true).toArray(new JavaType[0]);
-        CallingConvention expectedCC = regConfig.getCallingConvention(HotSpotCallingConventionType.JavaCallee, null, expectedParameterTypes, this);
-
-        int currentStackSizeArguments = currentCC.getStackSize(); /* sig args on stack */
-        int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
-
-        boolean performedStackExtension = false;
-        if (expectedStackSizeArguments > currentStackSizeArguments) {
+        boolean performStackExtension = ((HotSpotEntryPointFrameMap) crb.frameMap).entryPointNeedsStackExtension();
+        if (performStackExtension) {
             entryPointStackExtension(crb);
-            performedStackExtension = true;
         }
         ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
                         receiverOnly, crb);
-        return performedStackExtension;
+        return performStackExtension;
     }
 
     /**
@@ -500,7 +485,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         }
     }
 
-    protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
+    protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod, boolean receiverOnly) {
         throw new UnsupportedOperationException("entry point frame map builder implemented");
     }
 

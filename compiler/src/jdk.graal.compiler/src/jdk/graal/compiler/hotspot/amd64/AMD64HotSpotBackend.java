@@ -125,9 +125,9 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         return new AMD64HotSpotFrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
-    protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod) {
+    protected FrameMapBuilder newEntryPointFrameMapBuilder(RegisterConfig registerConfig, ResolvedJavaMethod targetMethod, boolean receiverOnly) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
-        AMD64FrameMap frameMap = new AMD64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this);
+        AMD64FrameMap frameMap = new AMD64HotSpotEntryPointFrameMap(getCodeCache(), registerConfigNonNull, targetMethod, this, this, receiverOnly);
         return new AMD64FrameMapBuilder(frameMap, getCodeCache(), registerConfigNonNull);
     }
 
@@ -483,11 +483,12 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         int expectedStackSizeArguments = expectedCC.getStackSize(); /* sig_cc args on stack */
         AllocatableValue[] expectedArguments = expectedCC.getArguments();
 
-        int spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
+        int spInc = 0;
         boolean performedStackExtension = false;
         if (expectedStackSizeArguments > currentStackSizeArguments) {
             entryPointStackExtension(crb);
             performedStackExtension = true;
+            spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
         }
         if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
             ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),

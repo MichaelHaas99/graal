@@ -3,6 +3,7 @@ package jdk.graal.compiler.hotspot.replacements;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.lir.StandardOp;
@@ -34,10 +35,12 @@ public class MoveArgumentsToDestinationNode extends FixedWithNextNode implements
         this.newArguments = new NodeInputList<>(this, newArguments);
         this.targetMethod = targetMethod;
         this.values = values;
+        GraalError.guarantee(newArguments.isEmpty() || newArguments.size() == values.size(), "size does not match");
     }
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
+        // use MyValue1.test9 to check if no necessary move
         if (newArguments.isEmpty()) {
             assert values.size() == 1 : "values should only contain one value";
             generator.getLIRGeneratorTool().append(new StandardOp.ValueDefOp(values.get(0)));
@@ -46,11 +49,11 @@ public class MoveArgumentsToDestinationNode extends FixedWithNextNode implements
         // process in the reverse order as the stack is likely to be extended and slots are not
         // block by old arguments
         for (int i = newArguments.size() - 1; i >= 0; i--) {
-            ValueNode param = newArguments.get(i);
-            Value dst = values.get(i);
-            assert dst.getValueKind().equals(generator.getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT))) : dst + " " +
-                            generator.getLIRGeneratorTool().getLIRKind(param.stamp(NodeView.DEFAULT));
-            generator.getLIRGeneratorTool().emitMove((AllocatableValue) dst, generator.operand(param));
+            ValueNode newArgument = newArguments.get(i);
+            Value newValue = values.get(i);
+            assert newValue.getValueKind().equals(generator.getLIRGeneratorTool().getLIRKind(newArgument.stamp(NodeView.DEFAULT))) : newValue + " " +
+                            generator.getLIRGeneratorTool().getLIRKind(newArgument.stamp(NodeView.DEFAULT));
+            generator.getLIRGeneratorTool().emitMove((AllocatableValue) newValue, generator.operand(newArgument));
         }
     }
 }

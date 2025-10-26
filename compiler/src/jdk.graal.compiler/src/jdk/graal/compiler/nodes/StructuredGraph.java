@@ -575,6 +575,16 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         isEntryPointCFG = entryPointCFG;
     }
 
+    private boolean receiverOnly;
+
+    public boolean isReceiverOnly() {
+        return receiverOnly;
+    }
+
+    public void setReceiverOnly(boolean receiverOnly) {
+        this.receiverOnly = receiverOnly;
+    }
+
     private List<JavaType> entryPointOriginalParameterTypes;
 
     public List<JavaType> getEntryPointOriginalParameterTypes() {
