@@ -405,6 +405,13 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 // with an oop
                 obj.setNonNull(ConstantNode.forInt(1, fixed.graph()));
             }
+            for (int i = 0; i < entries.length; i++) {
+                if (entries[i] instanceof VirtualObjectNode) {
+                    VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
+                    ObjectState entryObj = getObjectState(entryVirtual);
+                    GraalError.guarantee(entryObj.isMaterialized(), "object state should be materialized");
+                }
+            }
         } else {
             VirtualUtil.trace(options, debug, "materialized %s as %s", virtual, representation);
             otherAllocations.add(representation);

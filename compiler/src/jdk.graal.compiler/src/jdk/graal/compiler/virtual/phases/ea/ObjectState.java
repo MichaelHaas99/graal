@@ -242,7 +242,7 @@ public class ObjectState {
     }
 
     public void setEntry(int index, ValueNode value) {
-        assert !isMaterialized();
+        assert isVirtual();
         cachedState = null;
         entries[index] = value;
         if (unsetFields.length != 0) {
