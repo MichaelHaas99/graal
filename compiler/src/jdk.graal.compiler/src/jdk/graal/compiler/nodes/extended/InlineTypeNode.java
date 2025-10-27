@@ -79,6 +79,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.nonNull = nonNull;
+        // TODO: refactor such that no null value is allowed?
         GraalError.guarantee((nonNull == null) == (oop == null), "both should be either null or not null");
         this.isAllocatedOrNull = isAllocatedOrNull;
         GraalError.guarantee(type.getInstanceFields(true).length == entries.length, "field size does not match value size");
@@ -97,7 +98,21 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return oop;
     }
 
+    public ValueNode getOopOrDefault() {
+        if (oop == null) {
+            return ConstantNode.defaultForKind(JavaKind.Object, this.graph());
+        }
+        return oop;
+    }
+
     public ValueNode getNonNull() {
+        return nonNull;
+    }
+
+    public ValueNode getNonNullOrDefault() {
+        if (nonNull == null) {
+            return ConstantNode.forInt(1, this.graph());
+        }
         return nonNull;
     }
 

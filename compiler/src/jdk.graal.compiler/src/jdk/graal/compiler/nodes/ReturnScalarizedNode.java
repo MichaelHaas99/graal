@@ -70,11 +70,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
                 returnNode = b.add(new ReturnScalarizedNode(inlineTypeNode.getOop(), list));
             } else {
                 ConstantNode hub = b.add(createHub(b, result, inlineTypeNode.getType()));
-                ValueNode nonNull = inlineTypeNode.getNonNull();
+                ValueNode nonNull = inlineTypeNode.getNonNullOrDefault();
                 if (StampTool.isPointerNonNull(result)) {
                     nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
                 }
-                ValueNode returnResultDecider = b.add(ReturnResultDeciderNode.create(b.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOop(), hub));
+                ValueNode returnResultDecider = b.add(ReturnResultDeciderNode.create(b.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOopOrDefault(), hub));
                 returnNode = b.add(new ReturnScalarizedNode(returnResultDecider, list));
             }
         } else {
