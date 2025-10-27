@@ -215,7 +215,7 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
     public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
         FrameMapBuilder builder;
         boolean isEntryPoint = graph.isEntryPointCFG();
-        if (graph.isEntryPointCFG()) {
+        if (isEntryPoint) {
             builder = newEntryPointFrameMapBuilder(registerAllocationConfig.getRegisterConfig(), graph.method(), graph.isReceiverOnly());
         } else {
             builder = newFrameMapBuilderWithStackRepair(registerAllocationConfig.getRegisterConfig(), (Stub) stub, graph.method());
