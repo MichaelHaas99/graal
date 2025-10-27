@@ -88,12 +88,9 @@ public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowera
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(oop);
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
-            ValueNode newNode;
-            if (tool.isAllocatedOrNull(virtualObjectNode)) {
-                newNode = ReturnResultDeciderNode.create(this.getStackKind(), nonNull, tool.getOop(virtualObjectNode), hub);
-            } else {
-                newNode = ReturnResultDeciderNode.create(this.getStackKind(), nonNull, ConstantNode.defaultForKind(JavaKind.Object, this.graph()), hub);
-            }
+            ValueNode oop = tool.getOop(virtualObjectNode);
+            oop = (oop == null ? ConstantNode.defaultForKind(JavaKind.Object, this.graph()) : oop);
+            ValueNode newNode = ReturnResultDeciderNode.create(this.getStackKind(), nonNull, oop, hub);
             tool.ensureAdded(newNode);
             tool.replaceWith(newNode);
         }
