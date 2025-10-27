@@ -247,7 +247,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
             AMD64HotSpotFrameMap hotSpotFrameMap = (AMD64HotSpotFrameMap) crb.frameMap;
-            if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
+            if (hotSpotFrameMap.frameLeaveNeedsStackRepair() && crb.compilationResult.getEntryBCI() == -1) {
                 // method needs stack repair
                 // stack increment doesn't include RBP so add it, RA and padding already included
                 asm.movptr(new AMD64Address(rsp, frameMap.offsetForStackSlot(hotSpotFrameMap.getStackPointerIncrementSlot())),
@@ -332,7 +332,8 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
             AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
             assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
 
-            if (allowStackRepair && frameMap.frameLeaveNeedsStackRepair()) {
+            // only allow stack repair for non OSR compilations
+            if (allowStackRepair && frameMap.frameLeaveNeedsStackRepair() && crb.compilationResult.getEntryBCI() == -1) {
                 // needs stack repair
 
                 if (frameMap.preserveFramePointer()) {

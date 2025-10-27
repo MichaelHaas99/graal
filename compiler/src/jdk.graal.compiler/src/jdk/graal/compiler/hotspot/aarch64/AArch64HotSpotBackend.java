@@ -221,7 +221,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 if (config.preserveFramePointer(isStub)) {
                     masm.add(64, fp, sp, frameSize);
                 }
-                if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
+                if (hotSpotFrameMap.frameLeaveNeedsStackRepair() && crb.compilationResult.getEntryBCI() == -1) {
                     masm.mov(scratch, spInc);
                     masm.str(64, scratch, AArch64Address.createImmediateAddress(64, addressingMode, sp, spIncSlotOffset));
                 }
@@ -231,7 +231,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
                 if (config.preserveFramePointer(isStub)) {
                     masm.mov(64, fp, sp);
                 }
-                if (hotSpotFrameMap.frameLeaveNeedsStackRepair()) {
+                if (hotSpotFrameMap.frameLeaveNeedsStackRepair() && crb.compilationResult.getEntryBCI() == -1) {
                     masm.mov(scratch, spInc);
                     masm.str(64, scratch, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -wordSize));
                     frameRecordSize -= wordSize;
@@ -409,7 +409,8 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         @Override
         public void leave(CompilationResultBuilder crb, boolean allowStackRepair) {
             AArch64HotSpotFrameMap frameMap = (AArch64HotSpotFrameMap) crb.frameMap;
-            if (allowStackRepair && frameMap.frameLeaveNeedsStackRepair()) {
+            // only allow stack repair for non OSR compilations
+            if (allowStackRepair && frameMap.frameLeaveNeedsStackRepair() && crb.compilationResult.getEntryBCI() == -1) {
                 AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
                 // see macroAssembler_aarch64.cpp MacroAssembler::remove_frame
                 try (ScratchRegister sc = masm.getScratchRegister()) {
