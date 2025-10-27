@@ -33,7 +33,11 @@ import jdk.vm.ci.meta.Value;
  * The {@link ReturnScalarizedNode} represents a return of a nullable scalarized inline object. see
  * Compile::return_values in parse.cpp of the C2 compiler. In case the scalarized inline object is
  * not null, either an non-null oop is placed into the first register or the tagged hub. In case the
- * scalarized inline object is null, a null pointer is placed into the first register.
+ * scalarized inline object is null, a null pointer is placed into the first register. TODO: phases
+ * which insert safepoints are not allowed to directly insert them before this node. Instead they
+ * need to insert them before {@link ReturnResultDeciderNode}. As
+ * {@code LoopSafepointInsertionPhase} only inserts them in loops we are fine for the Graal JIT.
+ * This not the case for substrate.
  */
 @NodeInfo(nameTemplate = "ReturnScalarized")
 public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, Lowerable {
