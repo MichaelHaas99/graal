@@ -116,11 +116,12 @@ public class ObjectState {
         this.nonNull = nonNull;
     }
 
-    public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized) {
+    public ObjectState(ValueNode materializedValue, LockState locks, boolean ensureVirtualized, ValueNode nonNull) {
         assert materializedValue != null;
         this.materializedValue = materializedValue;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
+        this.nonNull = nonNull;
     }
 
     private ObjectState(ObjectState other) {

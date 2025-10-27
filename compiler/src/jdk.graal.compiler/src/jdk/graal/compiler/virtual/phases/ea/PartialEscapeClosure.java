@@ -1038,6 +1038,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         boolean ensureVirtual = true;
                         int[] sourceObjects = new int[states.length];
                         ValueNode uniqueMaterializedValue = !startObj.isMaterialized() ? null : startObj.getMaterializedValue();
+                        ValueNode uniqueNonNullValue = startObj.getNonNull();
                         ResolvedJavaType type = StampTool.typeOrNull(virtualObjects.get(object), tool.getMetaAccess());
                         assert type != null : "expected type to be non-null";
                         boolean allMaterialized = true;
@@ -1096,7 +1097,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             materialized |= mergeObjectStates(object, sourceObjects, states);
                         } else {
                             if (uniqueMaterializedValue != null) {
-                                newState.addObject(object, new ObjectState(uniqueMaterializedValue, null, ensureVirtual));
+                                newState.addObject(object, new ObjectState(uniqueMaterializedValue, null, ensureVirtual, uniqueNonNullValue));
                             } else {
                                 PhiNode materializedValuePhi = getPhi(object, StampFactory.forKind(JavaKind.Object));
                                 mergeEffects.addFloatingNode(materializedValuePhi, "materializedPhi");
@@ -1114,7 +1115,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     }
                                     setPhiInput(materializedValuePhi, i, obj.getMaterializedValue());
                                 }
-                                newState.addObject(object, new ObjectState(materializedValuePhi, null, false));
+                                newState.addObject(object, new ObjectState(materializedValuePhi, null, false, null));
                             }
                         }
                     }
@@ -1737,7 +1738,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         setPhiInput(materializedValuePhi, i, states[i].getObjectState(object).getMaterializedValue());
                     }
                 }
-                newState.addObject(resultObject, new ObjectState(materializedValuePhi, null, ensureVirtual));
+                newState.addObject(resultObject, new ObjectState(materializedValuePhi, null, ensureVirtual, null));
                 return true;
             }
         }
