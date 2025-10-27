@@ -16,11 +16,13 @@ import jdk.graal.compiler.core.target.Backend;
 import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.debug.DebugOptions;
 import jdk.graal.compiler.debug.GraalError;
+import jdk.graal.compiler.hotspot.HotSpotEntryPointFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotFrameMap;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
 import jdk.graal.compiler.hotspot.stubs.HotSpotGraphKit;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilderFactory;
+import jdk.graal.compiler.lir.framemap.FrameMap;
 import jdk.graal.compiler.lir.phases.LIRPhase;
 import jdk.graal.compiler.lir.phases.LIRSuites;
 import jdk.graal.compiler.lir.phases.PostAllocationOptimizationPhase;
@@ -245,18 +247,22 @@ public class ValhallaEntryPointCreator {
 
     }
 
-    public void emitCode(final Backend backend, boolean receiverOnly, CompilationResultBuilder builder) {
+    public int emitCode(final Backend backend, boolean receiverOnly, CompilationResultBuilder builder) {
         try (DebugContext debug = openDebugContext(DebugContext.forCurrentThread())) {
             try (DebugContext.Scope d = debug.scope("Compiling entry point", providers.getCodeCache(), debugScopeContext())) {
                 final StructuredGraph graph = getGraph(debug, receiverOnly, backend);
-                buildCompilationResult(debug, backend, graph, builder);
+                return buildCompilationResult(debug, backend, graph, builder);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
         }
     }
 
-    private void buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationResultBuilder crb) {
+    private static class FrameMapSaver {
+        FrameMap frameMap;
+    }
+
+    private int buildCompilationResult(DebugContext debug, final Backend backend, StructuredGraph graph, CompilationResultBuilder crb) {
 
         // Entry points cannot be recompiled so they cannot be compiled with assumptions
         assert graph.getAssumptions() == null;
@@ -267,10 +273,15 @@ public class ValhallaEntryPointCreator {
             LIRSuites lirSuites = createLIRSuites();
             // we want to directly add the entry point code to the nmethod so use the asm of the crb
             // parameter instead of creating a new assembler
+            final FrameMapSaver frameMapSaver = new FrameMapSaver();
             CompilationResultBuilderFactory entryPointFactory = (providers, frameMap, asm, dataBuilder, frameContext, options, debug1, compilationResult, nullRegister,
-                            lir) -> CompilationResultBuilderFactory.Default.createBuilder(providers, frameMap, crb.asm, dataBuilder, frameContext, options, debug1, compilationResult, nullRegister,
-                                            lir);
+                            lir) -> {
+                frameMapSaver.frameMap = frameMap;
+                return CompilationResultBuilderFactory.Default.createBuilder(providers, frameMap, crb.asm, dataBuilder, frameContext, options, debug1, compilationResult, nullRegister,
+                                lir);
+            };
             backend.emitBackEnd(graph, null, targetMethod, crb.compilationResult, entryPointFactory, null, null, lirSuites);
+            return ((HotSpotEntryPointFrameMap) frameMapSaver.frameMap).getStackIncrement();
         } catch (Throwable e) {
             throw debug.handle(e);
         }

@@ -231,15 +231,9 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
      * Extends the stack if necessary and scalarizes all value class args. See
      * {@code MacroAssembler::unpack_inline_args}
      */
-    public boolean scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
-
-        boolean performStackExtension = ((HotSpotEntryPointFrameMap) crb.frameMap).entryPointNeedsStackExtension();
-        if (performStackExtension) {
-            entryPointStackExtension(crb);
-        }
-        ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
+    public int scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+        return ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
                         receiverOnly, crb);
-        return performStackExtension;
     }
 
     /**
@@ -265,16 +259,10 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
             // create dummy frame
             crb.frameContext.enter(crb, 0, true);
             crb.frameContext.leave(crb, false);
-            boolean performedStackExtension = scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
+            int stackIncrement = scalarizeValueObjects(rootMethod, crb, regConfig, markId == HotSpotMarkId.VERIFIED_INLINE_ENTRY_RO);
 
             // create real entry point frame
-            HotSpotFrameMap frameMap = (HotSpotFrameMap) crb.frameMap;
-            /*
-             * Calling frameMap.getStackIncrement is not valid if no stack extension was performed,
-             * so we just use the value 0. This is because the function just returns the stack size
-             * of the new arguments if we are not compiling an actual entry point.
-             */
-            crb.frameContext.enter(crb, performedStackExtension ? frameMap.getStackIncrement() : 0, false);
+            crb.frameContext.enter(crb, stackIncrement, false);
             asm.jmp(verifiedEntry);
         }
         asm.align(config.codeEntryAlignment);
@@ -290,6 +278,10 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
     }
 
     public void emitEntryPointCode(CompilationResultBuilder crb) {
+        boolean performStackExtension = ((HotSpotEntryPointFrameMap) crb.frameMap).entryPointNeedsStackExtension();
+        if (performStackExtension) {
+            entryPointStackExtension(crb);
+        }
         crb.emitLIR(false);
     }
 
@@ -444,8 +436,6 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
                     emitEntryPoint(installedCodeOwner, crb, regConfig,
                                     HotSpotMarkId.VERIFIED_INLINE_ENTRY, verifiedEntry);
                     verifiedInlineSet = true;
-                    // new ValhallaEntryPointCreator(getRuntime().getOptions(), getProviders(),
-                    // installedCodeOwner).getCode(getRuntime().getHostBackend(), null);
                 }
             } else if (!installedCodeOwner.isStatic()) {
                 // case (1)

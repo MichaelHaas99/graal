@@ -689,10 +689,10 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
         masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -2 * wordSize));
         try (ScratchRegister sc = masm.getScratchRegister()) {
             Register scratch = sc.getRegister();
-            int spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
+            int stackIncrement = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
             // the stack increment contains the fp and lr, as we just stored them on the stack
             // subtract it
-            masm.sub(64, sp, sp, spInc - 2 * wordSize, scratch);
+            masm.sub(64, sp, sp, stackIncrement - 2 * wordSize, scratch);
         }
     }
 

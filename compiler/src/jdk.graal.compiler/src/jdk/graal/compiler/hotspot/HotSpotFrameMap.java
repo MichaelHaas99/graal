@@ -42,6 +42,8 @@ public interface HotSpotFrameMap {
     /**
      * Returns the stack increment to use when extending the stack frame.
      */
+    // TODO move stack increment logic to subinterface once we delete the assembler logic in
+    // AMD64HotspotBackend.java
     int getStackIncrement();
 
     static int computeStackIncrement(ResolvedJavaMethod targetMethod, RegisterConfig registerConfig, TargetDescription targetDescription, ValueKindFactory<?> valueKindFactory,

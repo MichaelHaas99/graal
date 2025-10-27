@@ -74,7 +74,6 @@ import jdk.graal.compiler.hotspot.amd64.z.AMD64HotSpotZBarrierSetLIRGenerator;
 import jdk.graal.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import jdk.graal.compiler.hotspot.meta.HotSpotProviders;
-import jdk.graal.compiler.hotspot.replacements.ValhallaEntryPointCreator;
 import jdk.graal.compiler.hotspot.stubs.Stub;
 import jdk.graal.compiler.lir.LIR;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
@@ -465,7 +464,11 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
      * @return the stack increment
      */
     @Override
-    public boolean scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+    public int scalarizeValueObjects(ResolvedJavaMethod rootMethod, CompilationResultBuilder crb, RegisterConfig regConfig, boolean receiverOnly) {
+
+        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
+            return super.scalarizeValueObjects(rootMethod, crb, regConfig, receiverOnly);
+        }
         AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
 
         // VIEP: nothing scalarized yet
@@ -484,21 +487,15 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         AllocatableValue[] expectedArguments = expectedCC.getArguments();
 
         int spInc = 0;
-        boolean performedStackExtension = false;
+
         if (expectedStackSizeArguments > currentStackSizeArguments) {
             entryPointStackExtension(crb);
-            performedStackExtension = true;
             spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
-        }
-        if (CreateValhallaEntryPointWithGraph.getValue(getRuntime().getOptions())) {
-            ValhallaEntryPointCreator.create(getRuntime().getOptions(), getProviders(), rootMethod).emitCode(getRuntime().getHostBackend(),
-                            receiverOnly, crb);
-            return performedStackExtension;
         }
 
         shuffleInlineArgs(rootMethod, crb, asm, receiverOnly, currentParameterTypes, currentArguments, currentStackSizeArguments, expectedArguments,
                         spInc);
-        return performedStackExtension;
+        return spInc;
     }
 
     /**
@@ -1056,6 +1053,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 StackSlot newStackSlot = StackSlot.get(stackSlot.getValueKind(), stackSlot.getRawOffset() + spInc, stackSlot.getRawAddFrameSize());
                 currentArguments[i] = newStackSlot;
 
+
             }
             // make the slot read only to prevent accidental writing
             state[argumentToStateIndex(currentArguments[i])] = State.READ_ONLY;
@@ -1099,10 +1097,10 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     @Override
     public void entryPointStackExtension(CompilationResultBuilder crb) {
         AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
-        int spInc = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
+        int stackIncrement = ((HotSpotFrameMap) crb.frameMap).getStackIncrement();
         // pop the return address
         asm.pop(r13);
-        asm.decrementq(rsp, spInc);
+        asm.decrementq(rsp, stackIncrement);
 
         // push the return address
         asm.push(r13);
