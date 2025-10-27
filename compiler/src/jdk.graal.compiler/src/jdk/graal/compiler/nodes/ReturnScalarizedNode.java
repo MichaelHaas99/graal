@@ -12,6 +12,9 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
@@ -33,7 +36,7 @@ import jdk.vm.ci.meta.Value;
  * scalarized inline object is null, a null pointer is placed into the first register.
  */
 @NodeInfo(nameTemplate = "ReturnScalarized")
-public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
+public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, Lowerable {
     public static final NodeClass<ReturnScalarizedNode> TYPE = NodeClass.create(ReturnScalarizedNode.class);
 
     @OptionalInput private NodeInputList<ValueNode> fieldValues;
@@ -56,13 +59,24 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
     public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
-        // PEA will replace oop with tagged hub if it is virtual
-        ReturnScalarizedNode returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
-        returnNode.fieldValues.clear();
+        ReturnScalarizedNode returnNode;
         if (GraphUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
             List<ValueNode> list = inlineTypeNode.getEntries();
-            returnNode.fieldValues.addAll(list);
+            if (inlineTypeNode.isAllocatedOrNull()) {
+                returnNode = b.add(new ReturnScalarizedNode(inlineTypeNode.getOop(), list));
+            } else {
+                ConstantNode hub = b.add(createHub(b, result, inlineTypeNode.getType()));
+                ValueNode nonNull = inlineTypeNode.getNonNull();
+                if (StampTool.isPointerNonNull(result)) {
+                    nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
+                }
+                ValueNode returnResultDecider = b.add(ReturnResultDeciderNode.create(b.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOop(), hub));
+                returnNode = b.add(new ReturnScalarizedNode(returnResultDecider, list));
+            }
         } else {
+            // need to add the return node here as the util adds the cfg before a fixed node
+            returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
+            returnNode.fieldValues.clear();
             ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
             returnNode.fieldValues.addAll(List.of(phis));
         }
@@ -127,8 +141,8 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
             // make sure oop stays virtual and instead return hub with bit zero set
-            TypeReference type = StampTool.typeReferenceOrNull(alias);
-            assert type != null && type.isExact() : "type should not be null for constant hub node in scalarized return";
+            TypeReference typeReference = StampTool.typeReferenceOrNull(alias);
+            assert typeReference != null && typeReference.isExact() : "type should not be null for constant hub node in scalarized return";
 
             if (!tool.isNonNull(virtualObjectNode) || !tool.hasNullOop(virtualObjectNode)) {
                 // nullable scalarized inline object or non-null scalarized inline object including
@@ -138,8 +152,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 assert oop != null && nonNull != null : "nullable scalarized object expected oop and non-null information to be set";
 
                 // get hub
-                ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
-                                tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
+                ConstantNode hub = createHub(tool, result, typeReference.getType());
                 tool.addNode(hub);
 
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
@@ -151,19 +164,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
                 // and non-null). Therefore use its values to replace the input list.
                 // At a later stage this will remove the CFG which was created for the scalarized
                 // return.
-                replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, type.getType());
+                replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, typeReference.getType());
 
                 if (tool.isAllocatedOrNull(virtualObjectNode)) {
                     tool.replaceFirstInput(result, oop);
                 } else {
-                    if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE)) {
-                        // We shouldn't insert a ReturnResultDeciderNode during an earlier PEA as a
-                        // later PEA may insert an allocation below it. The allocation needs a frame
-                        // state. This would lead to an unknown reference alive across safepoint as
-                        // the ReturnResultDeciderNode merges a klass pointer with a tracked oop.
-                        return;
-                    }
-                    ValueNode returnResultDecider = new ReturnResultDeciderNode(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
+                    ValueNode returnResultDecider = ReturnResultDeciderNode.create(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
                     tool.ensureAdded(returnResultDecider);
                     tool.replaceFirstInput(result, returnResultDecider);
                 }
@@ -173,11 +179,10 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
 
             // materialize before tagged hub node, a klass pointer in a register is dangerous, make
             // sure it comes last
-            replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, type.getType());
+            replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, typeReference.getType());
 
             // get hub
-            ConstantNode hub = ConstantNode.forConstant(tool.getStampProvider().createHubStamp(((ObjectStamp) result.stamp(NodeView.DEFAULT))),
-                            tool.getConstantReflection().asObjectHub(type.getType()), tool.getMetaAccess());
+            ConstantNode hub = createHub(tool, result, typeReference.getType());
             tool.addNode(hub);
 
             // set bit zero to one
@@ -195,6 +200,11 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             // materialize the field values if they are virtual
             materializeFields(tool);
         }
+    }
+
+    private static ConstantNode createHub(CoreProviders providers, ValueNode node, ResolvedJavaType type) {
+        return ConstantNode.forConstant(providers.getStampProvider().createHubStamp(((ObjectStamp) node.stamp(NodeView.DEFAULT))),
+                        providers.getConstantReflection().asObjectHub(type), providers.getMetaAccess());
     }
 
     private void materializeFields(VirtualizerTool tool) {
@@ -224,6 +234,25 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable {
             tool.replaceFirstInput(fieldValues.get(index), tool.getOop(virtualObjectNode));
         }
         tool.replaceFirstInput(fieldValues.get(index), tool.getAlias(entry));
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER && result instanceof ReturnResultDeciderNode returnResultDeciderNode) {
+            /*
+             * Make sure the ReturnResultDeciderNode node is the last node before the return node.
+             * An earlier PEA may insert an allocation below it. The allocation needs a frame state.
+             * This would lead to an unknown reference alive across safepoint as the
+             * ReturnResultDeciderNode merges a klass pointer with a tracked oop.
+             */
+            if (this.predecessor() != result) {
+                StructuredGraph graph = graph();
+                FixedNode next = returnResultDeciderNode.next();
+                returnResultDeciderNode.setNext(null);
+                ((FixedWithNextNode) returnResultDeciderNode.predecessor()).setNext(next);
+                graph.addBeforeFixed(this, returnResultDeciderNode);
+            }
+        }
     }
 
 }

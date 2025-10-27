@@ -133,6 +133,7 @@ import jdk.graal.compiler.nodes.LoweredCallTargetNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PiNode;
+import jdk.graal.compiler.nodes.ReturnScalarizedNode;
 import jdk.graal.compiler.nodes.SafepointNode;
 import jdk.graal.compiler.nodes.StartNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -829,6 +830,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     protected void lowerReturnResultDecider(ReturnResultDeciderNode node, LoweringTool tool) {
+        assert node.hasExactlyOneUsage() : "expected only one usage";
+        ReturnScalarizedNode returnScalarizedNode = (ReturnScalarizedNode) node.usages().first();
+        returnScalarizedNode.lower(tool);
         returnResultDeciderSnippets.lower(node, tool);
     }
 
