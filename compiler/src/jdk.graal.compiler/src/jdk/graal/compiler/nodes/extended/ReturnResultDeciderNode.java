@@ -13,6 +13,9 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.Virtualizable;
+import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
@@ -24,7 +27,7 @@ import jdk.vm.ci.meta.JavaKind;
  * 
  */
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
+public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowerable, Canonicalizable, Virtualizable {
 
     public static final NodeClass<ReturnResultDeciderNode> TYPE = NodeClass.create(ReturnResultDeciderNode.class);
     @Input ValueNode nonNull;
@@ -58,7 +61,7 @@ public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowera
         if (nonNull.isJavaConstant()) {
             if (nonNull.asJavaConstant().asInt() == 1) {
                 if (oop.isJavaConstant()) {
-                    if (oop.asJavaConstant().isDefaultForKind()) {
+                    if (oop.asJavaConstant().isNull()) {
                         return new TagHubNode(hub);
                     } else {
                         return oop;
@@ -74,5 +77,25 @@ public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowera
     @Override
     public Node canonical(CanonicalizerTool tool) {
         return canonicalized(this, getStackKind(), nonNull, oop, hub);
+    }
+
+    @Override
+    public boolean virtualizeHandlesNullableVirtualInputs() {
+        return true;
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(oop);
+        if (alias instanceof VirtualObjectNode virtualObjectNode) {
+            ValueNode newNode;
+            if (tool.isAllocatedOrNull(virtualObjectNode)) {
+                newNode = ReturnResultDeciderNode.create(this.getStackKind(), nonNull, tool.getOop(virtualObjectNode), hub);
+            } else {
+                newNode = ReturnResultDeciderNode.create(this.getStackKind(), nonNull, ConstantNode.defaultForKind(JavaKind.Object, this.graph()), hub);
+            }
+            tool.ensureAdded(newNode);
+            tool.replaceWith(newNode);
+        }
     }
 }
