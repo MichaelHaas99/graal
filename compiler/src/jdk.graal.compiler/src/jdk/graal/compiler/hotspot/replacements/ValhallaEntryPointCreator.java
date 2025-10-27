@@ -2,19 +2,16 @@ package jdk.graal.compiler.hotspot.replacements;
 
 import static jdk.graal.compiler.core.GraalCompiler.emitFrontEnd;
 import static jdk.graal.compiler.core.common.CompilationIdentifier.INVALID_COMPILATION_ID;
-import static jdk.graal.compiler.core.common.GraalOptions.RegisterPressure;
 import static jdk.graal.compiler.debug.DebugOptions.DebugValhallaEntryPoints;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 
-import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
 import jdk.graal.compiler.core.target.Backend;
 import jdk.graal.compiler.debug.DebugContext;
-import jdk.graal.compiler.debug.DebugOptions;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.hotspot.HotSpotEntryPointFrameMap;
 import jdk.graal.compiler.hotspot.HotSpotFrameMap;
@@ -79,8 +76,7 @@ public class ValhallaEntryPointCreator {
     protected final ResolvedJavaMethod targetMethod;
 
     public ValhallaEntryPointCreator(OptionValues options, HotSpotProviders providers, ResolvedJavaMethod targetMethod) {
-        this.options = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningForStubsAndSnippets.getValue(options), RegisterPressure, null,
-                        DebugOptions.OptimizationLog, null);
+        this.options = options;
         this.providers = providers;
         this.targetMethod = targetMethod;
     }
