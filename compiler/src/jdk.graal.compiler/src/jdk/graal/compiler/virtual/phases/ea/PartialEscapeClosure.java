@@ -2282,6 +2282,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
             if (existingObjectState != null) {
                 existingObjectState.setEntries(entryState);
+                existingObjectState.setNonNull(nonNull);
                 updateStatesForScalarized(state, virtualObject, node);
                 return (VirtualInstanceNode) virtualObject;
             }
