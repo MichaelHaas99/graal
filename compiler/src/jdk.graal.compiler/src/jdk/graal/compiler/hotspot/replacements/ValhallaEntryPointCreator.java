@@ -23,17 +23,10 @@ import jdk.graal.compiler.lir.phases.LIRPhase;
 import jdk.graal.compiler.lir.phases.LIRSuites;
 import jdk.graal.compiler.lir.phases.PostAllocationOptimizationPhase;
 import jdk.graal.compiler.lir.profiling.MoveProfilingPhase;
-import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.DummyControlSinkNode;
-import jdk.graal.compiler.nodes.EndNode;
 import jdk.graal.compiler.nodes.FixedNode;
-import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.MergeNode;
-import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
@@ -49,7 +42,6 @@ import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -98,81 +90,35 @@ public class ValhallaEntryPointCreator {
                     slot.setNewArgument(true);
                 }
             }
+            List<ValueNode> newArguments = new ArrayList<>();
             if (receiverOnly) {
                 // For the RO entry point we only need to scalarize the receiver, the
                 // rest is already scalarized
-                kit.append(new MoveArgumentsToDestinationNode(oldArguments.subList(1, oldArguments.size()), targetMethod, List.of(newValues).subList(1, newValues.length)));
                 addBefore = kit.append(new ValueAnchorNode());
-                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.getFirst(), targetMethod.getDeclaringClass().getInstanceFields(true));
-                kit.append(new MoveArgumentsToDestinationNode(List.of(scalarizedReceiver), targetMethod, List.of(newValues).subList(0, 1)));
+                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFGReversed(addBefore, oldArguments.getFirst(), targetMethod.getDeclaringClass().getInstanceFields(true));
+                newArguments.addAll(oldArguments.subList(1, oldArguments.size()).reversed());
+                newArguments.addAll(List.of(scalarizedReceiver));
             } else {
                 int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
-                int index = newValues.length;
                 // iterate in reverse order
                 for (int signatureIndex = parameterLength - 1; signatureIndex >= 0; signatureIndex--) {
                     boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
                     if (GraalValhallaServices.isScalarizedParameter(targetMethod, signatureIndex, true)) {
                         // argument needs to be scalarized
                         List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true);
-                        ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFG(addBefore, oldArguments.get(signatureIndex),
+                        ValueNode[] scalarizedParam = InlineTypeUtil.createScalarizationCFGReversed(addBefore, oldArguments.get(signatureIndex),
                                         fields, nonNull, !nonNull);
 
-                        boolean leftIsNullBranch = false;
-                        // try to duplicate into the branches to decrease life intervals
-                        for (int i = 0; i < scalarizedParam.length; i++) {
-                            ValueNode node = scalarizedParam[i];
-                            boolean onlyDefine = false;
-                                if (node instanceof ValuePhiNode phi) {
-                                    for (int j = 0; j < 2; j++) {
-                                        MergeNode merge = (MergeNode) phi.merge();
-                                        EndNode end = merge.forwardEndAt(j);
-                                        ValueNode phiValue = phi.valueAt(j);
-                                        // check the non-null info which is the first phi, determine
-                                        // the null branch
-                                        if (i == 0 && j == 0 && phiValue == ConstantNode.forInt(0, graph)) {
-                                            leftIsNullBranch = true;
-                                        }
-                                        if (i > 0 && (leftIsNullBranch && j == 0 || !leftIsNullBranch && j == 1)) {
-                                            // currently processing the null branch
-                                            if (phiValue.stamp(NodeView.DEFAULT).getStackKind() != JavaKind.Object) {
-                                                /*
-                                                 * Only oop slots need to be zeroed out to avoid
-                                                 * problems with the gc. So effectively only the
-                                                 * non-null info and oop fields will be set to zero
-                                                 * on the null branch. We need to define the value
-                                                 * though otherwise we get a problem with merging
-                                                 * values with different types. E.g. the type of an
-                                                 * original parameter is different to the value we
-                                                 * replace the parameter value with. TODO: do we
-                                                 * really want this?
-                                                 */
-                                                onlyDefine = true;
-                                            }
-                                        }
-                                        MoveArgumentsToDestinationNode mover = graph.add(new MoveArgumentsToDestinationNode(onlyDefine ? List.of() : List.of(phiValue), targetMethod,
-                                                        List.of(newValues).subList(index - scalarizedParam.length + i, index - scalarizedParam.length + i + 1)));
-                                        if (phiValue instanceof FixedWithNextNode fixedNode) {
-                                            graph.addAfterFixed(fixedNode, mover);
-                                        } else {
-                                            graph.addBeforeFixed(end, mover);
-                                        }
-                                    }
-                                } else {
-                                    kit.append(new MoveArgumentsToDestinationNode(List.of(node), targetMethod,
-                                                    List.of(newValues[index - scalarizedParam.length + i])));
-                                }
-                        }
-                        index -= scalarizedParam.length;
                         addBefore = kit.append(new ValueAnchorNode());
+                        newArguments.addAll(List.of(scalarizedParam));
                     } else {
                         // no need to scalarize just take the old value
-                        kit.append(new MoveArgumentsToDestinationNode(List.of(oldArguments.get(signatureIndex)), targetMethod, List.of(newValues[index - 1])));
-                        index--;
+                        newArguments.add(oldArguments.get(signatureIndex));
                         addBefore = kit.append(new ValueAnchorNode());
                     }
                 }
             }
-            kit.append(new DummyControlSinkNode(newValues));
+            kit.append(new MoveArgumentsToDestinationNode(newArguments, targetMethod, List.of(newValues).reversed()));
             debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Verified inline entry point%s graph before compilation", receiverOnly ? " receiver only" : "");
             return graph;
         } catch (Exception e) {

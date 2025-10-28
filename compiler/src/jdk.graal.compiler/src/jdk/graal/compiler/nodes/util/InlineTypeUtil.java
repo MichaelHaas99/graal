@@ -279,9 +279,23 @@ public class InlineTypeUtil {
         return createScalarizationCFG(addBefore, object, List.of(fields), false, false);
     }
 
+    public static ValueNode[] createScalarizationCFGReversed(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields) {
+        return createScalarizationCFG(addBefore, object, List.of(fields), false, false, null, null, null, null, true);
+    }
+
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null, null, null, null);
+    }
+
+    public static ValueNode[] createScalarizationCFGReversed(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
+                    boolean includeNonNullPhi) {
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null, null, null, null, true);
+    }
+
+    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
+                    boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode) {
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, phis, nonNullValues, nullValues, mergeNode, false);
     }
 
     /**
@@ -299,7 +313,7 @@ public class InlineTypeUtil {
      * @return The field values of the object
      */
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
-                    boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode) {
+                    boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode, boolean appendReverse) {
         StructuredGraph graph = addBefore.graph();
         LogicNode nonNull = graph.addOrUniqueWithInputs(LogicNegationNode.create(IsNullNode.create(object)));
         if (phis == null) {
@@ -309,10 +323,19 @@ public class InlineTypeUtil {
                 if (includeNonNullPhi) {
                     loads[0] = ConstantNode.forByte((byte) 1, graph);
                 }
-                for (int i = 0; i < fields.size(); i++) {
-                    LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields.get(i)));
-                    loads[i + (includeNonNullPhi ? 1 : 0)] = load;
-                    graph.addBeforeFixed(addBefore, load);
+                if (!appendReverse) {
+                    for (int i = 0; i < fields.size(); i++) {
+                        LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields.get(i)));
+                        loads[i + (includeNonNullPhi ? 1 : 0)] = load;
+                        graph.addBeforeFixed(addBefore, load);
+                    }
+                } else {
+                    for (int ri = fields.size() - 1; ri >= 0; ri--) {
+                        LoadFieldNode load = graph.add(LoadFieldNode.create(graph.getAssumptions(), object, fields.get(ri)));
+                        loads[ri + (includeNonNullPhi ? 1 : 0)] = load;
+                        graph.addBeforeFixed(addBefore, load);
+                    }
+                    loads = reverseArray(loads);
                 }
                 return loads;
             }
@@ -324,6 +347,9 @@ public class InlineTypeUtil {
                 for (int i = 0; i < fields.size(); i++) {
                     ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(i).getJavaKind()));
                     loads[i + (includeNonNullPhi ? 1 : 0)] = load;
+                }
+                if (appendReverse) {
+                    loads = reverseArray(loads);
                 }
                 return loads;
             }
@@ -345,32 +371,60 @@ public class InlineTypeUtil {
 
         ValueNode nonNullObject = graph.addOrUnique(PiNode.create(object, objectNonNull(), trueBegin));
         FixedWithNextNode previous = trueBegin;
-        for (int i = 0; i < fields.size(); i++) {
-            LoadFieldNode load;
-            if (nonNullValues == null) {
-                load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields.get(i)));
-            } else {
-                load = graph.add(nonNullValues[i]);
-                load.setObject(nonNullObject);
-            }
+        if (!appendReverse) {
+            for (int i = 0; i < fields.size(); i++) {
+                LoadFieldNode load;
+                if (nonNullValues == null) {
+                    load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields.get(i)));
+                } else {
+                    load = graph.add(nonNullValues[i]);
+                    load.setObject(nonNullObject);
+                }
 
-            loads[i] = load;
-            previous.setNext(load);
-            previous = load;
+                loads[i] = load;
+                previous.setNext(load);
+                previous = load;
+            }
+        } else {
+            for (int ri = fields.size() - 1; ri >= 0; ri--) {
+                LoadFieldNode load;
+                if (nonNullValues == null) {
+                    load = graph.add(LoadFieldNode.create(graph.getAssumptions(), nonNullObject, fields.get(ri)));
+                } else {
+                    load = graph.add(nonNullValues[ri]);
+                    load.setObject(nonNullObject);
+                }
+                loads[ri] = load;
+                previous.setNext(load);
+                previous = load;
+            }
         }
         EndNode trueEnd = graph.add(new EndNode());
         previous.setNext(trueEnd);
 
         // false branch - inline object is null, use default values of fields
 
-        for (int i = 0; i < fields.size(); i++) {
-            ConstantNode load;
-            if (nullValues == null) {
-                load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(i).getJavaKind()));
-            } else {
-                load = graph.addWithoutUnique(nullValues[i]);
+        if (!appendReverse) {
+            for (int i = 0; i < fields.size(); i++) {
+                ConstantNode load;
+                if (nullValues == null) {
+                    load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(i).getJavaKind()));
+                } else {
+                    load = graph.addWithoutUnique(nullValues[i]);
+                }
+                consts[i] = load;
             }
-            consts[i] = load;
+        } else {
+            // create const values in reverse (but place into consts array by their index)
+            for (int ri = fields.size() - 1; ri >= 0; ri--) {
+                ConstantNode load;
+                if (nullValues == null) {
+                    load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(ri).getJavaKind()));
+                } else {
+                    load = graph.addWithoutUnique(nullValues[ri]);
+                }
+                consts[ri] = load;
+            }
         }
         EndNode falseEnd = graph.add(new EndNode());
         if (falseBegin.next() == null)
@@ -386,7 +440,6 @@ public class InlineTypeUtil {
             newPhis = new ValuePhiNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
             if (includeNonNullPhi) {
                 newPhis[0] = graph.addOrUnique(new ValuePhiNode(StampFactory.forKind(JavaKind.Int), merge, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph)));
-
             }
             for (int i = 0; i < fields.size(); i++) {
                 newPhis[i + (includeNonNullPhi ? 1 : 0)] = graph.addOrUnique(
@@ -399,7 +452,17 @@ public class InlineTypeUtil {
         merge.addForwardEnd(trueEnd);
         merge.addForwardEnd(falseEnd);
         merge.setNext(addBefore);
+
+        if (appendReverse) {
+            // reverse the returned phis array as requested
+            newPhis = reverseArray(newPhis);
+        }
+
         return newPhis;
+    }
+
+    private static <T> T[] reverseArray(T[] arr) {
+        return List.of(arr).reversed().toArray(arr);
     }
 
     /**

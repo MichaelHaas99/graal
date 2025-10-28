@@ -8,7 +8,7 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.lir.StandardOp;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.ControlSinkNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
@@ -21,7 +21,7 @@ import jdk.vm.ci.meta.Value;
  * Moves input arguments into their designated slots according to the calling convention.
  */
 @NodeInfo
-public class MoveArgumentsToDestinationNode extends FixedWithNextNode implements LIRLowerable {
+public class MoveArgumentsToDestinationNode extends ControlSinkNode implements LIRLowerable {
 
     public static final NodeClass<MoveArgumentsToDestinationNode> TYPE = NodeClass.create(MoveArgumentsToDestinationNode.class);
 
@@ -48,12 +48,13 @@ public class MoveArgumentsToDestinationNode extends FixedWithNextNode implements
         }
         // process in the reverse order as the stack is likely to be extended and slots are not
         // block by old arguments
-        for (int i = newArguments.size() - 1; i >= 0; i--) {
+        for (int i = 0; i < newArguments.size(); i++) {
             ValueNode newArgument = newArguments.get(i);
             Value newValue = values.get(i);
             assert newValue.getValueKind().equals(generator.getLIRGeneratorTool().getLIRKind(newArgument.stamp(NodeView.DEFAULT))) : newValue + " " +
                             generator.getLIRGeneratorTool().getLIRKind(newArgument.stamp(NodeView.DEFAULT));
             generator.getLIRGeneratorTool().emitMove((AllocatableValue) newValue, generator.operand(newArgument));
         }
+        generator.getLIRGeneratorTool().append(new StandardOp.DummyBlockEndOp(values.toArray(new Value[values.size()])));
     }
 }
