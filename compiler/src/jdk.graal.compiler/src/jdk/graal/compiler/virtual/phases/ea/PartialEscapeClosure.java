@@ -1965,7 +1965,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             for (int i = 0; i < states.length; i++) {
                 VirtualObjectNode virtual = virtualObjs[i];
                 if (virtual != null) {
-                    setPhiInput(phi, i, getAliasAndResolve(states[i], virtual));
+                    setPhiInput(phi, i, getAliasAndResolve(states[i], virtual, true));
                 }
             }
             return materialized;
@@ -2300,10 +2300,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     }
 
     public ValueNode getAliasAndResolve(PartialEscapeBlockState<?> state, ValueNode value) {
+        return getAliasAndResolve(state, value, false);
+    }
+
+    public ValueNode getAliasAndResolve(PartialEscapeBlockState<?> state, ValueNode value, boolean useMaterializedValue) {
         ValueNode result = getAlias(value);
         if (result instanceof VirtualObjectNode) {
             int id = ((VirtualObjectNode) result).getObjectId();
-            if (id != -1 && !state.getObjectState(id).isVirtual()) {
+            if (id != -1 && (!state.getObjectState(id).isVirtual() || useMaterializedValue && state.getObjectState(id).isMaterialized())) {
                 result = state.getObjectState(id).getMaterializedValue();
             }
         }
