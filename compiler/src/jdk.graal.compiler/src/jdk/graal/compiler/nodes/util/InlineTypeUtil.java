@@ -125,7 +125,7 @@ public class InlineTypeUtil {
                     inlineTypeNode = InlineTypeNode.createWithoutOop(getParameterType(targetMethod, i, true),
                                     arguments.subList(currentIndex + 1, scalarizedParametersLen).toArray(new ValueNode[parameterLength - 1]), arguments.get(parameterLength));
                 }
-                graph.add(inlineTypeNode);
+                graph.addOrUniqueWithInputs(inlineTypeNode);
                 graph.addBeforeFixed(invoke.asFixedNode(), inlineTypeNode);
                 currentIndex += parameterLength;
                 newArguments.add(inlineTypeNode);

@@ -125,12 +125,20 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     @Override
     public ValueNode getOop(VirtualObjectNode virtualObject) {
         assert state.getObjectState(virtualObject).isVirtual() : "should only be queried on virtual object state";
-        return state.getObjectState(virtualObject).getMaterializedValueOrOop();
+        ValueNode oop = state.getObjectState(virtualObject).getMaterializedValueOrOop();
+        if (oop == null) {
+            oop = ConstantNode.defaultForKind(JavaKind.Object, closure.cfg.graph);
+        }
+        return oop;
     }
 
     @Override
     public ValueNode getNonNull(VirtualObjectNode virtualObject) {
-        return state.getObjectState(virtualObject).getNonNull();
+        ValueNode nonNull = state.getObjectState(virtualObject).getNonNull();
+        if (nonNull == null) {
+            nonNull = ConstantNode.forInt(1, closure.cfg.graph);
+        }
+        return nonNull;
     }
 
     @Override
@@ -145,25 +153,19 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             return true;
         }
         ValueNode nonNull = getNonNull(virtualObject);
-        return nonNull.isConstant() && nonNull.asJavaConstant().asInt() == 1;
+        return nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1;
     }
 
     @Override
-    public void castToNonNull(VirtualObjectNode virtualObject) {
-        ConstantNode one = ConstantNode.forInt(1, closure.cfg.graph);
-        state.getObjectState(virtualObject).setNonNull(one);
-    }
-
-    @Override
-    public void createNullCheck(VirtualObjectNode virtualObject) {
+    public void nullCheckAndCast(VirtualObjectNode virtualObject) {
         if (isNonNull(virtualObject)) {
             return;
         }
         ValueNode nonNull = state.getObjectState(virtualObject).getNonNull();
-        assert nonNull != null : "nullable scalarized inline object expect non-null information to be set";
         LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
         ensureAdded(check);
         addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false));
+        state.getObjectState(virtualObject).setNonNull(ConstantNode.forInt(1, closure.cfg.graph));
     }
 
     @Override
@@ -376,12 +378,21 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized) {
-        createVirtualObject(virtualObject, entryState, locks, sourcePosition, ensureVirtualized, null, null, false);
+        ValueNode oop = null;
+        ValueNode nonNull = null;
+        if (!virtualObject.hasIdentity()) {
+            oop = ConstantNode.defaultForKind(JavaKind.Object, closure.cfg.graph);
+            nonNull = ConstantNode.forInt(1, closure.cfg.graph);
+        }
+        createVirtualObject(virtualObject, entryState, locks, sourcePosition, ensureVirtualized, oop, nonNull, false);
     }
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized,
                     ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
+        if (!virtualObject.hasIdentity()) {
+            GraalError.guarantee(nonNull != null && oop != null, "oop and non-null info should be set");
+        }
         VirtualUtil.trace(options, debug, "{{%s}} ", current);
         if (!virtualObject.isAlive()) {
             effects.addFloatingNode(virtualObject, "newVirtualObject");

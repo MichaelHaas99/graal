@@ -74,7 +74,7 @@ public class ObjectState {
      */
     boolean copyOnWrite;
 
-    public ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized) {
+    private ObjectState(ValueNode[] entries, List<MonitorIdNode> locks, boolean ensureVirtualized) {
         this(entries, (LockState) null, ensureVirtualized);
         for (int i = locks.size() - 1; i >= 0; i--) {
             this.locks = new LockState(locks.get(i), this.locks);
@@ -91,11 +91,11 @@ public class ObjectState {
         this.nonNull = nonNull;
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
+    private ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
         this(entries, locks, ensureVirtualized, new boolean[0]);
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean[] unsetFields) {
+    private ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean[] unsetFields) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
@@ -103,11 +103,12 @@ public class ObjectState {
         this.unsetFields = unsetFields.clone();
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean[] unsetFields, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
+        this.unsetFields = unsetFields;
         if (isAllocatedOrNull) {
             this.materializedValue = oop;
         } else {

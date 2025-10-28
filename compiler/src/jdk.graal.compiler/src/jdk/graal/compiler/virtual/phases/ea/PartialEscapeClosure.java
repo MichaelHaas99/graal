@@ -1385,7 +1385,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     int object = getObject.applyAsInt(i);
                     if (object != -1) {
                         ObjectState state = states[i].getObjectState(object);
-                        if (state.getNonNull() != null) {
+                        ValueNode nonNull = state.getNonNull();
+                        if (state.getNonNull() != null && !(nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1)) {
                             additionalPhisCount = 2;
                             break;
                         }
@@ -1579,15 +1580,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 int additionalPhisIndex = 0;
                 while (additionalPhisIndex < additionalPhisCount) {
                     ValueNode value = additionalPhisIndex == 0 ? oop : nonNull;
-                    // make sure the value is set to a default value in case it is null for non-null
-                    // virtual objects
-                    if (value == null) {
-                        if (additionalPhisIndex == 0) {
-                            value = nullPointer;
-                        } else {
-                            value = ConstantNode.forInt(1, graph());
-                        }
-                    }
 
                     // create phi nodes if the values differ in the block states
                     for (int i = 1; i < states.length; i++) {
@@ -1597,14 +1589,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 ValueNode temp;
                                 if (additionalPhisIndex == 0) {
                                     temp = states[i].getObjectState(object).getMaterializedValueOrOop();
-                                    if (temp == null) {
-                                        temp = nullPointer;
-                                    }
                                 } else {
                                     temp = states[i].getObjectState(object).getNonNull();
-                                    if (temp == null) {
-                                        temp = ConstantNode.forInt(1, graph());
-                                    }
                                 }
                                 if (value != temp) {
                                     if (additionalPhisIndex == 0) {
@@ -1613,9 +1599,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                         for (int j = 0; j < states.length; j++) {
                                             int tempObject = getObject.applyAsInt(j);
                                             ValueNode tempOop = states[j].getObjectState(tempObject).getMaterializedValueOrOop();
-                                            if (tempOop == null) {
-                                                tempOop = nullPointer;
-                                            }
                                             if (oopStamp == null) {
                                                 oopStamp = tempOop.stamp(NodeView.DEFAULT);
                                             } else {
@@ -1681,14 +1664,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 ValueNode temp;
                                 if (i == 0) {
                                     temp = states[i2].getObjectState(object).getMaterializedValueOrOop();
-                                    if (temp == null) {
-                                        temp = nullPointer;
-                                    }
                                 } else {
                                     temp = states[i2].getObjectState(object).getNonNull();
-                                    if (temp == null) {
-                                        temp = ConstantNode.forInt(1, graph());
-                                    }
                                 }
                                 setPhiInput(phi, i2, temp);
                             }
@@ -1702,23 +1679,18 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
 
                 if (additionalPhisCount > 0) {
-                    // in case all entries were equal, just use the default values
-                    if (oop == null) {
-                        oop = nullPointer;
-                    }
-                    if (nonNull == null) {
-                        nonNull = ConstantNode.forInt(1, graph());
-                    }
                     boolean isAllocatedOrNull = true;
                     for (int j = 0; j < states.length; j++) {
-                        isAllocatedOrNull &= states[j].getObjectState(getObject.applyAsInt(j)).isMaterialized();
+                        ObjectState state = states[j].getObjectState(getObject.applyAsInt(j));
+                        isAllocatedOrNull &= state.isMaterialized();
                     }
-                    // virtual objects can't be larval anymore
-                    newState.addObject(resultObject, new ObjectState(values, states[0].getObjectState(getObject.applyAsInt(0)).getLocks(), ensureVirtual, oop, nonNull, isAllocatedOrNull));
+                    ObjectState startState = states[0].getObjectState(getObject.applyAsInt(0));
+                    newState.addObject(resultObject, new ObjectState(values, startState.getLocks(), ensureVirtual, startState.getUnsetFields(), oop, nonNull, isAllocatedOrNull));
                 } else {
                     // virtual objects can be larval also pass the unset fields information
                     ObjectState objectState = states[0].getObjectState(getObject.applyAsInt(0));
-                    newState.addObject(resultObject, new ObjectState(values, objectState.getLocks(), ensureVirtual, objectState.getUnsetFields()));
+                    newState.addObject(resultObject,
+                                    new ObjectState(values, objectState.getLocks(), ensureVirtual, objectState.getUnsetFields(), objectState.getOop(), objectState.getNonNull(), false));
                 }
                 return materialized;
             } else {

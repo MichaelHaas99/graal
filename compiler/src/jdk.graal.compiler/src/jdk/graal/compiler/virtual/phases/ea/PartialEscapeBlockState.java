@@ -37,7 +37,6 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
 import jdk.graal.compiler.nodes.BeginNode;
-import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.ControlSplitNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -245,12 +244,14 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                 }
                 if (!objects.isEmpty()) {
                     CommitAllocationNode commit;
-                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && oops.stream().allMatch(Objects::isNull) && nonNulls.stream().allMatch(Objects::isNull) ||
+                    if (fixed.predecessor().getNodeClass().equals(CommitAllocationNode.TYPE) && oops.stream().allMatch(o -> Objects.isNull(o) || o.isNullConstant()) &&
+                                    nonNulls.stream().allMatch(n -> Objects.isNull(n) || n.isJavaConstant() && n.asJavaConstant().asInt() == 1) ||
                                     fixed.predecessor() instanceof CommitAllocationOrReuseOopNode) {
                         commit = (CommitAllocationNode) fixed.predecessor();
                     } else {
                         try (DebugCloseable context = graph.withNodeSourcePosition(NodeSourcePosition.placeholder(graph.method()))) {
-                            if (oops.stream().allMatch(Objects::isNull) && nonNulls.stream().allMatch(Objects::isNull)) {
+                            if (oops.stream().allMatch(o -> Objects.isNull(o) || o.isNullConstant()) &&
+                                            nonNulls.stream().allMatch(n -> Objects.isNull(n) || n.isJavaConstant() && n.asJavaConstant().asInt() == 1)) {
                                 commit = graph.add(new CommitAllocationNode());
                             } else {
                                 commit = graph.add(new CommitAllocationOrReuseOopNode());
@@ -400,10 +401,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
             }
             if (!obj.isVirtual()) {
                 objectMaterialized(virtual, representation, values.subList(pos, pos + entries.length));
-            } else if (obj.getNonNull() == null) {
+            } else {
                 // our logic expects the non-null information to be set as soon as we are virtual
                 // with an oop
-                obj.setNonNull(ConstantNode.forInt(1, fixed.graph()));
+                GraalError.guarantee(obj.getNonNull() != null, "non null info should be set");
             }
             for (int i = 0; i < entries.length; i++) {
                 if (entries[i] instanceof VirtualObjectNode) {

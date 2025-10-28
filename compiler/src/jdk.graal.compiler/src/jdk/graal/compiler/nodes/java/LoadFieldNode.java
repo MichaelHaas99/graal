@@ -222,8 +222,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
                     if (!tool.isNonNull(virtualObjectNode)) {
-                        tool.createNullCheck(virtualObjectNode);
-                        tool.castToNonNull(virtualObjectNode);
+                        tool.nullCheckAndCast(virtualObjectNode);
                     }
                     tool.replaceWith(entry);
 

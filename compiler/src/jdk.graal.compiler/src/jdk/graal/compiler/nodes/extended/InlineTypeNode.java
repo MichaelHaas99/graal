@@ -75,12 +75,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     private final boolean handlesScalarizedReturn;
 
     @SuppressWarnings("this-escape")
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull, boolean handlesScalarizedReturn) {
+    private InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull, boolean handlesScalarizedReturn) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.nonNull = nonNull;
-        // TODO: refactor such that no null value is allowed?
-        GraalError.guarantee((nonNull == null) == (oop == null), "both should be either null or not null");
         this.isAllocatedOrNull = isAllocatedOrNull;
         GraalError.guarantee(type.getInstanceFields(true).length == entries.length, "field size does not match value size");
         this.entries = new NodeInputList<>(this, entries);
@@ -98,21 +96,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return oop;
     }
 
-    public ValueNode getOopOrDefault() {
-        if (oop == null) {
-            return ConstantNode.defaultForKind(JavaKind.Object, this.graph());
-        }
-        return oop;
-    }
-
     public ValueNode getNonNull() {
-        return nonNull;
-    }
-
-    public ValueNode getNonNullOrDefault() {
-        if (nonNull == null) {
-            return ConstantNode.forInt(1, this.graph());
-        }
         return nonNull;
     }
 
@@ -152,15 +136,15 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public static InlineTypeNode createNonNull(ResolvedJavaType type, ValueNode oop, ValueNode[] fieldValues) {
-        return new InlineTypeNode(type, oop, fieldValues, null, false);
+        return new InlineTypeNode(type, oop, fieldValues, ConstantNode.forInt(1), false);
     }
 
     public static InlineTypeNode createNonNullWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues) {
-        return InlineTypeNode.createNonNull(type, null, fieldValues);
+        return InlineTypeNode.createNonNull(type, ConstantNode.defaultForKind(JavaKind.Object), fieldValues);
     }
 
     public static InlineTypeNode createWithoutOop(ResolvedJavaType type, ValueNode[] fieldValues, ValueNode nonNull) {
-        return new InlineTypeNode(type, ConstantNode.forConstant(JavaConstant.NULL_POINTER, null), fieldValues, nonNull, false);
+        return new InlineTypeNode(type, ConstantNode.defaultForKind(JavaKind.Object), fieldValues, nonNull, false);
     }
 
     public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
@@ -253,11 +237,11 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     private boolean isNonNull() {
-        return nonNull == null || nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1;
+        return nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1;
     }
 
     private boolean isNull() {
-        return nonNull != null && nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0;
+        return nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0;
     }
 
     /**

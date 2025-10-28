@@ -137,15 +137,11 @@ public interface VirtualizerTool extends CoreProviders {
     boolean isNonNull(VirtualObjectNode virtualObject);
 
     /**
+     * Adds a guard into the graph checking the value of {@link #getNonNull(VirtualObjectNode)}.
      * Changes the object state of a virtual object such that {@link #getNonNull(VirtualObjectNode)}
      * returns a constant one node.
      */
-    void castToNonNull(VirtualObjectNode virtualObject);
-
-    /**
-     * Adds a guard into the graph checking the value of {@link #getNonNull(VirtualObjectNode)}.
-     */
-    void createNullCheck(VirtualObjectNode virtualObject);
+    void nullCheckAndCast(VirtualObjectNode virtualObject);
 
     /**
      * Calling this function tells the tool to explicitly track the larval state of the virtual

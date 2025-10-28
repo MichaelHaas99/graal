@@ -81,8 +81,7 @@ public class MonitorEnterNode extends AccessMonitorNode implements Virtualizable
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode virtual) {
             if (!tool.isNonNull(virtual)) {
-                tool.createNullCheck(virtual);
-                tool.castToNonNull(virtual);
+                tool.nullCheckAndCast(virtual);
             }
             if (virtual.hasIdentity()) {
                 tool.addLock(virtual, getMonitorId());
