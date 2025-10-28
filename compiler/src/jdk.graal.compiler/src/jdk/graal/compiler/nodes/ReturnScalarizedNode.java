@@ -81,7 +81,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             // need to add the return node here as the util adds the cfg before a fixed node
             returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
             returnNode.fieldValues.clear();
-            ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
+            ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, List.of(fields), false, false);
             returnNode.fieldValues.addAll(List.of(phis));
         }
         return returnNode;
@@ -105,7 +105,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         oldReturn.replaceAtUsages(returnNode);
         oldReturn.safeDelete();
 
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, fields);
+        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, List.of(fields), false, false);
         returnNode.fieldValues.clear();
         returnNode.fieldValues.addAll(List.of(phis));
     }

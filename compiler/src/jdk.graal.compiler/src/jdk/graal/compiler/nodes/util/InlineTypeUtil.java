@@ -271,31 +271,39 @@ public class InlineTypeUtil {
                         GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true), isNullFree, !isNullFree);
     }
 
-    /**
-     *
-     * See {@link #createScalarizationCFG(FixedNode, ValueNode, List, boolean, boolean)}
-     */
-    public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields) {
-        return createScalarizationCFG(addBefore, object, List.of(fields), false, false);
-    }
-
-    public static ValueNode[] createScalarizationCFGReversed(FixedNode addBefore, ValueNode object, ResolvedJavaField[] fields) {
-        return createScalarizationCFG(addBefore, object, List.of(fields), false, false, null, null, null, null, true);
-    }
-
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null, null, null, null);
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE);
     }
 
     public static ValueNode[] createScalarizationCFGReversed(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, null, null, null, null, true);
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE, true);
     }
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
-                    boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode) {
-        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, phis, nonNullValues, nullValues, mergeNode, false);
+                    boolean includeNonNullPhi, ScalarizationNodes scalarizationNodes) {
+        return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, scalarizationNodes, false);
+    }
+
+    public static class ScalarizationNodes {
+        ValuePhiNode[] phis;
+        LoadFieldNode[] nonNullValues;
+        ConstantNode[] nullValues;
+        MergeNode mergeNode;
+
+        public ScalarizationNodes(ConstantNode[] nullValues, LoadFieldNode[] nonNullValues, ValuePhiNode[] phis, MergeNode mergeNode) {
+            this.nullValues = nullValues;
+            this.nonNullValues = nonNullValues;
+            this.phis = phis;
+            this.mergeNode = mergeNode;
+        }
+
+        static final ScalarizationNodes SHOULD_CREATE = new ScalarizationNodes(null, null, null, null);
+
+        public static ScalarizationNodes alreadyCreated(ConstantNode[] nullValues, LoadFieldNode[] nonNullValues, ValuePhiNode[] phis, MergeNode mergeNode) {
+            return new ScalarizationNodes(nullValues, nonNullValues, phis, mergeNode);
+        }
     }
 
     /**
@@ -309,19 +317,19 @@ public class InlineTypeUtil {
      *            are not valid
      * @param includeNonNullPhi true if the non-null information should be included in the returned
      *            phis at position zero
-     * @param phis specify phis that should be used for the diamond
      * @return The field values of the object
      */
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
-                    boolean includeNonNullPhi, ValuePhiNode[] phis, LoadFieldNode[] nonNullValues, ConstantNode[] nullValues, MergeNode mergeNode, boolean appendReverse) {
+                    boolean includeNonNullPhi, ScalarizationNodes scalarizationNodes, boolean appendReverse) {
         StructuredGraph graph = addBefore.graph();
         LogicNode nonNull = graph.addOrUniqueWithInputs(LogicNegationNode.create(IsNullNode.create(object)));
+        ValuePhiNode[] phis = scalarizationNodes.phis;
         if (phis == null) {
             if (assumeObjectNonNull || nonNull.isTautology()) {
                 assert StampTool.isPointerNonNull(object) : "no diamond should be created, insert a null check";
                 ValueNode[] loads = new ValueNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
                 if (includeNonNullPhi) {
-                    loads[0] = ConstantNode.forByte((byte) 1, graph);
+                    loads[0] = ConstantNode.forInt(1, graph);
                 }
                 if (!appendReverse) {
                     for (int i = 0; i < fields.size(); i++) {
@@ -342,7 +350,7 @@ public class InlineTypeUtil {
             if (nonNull.isContradiction()) {
                 ValueNode[] loads = new ValueNode[fields.size() + (includeNonNullPhi ? 1 : 0)];
                 if (includeNonNullPhi) {
-                    loads[0] = ConstantNode.forByte((byte) 0, graph);
+                    loads[0] = ConstantNode.forInt(0, graph);
                 }
                 for (int i = 0; i < fields.size(); i++) {
                     ConstantNode load = graph.addOrUnique(ConstantNode.defaultForKind(fields.get(i).getJavaKind()));
@@ -371,6 +379,7 @@ public class InlineTypeUtil {
 
         ValueNode nonNullObject = graph.addOrUnique(PiNode.create(object, objectNonNull(), trueBegin));
         FixedWithNextNode previous = trueBegin;
+        LoadFieldNode[] nonNullValues = scalarizationNodes.nonNullValues;
         if (!appendReverse) {
             for (int i = 0; i < fields.size(); i++) {
                 LoadFieldNode load;
@@ -404,6 +413,7 @@ public class InlineTypeUtil {
 
         // false branch - inline object is null, use default values of fields
 
+        ConstantNode[] nullValues = scalarizationNodes.nullValues;
         if (!appendReverse) {
             for (int i = 0; i < fields.size(); i++) {
                 ConstantNode load;
@@ -431,6 +441,7 @@ public class InlineTypeUtil {
             falseBegin.setNext(falseEnd);
 
         // merge
+        MergeNode mergeNode = scalarizationNodes.mergeNode;
         MergeNode merge = graph.add(mergeNode == null ? new MergeNode() : mergeNode);
         merge.setStateAfter(framestate);
 

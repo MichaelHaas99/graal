@@ -95,7 +95,9 @@ public class ValhallaEntryPointCreator {
                 // For the RO entry point we only need to scalarize the receiver, the
                 // rest is already scalarized
                 addBefore = kit.append(new ValueAnchorNode());
-                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFGReversed(addBefore, oldArguments.getFirst(), targetMethod.getDeclaringClass().getInstanceFields(true));
+                List<ResolvedJavaField> fields = GraalValhallaServices.getScalarizedParameterFields(targetMethod, 0, true);
+                ValueNode[] scalarizedReceiver = InlineTypeUtil.createScalarizationCFGReversed(addBefore, oldArguments.getFirst(),
+                                fields, true, false);
                 newArguments.addAll(oldArguments.subList(1, oldArguments.size()).reversed());
                 newArguments.addAll(List.of(scalarizedReceiver));
             } else {
