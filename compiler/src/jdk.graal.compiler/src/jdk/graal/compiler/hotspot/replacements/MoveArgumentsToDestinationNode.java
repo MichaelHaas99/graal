@@ -40,14 +40,6 @@ public class MoveArgumentsToDestinationNode extends ControlSinkNode implements L
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        // use MyValue1.test9 to check if no necessary move
-        if (newArguments.isEmpty()) {
-            assert values.size() == 1 : "values should only contain one value";
-            generator.getLIRGeneratorTool().append(new StandardOp.ValueDefOp(values.get(0)));
-            return;
-        }
-        // process in the reverse order as the stack is likely to be extended and slots are not
-        // block by old arguments
         for (int i = 0; i < newArguments.size(); i++) {
             ValueNode newArgument = newArguments.get(i);
             Value newValue = values.get(i);
