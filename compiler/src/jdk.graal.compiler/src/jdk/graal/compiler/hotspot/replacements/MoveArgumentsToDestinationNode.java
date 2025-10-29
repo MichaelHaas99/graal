@@ -47,6 +47,6 @@ public class MoveArgumentsToDestinationNode extends ControlSinkNode implements L
                             generator.getLIRGeneratorTool().getLIRKind(newArgument.stamp(NodeView.DEFAULT));
             generator.getLIRGeneratorTool().emitMove((AllocatableValue) newValue, generator.operand(newArgument));
         }
-        generator.getLIRGeneratorTool().append(new StandardOp.DummyBlockEndOp(values.toArray(new Value[values.size()])));
+        generator.getLIRGeneratorTool().append(new StandardOp.EntryPointEndOp(values.toArray(new Value[values.size()])));
     }
 }

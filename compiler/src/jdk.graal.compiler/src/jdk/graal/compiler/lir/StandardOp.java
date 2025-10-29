@@ -55,12 +55,12 @@ public class StandardOp {
     public interface BlockEndOp {
     }
 
-    public static class DummyBlockEndOp extends LIRInstruction implements BlockEndOp {
-        public static final LIRInstructionClass<DummyBlockEndOp> TYPE = LIRInstructionClass.create(DummyBlockEndOp.class);
+    public static class EntryPointEndOp extends LIRInstruction implements BlockEndOp {
+        public static final LIRInstructionClass<EntryPointEndOp> TYPE = LIRInstructionClass.create(EntryPointEndOp.class);
 
         @Use({OperandFlag.REG, OperandFlag.STACK, OperandFlag.ILLEGAL}) protected Value[] newArguments;
 
-        public DummyBlockEndOp(Value[] newArguments) {
+        public EntryPointEndOp(Value[] newArguments) {
             super(TYPE);
             this.newArguments = newArguments;
         }
