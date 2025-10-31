@@ -124,8 +124,6 @@ public class ValhallaObjectEqualsNode extends FixedWithNextNode implements Lower
                 return new ObjectEqualsNode(x, y);
             }
 
-            // insert a state split for Hotspot
-            b.add(new StateSplitProxyNode());
             ValhallaObjectEqualsNode fixedEqualityCheck = b.add(new ValhallaObjectEqualsNode(x, y, profile));
             return b.add(IntegerEqualsNode.create(fixedEqualityCheck, ConstantNode.forInt(1, b.getGraph()), view));
         }

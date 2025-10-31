@@ -28,6 +28,7 @@ import static org.graalvm.nativeimage.ImageInfo.inImageRuntimeCode;
 
 import jdk.graal.compiler.api.replacements.Snippet;
 import jdk.graal.compiler.core.common.PermanentBailoutException;
+import jdk.graal.compiler.core.common.calc.Condition;
 import jdk.graal.compiler.java.BytecodeParser;
 import jdk.graal.compiler.java.GraphBuilderPhase.Instance;
 import jdk.graal.compiler.nodes.CallTargetNode;
@@ -37,6 +38,7 @@ import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.StateSplitProxyNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GeneratedNodeIntrinsicInvocationPlugin;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.IntrinsicContext;
@@ -122,5 +124,19 @@ public class HotSpotBytecodeParser extends BytecodeParser {
         }
 
         return super.needBarrierAfterFieldStore(field);
+    }
+
+    @Override
+    protected void genIfSame(JavaKind kind, Condition cond) {
+        if (getValhallaOptionsProvider().valhallaEnabled() && !parsingIntrinsic() && kind == JavaKind.Object) {
+            /*
+             * Insert a state split for Hotspot. Hotspot expects that the bci of the framestate
+             * associated with the call to the substitutability method points to the
+             * if_acmpeq/if_acmpne bytecode. See SharedRuntime::find_callee_info_helper.
+             */
+            StateSplitProxyNode split = append(new StateSplitProxyNode());
+            split.setStateAfter(createFrameState(bci(), split));
+        }
+        super.genIfSame(kind, cond);
     }
 }

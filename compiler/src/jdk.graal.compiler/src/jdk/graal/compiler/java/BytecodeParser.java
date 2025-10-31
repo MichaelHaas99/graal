@@ -4318,9 +4318,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 if (a.getStackKind() == JavaKind.Object) {
                     LogicNode node;
                     if (getValhallaOptionsProvider().valhallaEnabled() && !parsingIntrinsic()) {
-                        // Don't use this node when parsing an intrinsic. This is because we create
-                        // two state splits and therefore IntrinsicContext.createFrameState
-                        // creates an invalid framestate.
                         node = ValhallaObjectEqualsNode.create(this, a, b, NodeView.DEFAULT, getProfileForObjectEquals());
                     } else {
                         node = genObjectEquals(a, b);
@@ -4847,7 +4844,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         genIf(x, cond, y);
     }
 
-    private void genIfSame(JavaKind kind, Condition cond) {
+    protected void genIfSame(JavaKind kind, Condition cond) {
         ValueNode y = frameState.pop(kind);
         ValueNode x = frameState.pop(kind);
         genIf(x, cond, y);
