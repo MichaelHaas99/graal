@@ -1738,11 +1738,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         HIRBlock predecessor = getPredecessor(i);
                         materialized |= ensureMaterialized(states[i], entryVirtual.getObjectId(), predecessor.getEndNode(), blockEffects.get(predecessor), COUNTER_MATERIALIZATIONS_MERGE);
                         objectState = states[i].getObjectState(object);
+                        ObjectState entryState = states[i].getObjectState(entryVirtual.getObjectId());
+                        entry = entryState.getMaterializedValue();
                         if (!objectState.isMaterialized()) {
-                            ObjectState entryState = states[i].getObjectState(entryVirtual.getObjectId());
-                            entry = entryState.getMaterializedValue();
                             // we don't want to replace a virtual entry, so only replace it if it is
-                            // not virtual
+                            // not virtual anymore
                             if (!entryState.isVirtual()) {
                                 states[i].setEntry(object, entryIndex, entry);
                             }
