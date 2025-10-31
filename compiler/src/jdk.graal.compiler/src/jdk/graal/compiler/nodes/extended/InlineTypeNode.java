@@ -199,6 +199,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     // comment to see inline type node getting materialized to null for test6_verifier
     @Override
     public void simplify(SimplifierTool tool) {
+        if (!canBeUsedInCanonicalization()) {
+            return;
+        }
+
         if (StampTool.isPointerAlwaysNull(this)) {
             List<Node> inputSnapshot = inputs().snapshot();
             List<Node> usages = this.usages().snapshot();
@@ -253,12 +257,17 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return !handlesScalarizedReturn;
     }
 
+    /**
+     * We are not allowed to virtualize before the final partial escape phase, as the invoke whose
+     * scalarized return we handle with this node may be inlined and this node has to be deleted.
+     */
+    public boolean canVirtualize() {
+        return canBeUsedInCanonicalization() || this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE);
+    }
+
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE) && handlesScalarizedReturn) {
-            // We are not allowed to virtualize before the final partial escape phase, as the invoke
-            // whose scalarized return we handle with this node may be inlined and this node has to
-            // be deleted.
+        if (!canVirtualize()) {
             return;
         }
 
