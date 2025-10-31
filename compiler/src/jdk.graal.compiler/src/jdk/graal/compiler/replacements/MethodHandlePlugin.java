@@ -39,8 +39,7 @@ import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.extended.ForeignCallNode;
-import jdk.graal.compiler.nodes.extended.MembarNode;
+import jdk.graal.compiler.nodes.extended.ScalarizedReturnHandlerNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
@@ -107,7 +106,7 @@ public class MethodHandlePlugin implements NodePlugin {
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
                     if (b.getValhallaOptionsProvider().returnConventionEnabled() && invokeReturnStamp.getTrustedStamp().isObjectStamp()) {
-                        appendForeignCall(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
+                        handleScalarizedReturn(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
                     }
                 }
             } else {
@@ -148,13 +147,13 @@ public class MethodHandlePlugin implements NodePlugin {
 
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
                         if (GraalValhallaServices.hasScalarizedReturn(callTarget.targetMethod())) {
-                            appendForeignCall(b, newInvoke, invokeReturnStamp, invoke.bci());
+                            handleScalarizedReturn(b, newInvoke, invokeReturnStamp, invoke.bci());
                         }
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
                         macroInvokable.addMethodHandleInfo(b.append(callTarget));
                         if (GraalValhallaServices.hasScalarizedReturn(callTarget.targetMethod())) {
-                            appendForeignCall(b, macroInvokable, invokeReturnStamp, invoke.bci());
+                            handleScalarizedReturn(b, macroInvokable, invokeReturnStamp, invoke.bci());
                         }
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
@@ -190,27 +189,21 @@ public class MethodHandlePlugin implements NodePlugin {
                     Object.class,
                     long.class /* oop or hub */);
 
-    // see PhaseMacroExpand::expand_mh_intrinsic_return
-    private static void appendForeignCall(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
-
-        ForeignCallNode bufferInlineTypeCall = new ForeignCallNode(b.getForeignCalls().lookupForeignCall(STORE_INLINE_TYPE_FIELDS_TO).getDescriptor(), invokable.asNode());
-        bufferInlineTypeCall.setBci(bci);
-        b.append(bufferInlineTypeCall);
+    private static void handleScalarizedReturn(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
+        ScalarizedReturnHandlerNode handlerNode = new ScalarizedReturnHandlerNode(invokable.asNode(), invokeReturnStamp.getTrustedStamp());
+        handlerNode.setBci(bci);
+        b.append(handlerNode);
 
         // get the framestate of the macro invokable
         FrameState correctFrameState = invokable.stateAfter().duplicate();
         b.append(correctFrameState);
 
-        // replace the top of the stack with the result of the foreign call
-        correctFrameState.replaceFirstInput(invokable.asNode(), bufferInlineTypeCall);
-        bufferInlineTypeCall.setStateAfter(correctFrameState);
+        // replace the top of the stack with the handler node
+        correctFrameState.replaceFirstInput(invokable.asNode(), handlerNode);
+        handlerNode.setStateAfter(correctFrameState);
 
-        // set the foreign call as result
+        // set the handler node as result
         b.pop(invokeReturnStamp.getTrustedStamp().getStackKind());
-        b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), bufferInlineTypeCall);
-
-        // add a membar for newly created inline objects
-        b.append(MembarNode.forInitialization());
-
+        b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), handlerNode);
     }
 }

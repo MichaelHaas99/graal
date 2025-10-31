@@ -39,10 +39,10 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
-import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.PublishWritesNode;
+import jdk.graal.compiler.nodes.extended.ScalarizedReturnHandlerNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
@@ -806,8 +806,8 @@ public class InlineTypeUtil {
         return foreignCallAllocatesInlineType(foreignCall.getDescriptor());
     }
 
-    public static boolean foreignCallAllocatesInlineType(Node foreignCall) {
-        return foreignCall instanceof ForeignCallNode foreignCallNode && foreignCallAllocatesInlineType(foreignCallNode.getDescriptor());
+    public static boolean foreignCallAllocatesInlineType(Node nodeAfterInvoke) {
+        return nodeAfterInvoke instanceof ScalarizedReturnHandlerNode;
     }
 
     private static boolean foreignCallAllocatesInlineType(ForeignCallDescriptor foreignCall) {
