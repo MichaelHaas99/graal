@@ -26,22 +26,19 @@ package jdk.graal.compiler.replacements;
 
 import static jdk.graal.compiler.core.common.GraalOptions.MaximumRecursiveInlining;
 
-import jdk.graal.compiler.core.common.spi.ForeignCallSignature;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampPair;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodes.CallTargetNode;
 import jdk.graal.compiler.nodes.CallTargetNode.InvokeKind;
-import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.Invokable;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.InvokeNode;
-import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.extended.ScalarizedReturnHandlerNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.graphbuilderconf.NodePlugin;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.MacroNode;
 import jdk.graal.compiler.replacements.nodes.MethodHandleNode;
@@ -106,7 +103,7 @@ public class MethodHandlePlugin implements NodePlugin {
                 } else {
                     b.addPush(invokeReturnStamp.getTrustedStamp().getStackKind(), methodHandleNode.asNode());
                     if (b.getValhallaOptionsProvider().returnConventionEnabled() && invokeReturnStamp.getTrustedStamp().isObjectStamp()) {
-                        handleScalarizedReturn(b, methodHandleNode, invokeReturnStamp, methodHandleNode.bci());
+                        InlineTypeUtil.handlePossibleScalarizedReturn(b, methodHandleNode, methodHandleNode.bci());
                     }
                 }
             } else {
@@ -147,13 +144,13 @@ public class MethodHandlePlugin implements NodePlugin {
 
                         newInvoke.callTarget().replaceAndDelete(b.append(callTarget));
                         if (GraalValhallaServices.hasScalarizedReturn(callTarget.targetMethod())) {
-                            handleScalarizedReturn(b, newInvoke, invokeReturnStamp, invoke.bci());
+                            InlineTypeUtil.handlePossibleScalarizedReturn(b, newInvoke, invoke.bci());
                         }
                         return true;
                     } else if (newInvokable instanceof MacroInvokable macroInvokable) {
                         macroInvokable.addMethodHandleInfo(b.append(callTarget));
                         if (GraalValhallaServices.hasScalarizedReturn(callTarget.targetMethod())) {
-                            handleScalarizedReturn(b, macroInvokable, invokeReturnStamp, invoke.bci());
+                            InlineTypeUtil.handlePossibleScalarizedReturn(b, macroInvokable, invoke.bci());
                         }
                     } else {
                         throw GraalError.shouldNotReachHere("unexpected Invokable: " + newInvokable);
@@ -183,27 +180,5 @@ public class MethodHandlePlugin implements NodePlugin {
             return true;
         }
         return false;
-    }
-
-    public static final ForeignCallSignature STORE_INLINE_TYPE_FIELDS_TO = new ForeignCallSignature("storeInlineTypeFieldsToBuf",
-                    Object.class,
-                    long.class /* oop or hub */);
-
-    private static void handleScalarizedReturn(GraphBuilderContext b, StateSplit invokable, StampPair invokeReturnStamp, int bci) {
-        ScalarizedReturnHandlerNode handlerNode = new ScalarizedReturnHandlerNode(invokable.asNode(), invokeReturnStamp.getTrustedStamp());
-        handlerNode.setBci(bci);
-        b.append(handlerNode);
-
-        // get the framestate of the macro invokable
-        FrameState correctFrameState = invokable.stateAfter().duplicate();
-        b.append(correctFrameState);
-
-        // replace the top of the stack with the handler node
-        correctFrameState.replaceFirstInput(invokable.asNode(), handlerNode);
-        handlerNode.setStateAfter(correctFrameState);
-
-        // set the handler node as result
-        b.pop(invokeReturnStamp.getTrustedStamp().getStackKind());
-        b.push(invokeReturnStamp.getTrustedStamp().getStackKind(), handlerNode);
     }
 }

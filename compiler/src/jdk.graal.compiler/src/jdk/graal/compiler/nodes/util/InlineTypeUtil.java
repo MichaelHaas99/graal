@@ -34,6 +34,7 @@ import jdk.graal.compiler.nodes.MergeNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProfileData;
+import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
@@ -53,7 +54,6 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
-import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaKind;
@@ -483,7 +483,7 @@ public class InlineTypeUtil {
      * model the concept of a nullable scalarized inline object after an invoke, a
      * {@link VirtualInstanceNode} is pushed onto the framestate.
      */
-    public static void handleScalarizedReturnOnInvoke(GraphBuilderContext b, Invoke invoke, JavaKind resultType) {
+    public static void handleScalarizedReturnOnInvoke(GraphBuilderContext b, Invoke invoke) {
         InlineTypeNode result = InlineTypeNode.createFromInvoke(b, invoke);
 
         // create virtual object representing nullable scalarized inline object in the framestate
@@ -500,20 +500,19 @@ public class InlineTypeUtil {
 
         // create a framestate for invoke with virtual object
         b.pop(JavaKind.Object);
-        b.push(resultType, virtual);
+        b.push(JavaKind.Object, virtual);
         b.setStateAfter(invoke);
         invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getNonNull())));
-        b.pop(resultType);
+        b.pop(JavaKind.Object);
 
         // push the InlineTypeNode as result
-        b.push(resultType, result);
+        b.push(JavaKind.Object, result);
     }
 
-    public static void handleUnresolvedReturnType(GraphBuilderContext b, Invoke invoke) {
+    public static void handlePossibleScalarizedReturn(GraphBuilderContext b, StateSplit invoke, int bci) {
         b.setStateAfter(invoke);
         b.pop(JavaKind.Object);
-        ScalarizedReturnHandlerNode handlerNode = new ScalarizedReturnHandlerNode(invoke.asNode(), invoke.asNode().stamp(NodeView.DEFAULT));
-        handlerNode.setBci(invoke.bci());
+        ScalarizedReturnHandlerNode handlerNode = new ScalarizedReturnHandlerNode(invoke.asNode(), invoke.asNode().stamp(NodeView.DEFAULT), bci);
         b.append(handlerNode);
         b.push(JavaKind.Object, handlerNode);
         b.setStateAfter(handlerNode);
@@ -822,6 +821,6 @@ public class InlineTypeUtil {
     }
 
     private static boolean foreignCallAllocatesInlineType(ForeignCallDescriptor foreignCall) {
-        return foreignCall.getSignature().getName().contains(MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO.getName());
+        return foreignCall.getSignature().getName().contains(ScalarizedReturnHandlerNode.STORE_INLINE_TYPE_FIELDS_TO.getName());
     }
 }

@@ -139,8 +139,8 @@ import jdk.graal.compiler.hotspot.stubs.UnwindExceptionToCallerStub;
 import jdk.graal.compiler.hotspot.stubs.VerifyOopStub;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
+import jdk.graal.compiler.nodes.extended.ScalarizedReturnHandlerNode;
 import jdk.graal.compiler.options.OptionValues;
-import jdk.graal.compiler.replacements.MethodHandlePlugin;
 import jdk.graal.compiler.replacements.StringLatin1InflateNode;
 import jdk.graal.compiler.replacements.StringUTF16CompressNode;
 import jdk.graal.compiler.replacements.arraycopy.ArrayCopyForeignCalls;
@@ -562,7 +562,7 @@ public abstract class HotSpotHostForeignCallsProvider extends HotSpotForeignCall
             linkForeignCall(options, providers, VALUE_OBJECT_HASH_CODE, c.valueObjectHashCodeAddress, PREPEND_THREAD);
             linkForeignCall(options, providers, LOAD_UNKNOWN_INLINE, c.loadUnknownInlineAddress, PREPEND_THREAD);
             linkForeignCall(options, providers, STORE_UNKNOWN_INLINE, c.storeUnknownInlineAddress, PREPEND_THREAD);
-            linkForeignCall(options, providers, createDescriptor(MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO, SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATIONS), c.storeInlineTypeFieldsToBuf,
+            linkForeignCall(options, providers, createDescriptor(ScalarizedReturnHandlerNode.STORE_INLINE_TYPE_FIELDS_TO, SAFEPOINT, HAS_SIDE_EFFECT, NO_LOCATIONS), c.storeInlineTypeFieldsToBuf,
                             PREPEND_THREAD);
         }
         registerForeignCall(NOTIFY, c.notifyAddress, NativeCall);

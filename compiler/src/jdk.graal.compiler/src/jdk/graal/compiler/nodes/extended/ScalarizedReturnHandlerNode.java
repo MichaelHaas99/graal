@@ -24,14 +24,12 @@
  */
 package jdk.graal.compiler.nodes.extended;
 
-import static jdk.graal.compiler.replacements.MethodHandlePlugin.STORE_INLINE_TYPE_FIELDS_TO;
-
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.spi.ForeignCallSignature;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.DeoptBciSupplier;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -45,8 +43,12 @@ import jdk.graal.compiler.nodes.spi.LoweringTool;
  * scalarized form. This appears at method handles calls or at calls with an unresolved return type.
  */
 @NodeInfo
-public class ScalarizedReturnHandlerNode extends AbstractMemoryCheckpoint implements SingleMemoryKill, Lowerable, DeoptBciSupplier {
+public class ScalarizedReturnHandlerNode extends AbstractMemoryCheckpoint implements SingleMemoryKill, Lowerable {
     public static final NodeClass<ScalarizedReturnHandlerNode> TYPE = NodeClass.create(ScalarizedReturnHandlerNode.class);
+
+    public static final ForeignCallSignature STORE_INLINE_TYPE_FIELDS_TO = new ForeignCallSignature("storeInlineTypeFieldsToBuf",
+                    Object.class,
+                    long.class /* oop or hub */);
 
     @Input ValueNode input;
     int bci;
@@ -59,29 +61,21 @@ public class ScalarizedReturnHandlerNode extends AbstractMemoryCheckpoint implem
         super(c, stamp, stateAfter);
     }
 
-    public ScalarizedReturnHandlerNode(ValueNode input, Stamp stamp) {
+    public ScalarizedReturnHandlerNode(ValueNode input, Stamp stamp, int bci) {
         super(TYPE, stamp);
         this.input = input;
+        this.bci = bci;
     }
 
-    public ScalarizedReturnHandlerNode(ValueNode input, Stamp stamp, FrameState stateAfter) {
+    public ScalarizedReturnHandlerNode(ValueNode input, Stamp stamp, FrameState stateAfter, int bci) {
         super(TYPE, stamp, stateAfter);
         this.input = input;
+        this.bci = bci;
     }
 
     @Override
     public LocationIdentity getKilledLocationIdentity() {
         return LocationIdentity.init();
-    }
-
-    @Override
-    public int bci() {
-        return bci;
-    }
-
-    @Override
-    public void setBci(int bci) {
-        this.bci = bci;
     }
 
     @Override

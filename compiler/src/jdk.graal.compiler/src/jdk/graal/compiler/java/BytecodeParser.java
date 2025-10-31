@@ -2393,12 +2393,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             JavaType returnType = maybeEagerlyResolve(targetMethod.getSignature().getReturnType(method.getDeclaringClass()), targetMethod.getDeclaringClass());
             // check if the return type is already resolved
             if (!typeIsResolved(returnType)) {
-                InlineTypeUtil.handleUnresolvedReturnType(this, invoke);
+                InlineTypeUtil.handlePossibleScalarizedReturn(this, invoke, invoke.bci());
                 return invoke;
             }
 
             if (GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
+                InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke);
                 return invoke;
             }
         }
