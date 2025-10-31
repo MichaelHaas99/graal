@@ -2392,15 +2392,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             ResolvedJavaMethod targetMethod = callTarget.targetMethod();
             JavaType returnType = maybeEagerlyResolve(targetMethod.getSignature().getReturnType(method.getDeclaringClass()), targetMethod.getDeclaringClass());
             // check if the return type is already resolved
-            // TODO: https://github.com/openjdk/valhalla/pull/1554/files
             if (!typeIsResolved(returnType)) {
-                // could be an inline type which can be returned scalarized we bailout, see
-                // ciTypeFlow::StateVector::do_invoke
-                throw new RetryableBailoutException("Return type is unresolved and may be an inline type.");
+                InlineTypeUtil.handleUnresolvedReturnType(this, invoke);
+                return invoke;
             }
 
             if (GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                frameState.pop(JavaKind.Object);
                 InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke, resultType);
                 return invoke;
             }

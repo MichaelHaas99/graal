@@ -499,6 +499,7 @@ public class InlineTypeUtil {
         }
 
         // create a framestate for invoke with virtual object
+        b.pop(JavaKind.Object);
         b.push(resultType, virtual);
         b.setStateAfter(invoke);
         invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getNonNull())));
@@ -506,6 +507,16 @@ public class InlineTypeUtil {
 
         // push the InlineTypeNode as result
         b.push(resultType, result);
+    }
+
+    public static void handleUnresolvedReturnType(GraphBuilderContext b, Invoke invoke) {
+        b.setStateAfter(invoke);
+        b.pop(JavaKind.Object);
+        ScalarizedReturnHandlerNode handlerNode = new ScalarizedReturnHandlerNode(invoke.asNode(), invoke.asNode().stamp(NodeView.DEFAULT));
+        handlerNode.setBci(invoke.bci());
+        b.append(handlerNode);
+        b.push(JavaKind.Object, handlerNode);
+        b.setStateAfter(handlerNode);
     }
 
     /**
