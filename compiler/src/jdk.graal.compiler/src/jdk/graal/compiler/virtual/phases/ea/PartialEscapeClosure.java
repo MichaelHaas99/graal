@@ -50,7 +50,6 @@ import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeBitMap;
 import jdk.graal.compiler.graph.NodeInputList;
-import jdk.graal.compiler.graph.NodeMap;
 import jdk.graal.compiler.graph.Position;
 import jdk.graal.compiler.nodes.AbstractEndNode;
 import jdk.graal.compiler.nodes.AbstractMergeNode;
@@ -898,7 +897,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
-        protected NodeMap<ValueNode> loopMergeAliases = cfg.graph.createNodeMap();;
+        protected EconomicMap<ValueNode, ValueNode> loopMergeAliases = EconomicMap.create(Equivalence.IDENTITY);
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -2087,7 +2086,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private ValueNode getAlias(ValueNode value, int blockId) {
             if (blockId == 0 && needsCaching) {
                 if (value != null && !(value instanceof VirtualObjectNode)) {
-                    if (value.isAlive() && !loopMergeAliases.isNew(value)) {
+                    if (value.isAlive()) {
                         ValueNode result = loopMergeAliases.get(value);
                         if (result != null) {
                             return result;
@@ -2270,8 +2269,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             FixedNode position = getPredecessor(predecessorIndex).getEndNode();
             tool.reset(state, position, position, bEffects);
             tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
-            if (!StampTool.isPointerAlwaysNull(node) && predecessorIndex == 0) {
-                loopMergeAliases.set(node, virtualObject);
+            if (!StampTool.isPointerAlwaysNull(node) && predecessorIndex == 0 && needsCaching) {
+                loopMergeAliases.put(node, virtualObject);
             }
             return (VirtualInstanceNode) virtualObject;
         }
