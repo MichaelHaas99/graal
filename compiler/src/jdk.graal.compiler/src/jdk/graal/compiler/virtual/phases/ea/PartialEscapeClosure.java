@@ -2107,6 +2107,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             if (scalarizationCache == null) {
                 scalarizationCache = new EconomicMap[size];
             }
+            // keep the cache for the dominator block of the loop
             int i = scalarizationCache[0] != null && needsCaching ? 1 : 0;
             for (; i < size; i++) {
                 scalarizationCache[i] = EconomicMap.create(Equivalence.IDENTITY);
