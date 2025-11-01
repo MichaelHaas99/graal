@@ -898,6 +898,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
         protected EconomicMap<ValueNode, ValueNode> loopMergeAliases = EconomicMap.create(Equivalence.IDENTITY);
+        protected List<EconomicMap<ValueNode, VirtualInstanceNode>> scalarizationCache;
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -980,6 +981,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          */
         @Override
         protected void merge(List<BlockT> statesList) {
+
+            initScalarizationCache(statesList.size());
 
             PartialEscapeBlockState<?>[] states = new PartialEscapeBlockState<?>[statesList.size()];
             for (int i = 0; i < statesList.size(); i++) {
@@ -1426,6 +1429,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             }
 
                             ValueNode entry = states[i].getObjectState(object).getEntry(valueIndex);
+                            entry = getAlias(entry, i);
                             if (!StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider()) && !StampTool.isPointerAlwaysNull(entry)) {
                                 // node is not a value object or not a constant null pointer
                                 virtualize = false;
@@ -1474,6 +1478,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         for (int i = 0; i < states.length; i++) {
                             int object = getObject.applyAsInt(i);
                             ValueNode entry = states[i].getObjectState(object).getEntry(entryIndex);
+                            entry = getAlias(entry, i);
                             VirtualInstanceNode tempVirtual;
                             if (entry instanceof VirtualInstanceNode virtualInstanceNode && states[i].getObjectState(virtualInstanceNode.getObjectId()).isVirtual()) {
                                 tempVirtual = virtualInstanceNode;
@@ -2084,21 +2089,31 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * would then be dead and needs to be deleted by DeadCodeElimination.
          */
         private ValueNode getAlias(ValueNode value, int blockId) {
-            if (blockId == 0 && needsCaching) {
                 if (value != null && !(value instanceof VirtualObjectNode)) {
                     if (value.isAlive()) {
-                        ValueNode result = loopMergeAliases.get(value);
+                        ValueNode result;
+                        if (blockId == 0 && needsCaching) {
+                            result = loopMergeAliases.get(value);
+                        } else {
+                            result = scalarizationCache.get(blockId).get(value);
+                        }
                         if (result != null) {
                             return result;
                         }
                     }
                 }
-            }
             return PartialEscapeClosure.this.getAlias(value);
         }
 
         private ValueNode getAlias(ValueNode value) {
             return PartialEscapeClosure.this.getAlias(value);
+        }
+
+        private void initScalarizationCache(int size) {
+            scalarizationCache = new ArrayList<>(size);
+            for (int i = 0; i < size; i++) {
+                scalarizationCache.add(EconomicMap.create(Equivalence.IDENTITY));
+            }
         }
 
         private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex, VirtualObjectNode virtualObjectNode,
@@ -2270,8 +2285,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             FixedNode position = getPredecessor(predecessorIndex).getEndNode();
             tool.reset(state, position, position, bEffects);
             tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
-            if (!StampTool.isPointerAlwaysNull(node) && predecessorIndex == 0 && needsCaching) {
-                loopMergeAliases.put(node, virtualObject);
+            if (!StampTool.isPointerAlwaysNull(node)) {
+                if (predecessorIndex == 0 && needsCaching) {
+                    loopMergeAliases.put(node, virtualObject);
+                } else {
+                    scalarizationCache.get(predecessorIndex).put(node, (VirtualInstanceNode) virtualObject);
+                }
+
             }
             return (VirtualInstanceNode) virtualObject;
         }
