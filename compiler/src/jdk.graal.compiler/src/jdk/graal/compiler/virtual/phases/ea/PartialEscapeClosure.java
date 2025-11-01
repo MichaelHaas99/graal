@@ -98,6 +98,7 @@ import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -1217,10 +1218,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return true if materialization happened during the merge, false otherwise
          */
         private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
-            return mergeObjectStates(resultObject, sourceObjects, states, 0, -1);
+            List<JavaType> visited = new ArrayList<>();
+            visited.add(virtualObjects.get(resultObject).type());
+            return mergeObjectStates(resultObject, sourceObjects, states, 0, visited);
         }
 
-        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int currentScalarizationDepth, int maxScalarizationDepth) {
+        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int currentScalarizationDepth,
+                        List<JavaType> visited) {
             boolean compatible = true;
             boolean ensureVirtual = true;
             IntUnaryOperator getObject = index -> sourceObjects == null ? resultObject : sourceObjects[index];
@@ -1404,16 +1408,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 ValueNode firstVirtual = virtualObjects.get(getObject.applyAsInt(0));
                 ResolvedJavaType type = StampTool.typeOrNull(firstVirtual, tool.getMetaAccess());
                 assert type != null : "expected type to be non-null";
-                InlineTypeUtil.CircularTestResult circularTestResult = InlineTypeUtil.circularInlineTypeTest(type);
-                int updatedMaxScalarizationDepth = maxScalarizationDepth;
-                if (currentScalarizationDepth == 0) {
-                    updatedMaxScalarizationDepth = circularTestResult.depth();
-                }
-                // TODO: at the moment only do this if the virtual object to be merged is a value
-                // object, to avoid possible errors in PEA without Valhalla.
-                if (!circularTestResult.isCircular() && currentScalarizationDepth < updatedMaxScalarizationDepth &&
-                                currentScalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions()) &&
-                                StampTool.isNullableInlineType(firstVirtual, tool.getValhallaOptionsProvider())) {
+                if (currentScalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions())) {
                     // try to keep virtual entries virtual by making entries with materialized
                     // inline objects virtual again, merge each virtual entry recursively.
                     boolean[] virtualizeInfo = new boolean[values.length];
@@ -1439,7 +1434,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             } else if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
                                 if (types[valueIndex] == null) {
                                     // remember the type for null constants to scalarize them
-                                    types[valueIndex] = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+                                    ResolvedJavaType entryType = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+                                    if (visited.contains(entryType)) {
+                                        virtualize = false;
+                                        break;
+                                    }
+                                    types[valueIndex] = entryType;
                                 } else if (!entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()).equals(types[valueIndex])) {
                                     // the entries have different types
                                     virtualize = false;
@@ -1500,7 +1500,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             }
                             entrySourceObjects[i] = tempVirtual.getObjectId();
                         }
-                        // finsihed iteration of one entry over all states
+                        // finished iteration of one entry over all states
                         if (representativeObjectOfEntry == -1) {
                             // no nullable virtual object was present, just choose the first entry
                             representativeObjectOfEntry = entrySourceObjects[0];
@@ -1531,7 +1531,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                         newState.addObject(representativeObjectOfEntry, tempState);
                         virtualizedEntry[entryIndex] = virtualObjects.get(representativeObjectOfEntry);
-                        mergeObjectStates(representativeObjectOfEntry, entrySourceObjects, states, currentScalarizationDepth + 1, updatedMaxScalarizationDepth);
+                        int oldLength = visited.size();
+                        visited.add(types[entryIndex]);
+                        mergeObjectStates(representativeObjectOfEntry, entrySourceObjects, states, currentScalarizationDepth + 1, visited);
+                        while (visited.size() > oldLength) {
+                            visited.removeLast();
+                        }
                         values[entryIndex] = virtualizedEntry[entryIndex];
                     }
                 }
