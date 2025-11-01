@@ -428,9 +428,14 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
         MapCursor<LIRFrameState, SaveRegistersOp> cursor = calleeSaveInfo.getEntries();
         while (cursor.advance()) {
             SaveRegistersOp save = cursor.getValue();
-            // In the function SharedRuntime::store_inline_type_fields_to_buf, the statement
-            // InlineKlass* verif_vk = InlineKlass::returned_inline_klass(reg_map); expects the
-            // first general return register to be in the register map so don't remove it
+            /*
+             * In the function SharedRuntime::store_inline_type_fields_to_buf, the statement
+             * InlineKlass* verif_vk = InlineKlass::returned_inline_klass(reg_map); expects the
+             * first general return register to be in the register map so don't remove it. The first
+             * register would be removed due to the call to gatherDestroyedCallerRegisters detects
+             * that the first return register is killed, because it contains the result of the
+             * runtime call.
+             */
             if (!InlineTypeUtil.foreignCallAllocatesInlineType(stub.getLinkage())) {
                 save.remove(destroyedRegisters);
             }
