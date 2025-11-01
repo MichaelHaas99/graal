@@ -247,9 +247,7 @@ public class ObjectState {
         assert isVirtual();
         cachedState = null;
         entries[index] = value;
-        if (unsetFields.length != 0) {
-            unsetFields[index] = false;
-        }
+        setFieldInitialized(index);
     }
 
     public void setEntries(ValueNode[] entries) {
@@ -335,6 +333,17 @@ public class ObjectState {
 
     public void setUnsetFields(boolean[] unsetFields) {
         this.unsetFields = unsetFields.clone();
+    }
+
+    public boolean hasUnsetFields() {
+        return unsetFields.length > 0;
+    }
+
+    public void setFieldInitialized(int index) {
+        assert isVirtual();
+        if (unsetFields.length != 0) {
+            unsetFields[index] = false;
+        }
     }
 
     public void clearCachedState() {

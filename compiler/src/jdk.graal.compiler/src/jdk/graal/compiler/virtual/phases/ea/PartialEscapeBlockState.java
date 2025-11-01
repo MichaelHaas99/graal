@@ -167,6 +167,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     public void setEntry(int object, int entryIndex, ValueNode value) {
         if (objectStates[object].getEntry(entryIndex) != value) {
             getObjectStateForModification(object).setEntry(entryIndex, value);
+        } else if (objectStates[object].hasUnsetFields()) {
+            getObjectStateForModification(object).setFieldInitialized(entryIndex);
         }
     }
 
