@@ -441,7 +441,24 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
             append(new AArch64RestoreRegistersOp(saveOnEntry.getSlots(), saveOnEntry));
         }
         Register thread = getProviders().getRegisters().getThreadRegister();
-        append(new AArch64HotSpotReturnOp(operand, getStub() != null, config, thread, getResult().requiresReservedStackAccessCheck()));
+        append(new AArch64HotSpotReturnOp(operand, new AllocatableValue[0], getStub() != null, config, thread, getResult().requiresReservedStackAccessCheck()));
+    }
+
+    @Override
+    public void emitScalarizedReturn(JavaKind oopOrTaggedHubKind, Value oopOrTaggedHub, JavaKind[] fieldKinds, Value[] fieldValues) {
+        assert oopOrTaggedHub != null : "return with scalarized values expected oop or hub value";
+        AllocatableValue operand = resultOperandFor(oopOrTaggedHubKind, oopOrTaggedHub.getValueKind());
+        emitMove(operand, oopOrTaggedHub);
+        AllocatableValue[] fieldOperands = resultOperandsFor(fieldKinds, fieldValues);
+        for (int i = 0; i < fieldKinds.length; i++) {
+            emitMove(fieldOperands[i], fieldValues[i]);
+        }
+        AArch64SaveRegistersOp saveOnEntry = (AArch64SaveRegistersOp) getResult().getSaveOnEntry();
+        if (saveOnEntry != null) {
+            append(new AArch64RestoreRegistersOp(saveOnEntry.getSlots(), saveOnEntry));
+        }
+        Register thread = getProviders().getRegisters().getThreadRegister();
+        append(new AArch64HotSpotReturnOp(operand, fieldOperands, getStub() != null, config, thread, getResult().requiresReservedStackAccessCheck()));
     }
 
     /**

@@ -24,12 +24,12 @@
  */
 package jdk.graal.compiler.hotspot.aarch64;
 
+import static jdk.graal.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
+import static jdk.graal.compiler.lir.LIRInstruction.OperandFlag.REG;
 import static jdk.vm.ci.aarch64.AArch64.lr;
 import static jdk.vm.ci.aarch64.AArch64.r0;
 import static jdk.vm.ci.aarch64.AArch64.v0;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.graal.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static jdk.graal.compiler.lir.LIRInstruction.OperandFlag.REG;
 
 import jdk.graal.compiler.asm.aarch64.AArch64MacroAssembler;
 import jdk.graal.compiler.hotspot.GraalHotSpotVMConfig;
@@ -37,7 +37,6 @@ import jdk.graal.compiler.lir.LIRInstructionClass;
 import jdk.graal.compiler.lir.Opcode;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.gen.DiagnosticLIRGeneratorTool.ZapStackArgumentSpaceBeforeInstruction;
-
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.meta.Value;
 
@@ -50,14 +49,16 @@ public final class AArch64HotSpotReturnOp extends AArch64HotSpotEpilogueOp imple
     public static final LIRInstructionClass<AArch64HotSpotReturnOp> TYPE = LIRInstructionClass.create(AArch64HotSpotReturnOp.class);
 
     @Use({REG, ILLEGAL}) private Value result;
+    @Use({REG, ILLEGAL}) protected Value[] scalarizedValues;
     private final boolean isStub;
     private final boolean requiresReservedStackAccessCheck;
 
-    public AArch64HotSpotReturnOp(Value result, boolean isStub, GraalHotSpotVMConfig config, Register thread, boolean requiresReservedStackAccessCheck) {
+    public AArch64HotSpotReturnOp(Value result, Value[] additionalValues, boolean isStub, GraalHotSpotVMConfig config, Register thread, boolean requiresReservedStackAccessCheck) {
         super(TYPE, config, thread);
         this.requiresReservedStackAccessCheck = requiresReservedStackAccessCheck;
         assert validReturnValue(result);
         this.result = result;
+        this.scalarizedValues = additionalValues;
         this.isStub = isStub;
     }
 
