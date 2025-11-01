@@ -168,18 +168,18 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         if (objectStates[object].getEntry(entryIndex) != value) {
             getObjectStateForModification(object).setEntry(entryIndex, value);
         } else if (objectStates[object].hasUnsetFields()) {
-            getObjectStateForModification(object).setFieldInitialized(entryIndex);
+            setFieldInitialized(object, entryIndex);
         }
     }
 
     public void setAdditionalEntry(int object, boolean nonNull, ValueNode value) {
         if (nonNull) {
             if (objectStates[object].getNonNull() != value) {
-                getObjectStateForModification(object).setNonNull(value);
+                setNonNull(object, value);
             }
         } else {
             if (objectStates[object].getOop() != value) {
-                getObjectStateForModification(object).setOop(value);
+                setOop(object, value);
             }
         }
 
@@ -207,6 +207,26 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         if (objectStates[object].getMaterializedValue() != value) {
             getObjectStateForModification(object).updateMaterializedValue(value);
         }
+    }
+
+    public void setNonNull(int object, ValueNode nonNUll) {
+        getObjectStateForModification(object).setNonNull(nonNUll);
+    }
+
+    public void setOop(int object, ValueNode oop) {
+        getObjectStateForModification(object).setOop(oop);
+    }
+
+    public void setUnsetFields(int object, boolean[] unsetFields) {
+        getObjectStateForModification(object).setUnsetFields(unsetFields);
+    }
+
+    public void setFieldInitialized(int object, int index) {
+        getObjectStateForModification(object).setFieldInitialized(index);
+    }
+
+    public void setEntries(int object, ValueNode[] entries) {
+        getObjectStateForModification(object).setEntries(entries);
     }
 
     /**

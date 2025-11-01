@@ -165,14 +165,14 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(1));
         ensureAdded(check);
         addNode(new FixedGuardNode(check, DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, false));
-        state.getObjectState(virtualObject).setNonNull(ConstantNode.forInt(1, closure.cfg.graph));
+        state.setNonNull(virtualObject.getObjectId(), ConstantNode.forInt(1, closure.cfg.graph));
     }
 
     @Override
     public void setUnsetFields(VirtualObjectNode virtualObjectNode, boolean[] unsetFields) {
         GraalError.guarantee(unsetFields != null, "unsetFields to track larval state should not be null");
         GraalError.guarantee(unsetFields.length == 0 || virtualObjectNode.entryCount() == unsetFields.length, "unsetFields list does not contain a value for each field");
-        state.getObjectState(virtualObjectNode).setUnsetFields(unsetFields);
+        state.setUnsetFields(virtualObjectNode.getObjectId(), unsetFields);
     }
 
     @Override
@@ -448,10 +448,6 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             closure.virtualObjects.add(virtualObject);
             virtualObject.setObjectId(id);
         }
-        // ObjectState oldState = this.state.getObjectState(from).cloneState();
-        // ObjectState state = new ObjectState(oldState.getEntries(), oldState.getLocks(),
-        // oldState.getEnsureVirtualized(), oldState.getOop(), oldState.getNonNull(),
-        // oldState.isAllocatedOrNull());
         ObjectState newState = this.state.getObjectState(from).cloneState();
         newState.clearCachedState();
         ValueNode constOne = ConstantNode.forInt(1);
