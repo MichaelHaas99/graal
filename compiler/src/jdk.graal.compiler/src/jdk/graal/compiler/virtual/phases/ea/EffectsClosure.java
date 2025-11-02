@@ -655,6 +655,10 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             return mergeBlock.getPredecessorAt(stateIndexes[index]);
         }
 
+        protected final int getStateIndex(int index) {
+            return stateIndexes[index];
+        }
+
         protected final NodeIterable<PhiNode> getPhis() {
             return merge.phis();
         }
