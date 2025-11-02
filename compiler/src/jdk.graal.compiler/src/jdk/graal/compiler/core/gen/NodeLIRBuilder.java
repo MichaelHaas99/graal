@@ -692,8 +692,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
 
         Value result = invokeCc.getReturn();
-        // TODO: actually wrong to say the scalarized return values are temps
-        emitInvoke(callTarget, parameters, callState, result, results.toArray(new Value[0]));
+
+        emitInvoke(callTarget, parameters, callState, result);
+
+        LIRInstruction call = gen.getResult().getLIR().getLIRforBlock(gen.getCurrentBlock()).getLast();
+        setScalarizedResults(call, results.toArray(new Value[0]));
 
         // assign the read multi value nodes a result see
         // CallDynamicJavaDirectNode::emit(C2_MacroAssembler* masm, PhaseRegAlloc* ra_)
@@ -760,18 +763,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         if (x instanceof InvokeWithExceptionNode) {
             gen.emitJump(getLIRBlock(((InvokeWithExceptionNode) x).next()));
         }
-
     }
 
-    protected void emitInvoke(LoweredCallTargetNode callTarget, Value[] parameters, LIRFrameState callState, Value result, Value[] temps) {
-        if (callTarget instanceof DirectCallTargetNode) {
-            emitDirectCall((DirectCallTargetNode) callTarget, result, parameters, temps, callState);
-        } else if (callTarget instanceof IndirectCallTargetNode) {
-            emitIndirectCall((IndirectCallTargetNode) callTarget, result, parameters, temps, callState);
-        } else {
-            throw GraalError.shouldNotReachHereUnexpectedValue(callTarget); // ExcludeFromJacocoGeneratedReport
-        }
-    }
+    public abstract void setScalarizedResults(LIRInstruction call, Value[] scalarizedResults);
 
     protected void emitInvoke(LoweredCallTargetNode callTarget, Value[] parameters, LIRFrameState callState, Value result) {
         if (callTarget instanceof DirectCallTargetNode) {

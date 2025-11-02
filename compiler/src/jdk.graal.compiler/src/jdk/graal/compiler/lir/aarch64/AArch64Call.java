@@ -43,6 +43,7 @@ import jdk.graal.compiler.lir.gen.DiagnosticLIRGeneratorTool.ZapRegistersAfterIn
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.site.Call;
+import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.InvokeTarget;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
@@ -51,6 +52,7 @@ public class AArch64Call {
 
     public abstract static class CallOp extends AArch64LIRInstruction {
         @Def({REG, ILLEGAL}) protected Value result;
+        @Def({REG}) protected Value[] scalarizedResults;
         @Use({REG, STACK}) protected Value[] parameters;
         @Temp({REG, STACK}) protected Value[] temps;
         @State protected LIRFrameState state;
@@ -62,11 +64,16 @@ public class AArch64Call {
             this.state = state;
             this.temps = addStackSlotsToTemporaries(parameters, temps);
             assert temps != null;
+            this.scalarizedResults = AllocatableValue.NONE;
         }
 
         @Override
         public boolean destroysCallerSavedRegisters() {
             return true;
+        }
+
+        public void setScalarizedResults(Value[] scalarizedResults) {
+            this.scalarizedResults = scalarizedResults;
         }
     }
 

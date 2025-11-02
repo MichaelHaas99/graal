@@ -39,7 +39,6 @@ import jdk.graal.compiler.lir.LIRValueUtil;
 import jdk.graal.compiler.lir.Opcode;
 import jdk.graal.compiler.lir.asm.CompilationResultBuilder;
 import jdk.graal.compiler.lir.gen.DiagnosticLIRGeneratorTool;
-
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.code.CallingConvention;
@@ -57,6 +56,7 @@ public class AMD64Call {
         public static final LIRInstructionClass<CallOp> TYPE = LIRInstructionClass.create(CallOp.class);
 
         @Def({OperandFlag.REG, OperandFlag.ILLEGAL}) protected Value result;
+        @Def({OperandFlag.REG}) protected Value[] scalarizedResults;
         @Use({OperandFlag.REG, OperandFlag.STACK}) protected Value[] parameters;
         @Temp({OperandFlag.REG, OperandFlag.STACK}) protected Value[] temps;
         @State protected LIRFrameState state;
@@ -68,11 +68,16 @@ public class AMD64Call {
             this.state = state;
             this.temps = addStackSlotsToTemporaries(parameters, temps);
             assert temps != null;
+            this.scalarizedResults = AllocatableValue.NONE;
         }
 
         @Override
         public boolean destroysCallerSavedRegisters() {
             return true;
+        }
+
+        public void setScalarizedResults(Value[] scalarizedResults) {
+            this.scalarizedResults = scalarizedResults;
         }
     }
 

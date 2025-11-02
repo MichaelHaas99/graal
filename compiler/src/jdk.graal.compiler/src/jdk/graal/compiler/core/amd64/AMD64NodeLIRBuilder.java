@@ -29,6 +29,7 @@ import jdk.graal.compiler.core.gen.NodeLIRBuilder;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.core.common.util.CompilationAlarm;
 import jdk.graal.compiler.lir.LIRFrameState;
+import jdk.graal.compiler.lir.LIRInstruction;
 import jdk.graal.compiler.lir.amd64.AMD64Call;
 import jdk.graal.compiler.lir.gen.LIRGeneratorTool;
 import jdk.graal.compiler.nodes.DeoptimizingNode;
@@ -125,5 +126,11 @@ public abstract class AMD64NodeLIRBuilder extends NodeLIRBuilder {
     @Override
     public AMD64LIRGenerator getLIRGeneratorTool() {
         return (AMD64LIRGenerator) gen;
+    }
+
+    @Override
+    public void setScalarizedResults(LIRInstruction call, Value[] scalarizedResults) {
+        AMD64Call.CallOp callOp = (AMD64Call.CallOp) call;
+        callOp.setScalarizedResults(scalarizedResults);
     }
 }

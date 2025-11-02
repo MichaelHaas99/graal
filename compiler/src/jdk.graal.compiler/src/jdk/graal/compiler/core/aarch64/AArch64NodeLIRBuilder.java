@@ -26,9 +26,12 @@
 package jdk.graal.compiler.core.aarch64;
 
 import jdk.graal.compiler.core.gen.NodeLIRBuilder;
+import jdk.graal.compiler.lir.LIRInstruction;
+import jdk.graal.compiler.lir.aarch64.AArch64Call;
 import jdk.graal.compiler.lir.gen.LIRGeneratorTool;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.vm.ci.meta.Value;
 
 /**
  * This class implements the AArch64 specific portion of the LIR generator.
@@ -48,5 +51,11 @@ public abstract class AArch64NodeLIRBuilder extends NodeLIRBuilder {
     @Override
     public AArch64LIRGenerator getLIRGeneratorTool() {
         return (AArch64LIRGenerator) super.getLIRGeneratorTool();
+    }
+
+    @Override
+    public void setScalarizedResults(LIRInstruction call, Value[] scalarizedResults) {
+        AArch64Call.CallOp callOp = (AArch64Call.CallOp) call;
+        callOp.setScalarizedResults(scalarizedResults);
     }
 }
