@@ -1395,7 +1395,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             additionalPhisCount = 2;
                             break;
                         }
-                        if (state.isMaterialized()) {
+                        ValueNode oop = state.getOop();
+                        if (state.isMaterialized() || (oop != null && !oop.isNullConstant())) {
                             // We need to continue searching if one state also has the non-null
                             // field set, so no break here. We are sure though that we need a phi
                             // for the oop.
@@ -1404,7 +1405,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     }
                 }
 
-                VirtualObjectNode[] virtualizedEntry = new VirtualObjectNode[values.length];
+                VirtualObjectNode[] mergedVirtualEntries = new VirtualObjectNode[values.length];
                 // don't scalarize if we may land in a circle
                 ValueNode firstVirtual = virtualObjects.get(getObject.applyAsInt(0));
                 ResolvedJavaType type = StampTool.typeOrNull(firstVirtual, tool.getMetaAccess());
@@ -1415,9 +1416,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     boolean[] virtualizeInfo = new boolean[values.length];
                     ResolvedJavaType[] types = new ResolvedJavaType[values.length];
                     // iterate over each entry
-                    for (int valueIndex = 0; valueIndex < values.length; valueIndex++) {
+                    for (int entryIndex = 0; entryIndex < values.length; entryIndex++) {
                         boolean virtualize = true;
                         boolean allMaterialized = true;
+                        // we don't want to merge one entry of all states, although they have the
+                        // same virtual object
+                        boolean uniqueVirtualEntry = true;
+                        ValueNode entryOfFirstObject = getAlias(values[entryIndex], 0);
                         // iterate over the states
                         for (int i = 0; i < states.length; i++) {
                             // we are allowed to virtualize if the entry is null or an inline type
@@ -1427,24 +1432,27 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 break;
                             }
 
-                            ValueNode entry = states[i].getObjectState(object).getEntry(valueIndex);
+                            ValueNode entry = states[i].getObjectState(object).getEntry(entryIndex);
                             entry = getAlias(entry, i);
                             if (!StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider()) && !StampTool.isPointerAlwaysNull(entry)) {
                                 // node is not a value object or not a constant null pointer
                                 virtualize = false;
+                                uniqueVirtualEntry = false;
                                 break;
                             } else if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                                if (types[valueIndex] == null) {
+                                if (types[entryIndex] == null) {
                                     // remember the type for null constants to scalarize them
                                     ResolvedJavaType entryType = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
                                     if (visited.contains(entryType)) {
                                         virtualize = false;
+                                        uniqueVirtualEntry = false;
                                         break;
                                     }
-                                    types[valueIndex] = entryType;
-                                } else if (!entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()).equals(types[valueIndex])) {
+                                    types[entryIndex] = entryType;
+                                } else if (!entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()).equals(types[entryIndex])) {
                                     // the entries have different types
                                     virtualize = false;
+                                    uniqueVirtualEntry = false;
                                     break;
                                 }
 
@@ -1453,17 +1461,28 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 ObjectState objectState = states[i].getObjectState(tempVirtual.getObjectId());
                                 if (!objectState.isMaterialized()) {
                                     allMaterialized = false;
+                                    if (entryOfFirstObject != entry) {
+                                        uniqueVirtualEntry = false;
+                                    }
                                     if (objectState.isLarval()) {
                                         // Disallow scalarization of value objects as they are
                                         // larval and we are not allowed to lose identity.
                                         virtualize = false;
                                         break;
                                     }
+                                } else {
+                                    uniqueVirtualEntry = false;
                                 }
+                            } else {
+                                uniqueVirtualEntry = false;
                             }
                         }
-                        virtualize &= !allMaterialized;
-                        virtualizeInfo[valueIndex] = virtualize;
+                        virtualize &= !allMaterialized & !uniqueVirtualEntry;
+                        virtualizeInfo[entryIndex] = virtualize;
+                        if (uniqueVirtualEntry) {
+                            mergedVirtualEntries[entryIndex] = (VirtualObjectNode) entryOfFirstObject;
+                            values[entryIndex] = mergedVirtualEntries[entryIndex];
+                        }
                     }
 
                     outer: for (int entryIndex = 0; entryIndex < values.length; entryIndex++) {
@@ -1533,14 +1552,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         representativeObjectOfEntry = tempVirtual.getObjectId();
 
                         newState.addObject(representativeObjectOfEntry, tempState);
-                        virtualizedEntry[entryIndex] = virtualObjects.get(representativeObjectOfEntry);
+                        mergedVirtualEntries[entryIndex] = virtualObjects.get(representativeObjectOfEntry);
                         int oldLength = visited.size();
                         visited.add(types[entryIndex]);
                         mergeObjectStates(representativeObjectOfEntry, entrySourceObjects, states, currentScalarizationDepth + 1, visited);
                         while (visited.size() > oldLength) {
                             visited.removeLast();
                         }
-                        values[entryIndex] = virtualizedEntry[entryIndex];
+                        values[entryIndex] = mergedVirtualEntries[entryIndex];
                     }
                 }
 
@@ -1552,7 +1571,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         if (phis[valueIndex] == null) {
                             int object = getObject.applyAsInt(i);
                             if (object != -1) {
-                                if (virtualizedEntry[valueIndex] != null) {
+                                if (mergedVirtualEntries[valueIndex] != null) {
                                     /*
                                      * We already merged all virtual objects in this entry of all
                                      * states before. We may even virtualized in one state but
@@ -1583,7 +1602,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 PhiNode[] additionalPhis = Arrays.copyOfRange(phis, values.length, phis.length);
                 ValueNode oop = states[0].getObjectState(getObject.applyAsInt(0)).getMaterializedValueOrOop();
                 ValueNode nonNull = states[0].getObjectState(getObject.applyAsInt(0)).getNonNull();
-                ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
 
                 int additionalPhisIndex = 0;
                 while (additionalPhisIndex < additionalPhisCount) {
