@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.GraalOptions;
+import jdk.graal.compiler.core.common.memory.MemoryOrderMode;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -165,7 +166,8 @@ public class InlineTypePlugin implements NodePlugin {
             // holder is directly embedded in other object, use the offset without the header
             loads[i] = b.add(
                             LoadFieldNode.create(b.getAssumptions(), nonNullObject,
-                                            GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, srcOff + off), field.getDeclaringClass())));
+                                            GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, srcOff + off), field.getDeclaringClass()),
+                                            MemoryOrderMode.getMemoryOrder(field)));
         }
 
         // create InlineTypeNode
