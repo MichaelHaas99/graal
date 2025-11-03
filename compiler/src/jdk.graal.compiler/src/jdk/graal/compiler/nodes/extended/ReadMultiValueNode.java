@@ -7,6 +7,7 @@ import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
+import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -24,7 +25,7 @@ import jdk.vm.ci.meta.JavaType;
  * an {@link InvokeNode} which has a scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ReadMultiValue#{p#index}", cycles = CYCLES_0, size = SIZE_0)
-public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable {
+public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable, NodeWithIdentity {
     public static final NodeClass<ReadMultiValueNode> TYPE = NodeClass.create(ReadMultiValueNode.class);
 
     @Input ValueNode multiValueNode;
