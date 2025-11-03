@@ -29,11 +29,12 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-// @formatter:off
 /**
- * The {@code LoadFlatFieldNode} performs a (maybe not atomic) load operation for a flat instance
- * field. This node returns a value for each instance field, so multiple values. The structure looks
- * as follows:
+ * The {@code LoadFlatFieldNode} performs an atomic load operation for a flat value object. This
+ * node returns a value for each instance field of the value object, so multiple values. Each value
+ * is represented with a {@link ReadMultiValueNode}. The structure looks as follows:
+ * 
+ * <pre>
  *            object
  *              ^
  *              |
@@ -48,9 +49,13 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  *    -------------------------
  *              |
  *        InlineTypeNode
- *        
+ * </pre>
+ * 
+ * There exists no oop in a flat field so the oop node should be replaced with a null pointer during
+ * lowering. We need the oop node during PEA, when we replace the LoadFlatFieldNode with a virtual
+ * object. We use the oop node to propagate the virtual object to the InlinetypeNode, which will
+ * replace itself with this virtual object as well.
  */
-// @formatter:on
 // TOOD: WIP, preparation for nullable heap flattening
 @NodeInfo(nameTemplate = "LoadFlatFieldNode#{p#declaredField/s}")
 public class LoadFlatFieldNode extends FixedWithNextNode implements Virtualizable, Canonicalizable, Lowerable, OrderedMemoryAccess, MemoryAccess, SingleMemoryKill {
