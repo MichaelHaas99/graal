@@ -897,7 +897,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
-        protected EconomicMap<ValueNode, VirtualInstanceNode>[] scalarizationCache;
+        protected List<EconomicMap<ValueNode, VirtualInstanceNode>> scalarizationCache;
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -2108,7 +2108,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private ValueNode getAlias(ValueNode value, int blockId) {
                 if (value != null && !(value instanceof VirtualObjectNode)) {
                     if (value.isAlive()) {
-                        ValueNode result = scalarizationCache[blockId].get(value);
+                        ValueNode result = scalarizationCache.get(blockId).get(value);
                         if (result != null) {
                             return result;
                         }
@@ -2122,16 +2122,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         private void initScalarizationCache(int size) {
-            EconomicMap<ValueNode, VirtualInstanceNode>[] oldScalarizationCache = scalarizationCache;
-            scalarizationCache = new EconomicMap[size];
+            List<EconomicMap<ValueNode, VirtualInstanceNode>> oldScalarizationCache = scalarizationCache;
+            scalarizationCache = new ArrayList<>(size);
             int i = 0;
             if (oldScalarizationCache != null && needsCaching && getStateIndex(0) == 0) {
                 // second iteration, keep the cache for the dominator block of the loop
-                scalarizationCache[0] = oldScalarizationCache[0];
+                scalarizationCache.add(oldScalarizationCache.get(0));
                 i = 1;
             }
             for (; i < size; i++) {
-                scalarizationCache[i] = EconomicMap.create(Equivalence.IDENTITY);
+                scalarizationCache.add(EconomicMap.create(Equivalence.IDENTITY));
             }
         }
 
@@ -2305,7 +2305,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             tool.reset(state, position, position, bEffects);
             tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
             if (!StampTool.isPointerAlwaysNull(node)) {
-                scalarizationCache[predecessorIndex].put(node, (VirtualInstanceNode) virtualObject);
+                scalarizationCache.get(predecessorIndex).put(node, (VirtualInstanceNode) virtualObject);
 
             }
             return (VirtualInstanceNode) virtualObject;
