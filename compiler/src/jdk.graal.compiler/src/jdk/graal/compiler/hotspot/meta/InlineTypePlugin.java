@@ -277,6 +277,8 @@ public class InlineTypePlugin implements NodePlugin {
             readOperations.addAll(inlineTypeNode.getEntries());
             isAlreadyScalarized = true;
         }
+
+        // TODO: use InlineTypeUtil for scalarization
         for (int i = 0; i < innerFields.length; i++) {
             ResolvedJavaField innerField = innerFields[i];
             assert !GraalValhallaServices.isFlat(innerField) : "the iteration over nested fields is handled by the loop itself";
@@ -550,6 +552,7 @@ public class InlineTypePlugin implements NodePlugin {
         // empty inline type will have no fields
         ValueNode returnValue = null;
 
+        // TODO: use InlineTypeUtil for scalarization
         for (int i = 0; i < fields.length; i++) {
             ResolvedJavaField field = fields[i];
             assert !GraalValhallaServices.isFlat(field) : "the iteration over nested fields is handled by the loop itself";
