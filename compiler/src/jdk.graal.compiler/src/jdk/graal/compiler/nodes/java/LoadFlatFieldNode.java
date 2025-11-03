@@ -58,7 +58,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  */
 // TOOD: WIP, preparation for nullable heap flattening
 @NodeInfo(nameTemplate = "LoadFlatFieldNode#{p#declaredField/s}")
-public class LoadFlatFieldNode extends FixedWithNextNode implements Virtualizable, Canonicalizable, Lowerable, OrderedMemoryAccess, MemoryAccess, SingleMemoryKill {
+public class LoadFlatFieldNode extends FixedWithNextNode implements Virtualizable, Canonicalizable, Lowerable, OrderedMemoryAccess, MemoryAccess, SingleMemoryKill, MultiValue {
     public static final NodeClass<LoadFlatFieldNode> TYPE = NodeClass.create(LoadFlatFieldNode.class);
     @OptionalInput ValueNode object;
     private final LocationIdentity location;
@@ -90,7 +90,7 @@ public class LoadFlatFieldNode extends FixedWithNextNode implements Virtualizabl
 
     @Override
     public boolean verifyNode() {
-        assertTrue(this.usages().snapshot().stream().allMatch(usage -> usage instanceof ReadMultiValueNode), "Illegal usage of %s");
+        MultiValue.verifyNode(this);
         return super.verifyNode();
     }
 
