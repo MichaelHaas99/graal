@@ -33,6 +33,7 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -151,17 +152,17 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
 
         // can also represent an oop or a null pointer
-        ReadMultiValueNode oop = b.add(new ReadMultiValueNode(returnType, b.getAssumptions(), invoke.asNode(), 0));
+        ReadMultiValueNode oop = b.add(ReadMultiValueNode.createOop(returnType, b.getAssumptions(), invoke.asNode(), 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            fieldValues[i] = b.add(new ReadMultiValueNode(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
+            fieldValues[i] = b.add(ReadMultiValueNode.createFieldValue(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
 
         }
 
-        ReadMultiValueNode nonNull = b.add(new ReadMultiValueNode(StampFactory.forKind(JavaKind.Int),
+        ReadMultiValueNode nonNull = b.add(ReadMultiValueNode.createNonNull(
                         invoke.asNode(), fields.length + 1));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false, true));
@@ -268,6 +269,12 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     @Override
     public void virtualize(VirtualizerTool tool) {
         if (!canVirtualize()) {
+            return;
+        }
+
+        ValueNode oopAlias = tool.getAlias(oop);
+        if (oopAlias instanceof VirtualObjectNode virtualOop) {
+            tool.replaceWithVirtual(virtualOop);
             return;
         }
 

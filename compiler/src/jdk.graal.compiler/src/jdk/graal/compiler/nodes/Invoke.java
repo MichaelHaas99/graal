@@ -160,17 +160,15 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
         }
 
         List<JavaType> types = GraalValhallaServices.getScalarizedReturn(this.callTarget().targetMethod());
-        int oopIndex = 0;
         ReadMultiValueNode oop = null;
-        int nonNullIndex = types.size();
         ReadMultiValueNode nonNull = null;
 
         List<ReadMultiValueNode> readMultiValue = new ArrayList<>(types.size() - 1);
         for (Node usage : asNode().usages()) {
             if (usage instanceof ReadMultiValueNode readMultiValueNode) {
-                if (readMultiValueNode.getIndex() == oopIndex) {
+                if (readMultiValueNode.isOop()) {
                     oop = readMultiValueNode;
-                } else if (readMultiValueNode.getIndex() == nonNullIndex) {
+                } else if (readMultiValueNode.isNonNull()) {
                     nonNull = readMultiValueNode;
                 } else {
                     readMultiValue.add(readMultiValueNode);

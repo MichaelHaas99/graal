@@ -16,7 +16,11 @@ import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
+import jdk.graal.compiler.nodes.spi.Virtualizable;
+import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 
 /**
@@ -25,12 +29,14 @@ import jdk.vm.ci.meta.JavaType;
  * an {@link InvokeNode} which has a scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ReadMultiValue#{p#index}", cycles = CYCLES_0, size = SIZE_0)
-public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable, NodeWithIdentity {
+public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable, NodeWithIdentity, Virtualizable {
     public static final NodeClass<ReadMultiValueNode> TYPE = NodeClass.create(ReadMultiValueNode.class);
 
     @Input ValueNode multiValueNode;
 
     private final int index;
+    private final boolean isNonNull;
+    private final boolean isOop;
 
     public int getIndex() {
         return index;
@@ -40,23 +46,46 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return multiValueNode;
     }
 
-    public ReadMultiValueNode(Stamp stamp, ValueNode multiValueNode, int index) {
-        this(TYPE, stamp, multiValueNode, index);
+    public boolean isNonNull() {
+        return isNonNull;
     }
 
-    public ReadMultiValueNode(NodeClass<? extends FloatingNode> c, Stamp stamp, ValueNode multiValueNode, int index) {
+    public boolean isOop() {
+        return isOop;
+    }
+
+    private ReadMultiValueNode(NodeClass<? extends FloatingNode> c, Stamp stamp, ValueNode multiValueNode, int index, boolean isOop, boolean isNonNull) {
         super(c, stamp);
         this.multiValueNode = multiValueNode;
         this.index = index;
+        this.isOop = isOop;
+        this.isNonNull = isNonNull;
     }
 
-    public ReadMultiValueNode(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index) {
-        this(StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiValueNode, index);
+    public ReadMultiValueNode(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index, boolean isOop, boolean isNonNull) {
+        this(TYPE, StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiValueNode, index, isOop, isNonNull);
+    }
+
+    public static ReadMultiValueNode createNonNull(ValueNode multiValueNode, int index) {
+        return new ReadMultiValueNode(TYPE, StampFactory.forKind(JavaKind.Int), multiValueNode, index, false, true);
+    }
+
+    public static ReadMultiValueNode createOop(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index) {
+        return new ReadMultiValueNode(type, assumptions, multiValueNode, index, true, false);
+    }
+
+    public static ReadMultiValueNode createFieldValue(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index) {
+        return new ReadMultiValueNode(type, assumptions, multiValueNode, index, false, false);
     }
 
     public void delete() {
         replaceAtUsages(null);
         safeDelete();
+    }
+
+    public InlineTypeNode getInlineTypeNode() {
+        assert hasExactlyOneUsage() : "only one usage expected";
+        return (InlineTypeNode) usages().first();
     }
 
     /**
@@ -76,4 +105,18 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return this;
     }
 
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        ValueNode alias = tool.getAlias(multiValueNode);
+        if (alias instanceof VirtualObjectNode virtualMultiValue) {
+            if (isOop) {
+                // Just replace this node with the MultiValueNode, the InlineTypeNode will then
+                // replace itself with the virtual oop value
+                tool.replaceWithVirtual(virtualMultiValue);
+            } else {
+                tool.delete();
+            }
+        }
+
+    }
 }
