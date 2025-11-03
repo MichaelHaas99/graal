@@ -24,6 +24,7 @@ import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
@@ -152,18 +153,18 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
 
         // can also represent an oop or a null pointer
-        ReadMultiValueNode oop = b.add(ReadMultiValueNode.createOop(returnType, b.getAssumptions(), invoke.asNode(), 0));
+        ReadMultiValueNode oop = b.add(ReadMultiValueNode.createOop(returnType, b.getAssumptions(), invoke, 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            fieldValues[i] = b.add(ReadMultiValueNode.createFieldValue(fields[i].getType(), b.getAssumptions(), invoke.asNode(), i + 1));
+            fieldValues[i] = b.add(ReadMultiValueNode.createFieldValue(fields[i].getType(), b.getAssumptions(), invoke, i + 1));
 
         }
 
         ReadMultiValueNode nonNull = b.add(ReadMultiValueNode.createNonNull(
-                        invoke.asNode(), fields.length + 1));
+                        invoke, fields.length + 1));
 
         InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false, true));
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
@@ -173,17 +174,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     }
 
     public void removeOnInlining() {
-        assert oop instanceof ReadMultiValueNode : "oop has to be a ReadMultiValueNode";
-        assert nonNull instanceof ReadMultiValueNode : "nonNull has to be a ReadMultiValueNode";
-        ValueNode invoke = ((ReadMultiValueNode) oop).getMultiValueNode();
+        MultiValue invoke = ((ReadMultiValueNode) oop).getMultiValueNode();
         assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
-        replaceAtUsages(invoke);
+        replaceAtUsages(invoke.asNode());
 
         // remove inputs of ReadMultiValueNode to MultiValueNode
         ((ReadMultiValueNode) oop).delete();
         ((ReadMultiValueNode) nonNull).delete();
         for (ValueNode p : entries) {
-            assert p instanceof ReadMultiValueNode : "scalarized value has to be a ProjNode";
             ((ReadMultiValueNode) p).delete();
         }
 

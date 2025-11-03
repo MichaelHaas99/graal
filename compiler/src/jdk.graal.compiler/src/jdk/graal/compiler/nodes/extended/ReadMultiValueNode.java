@@ -12,6 +12,7 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.InvokeNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
+import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
@@ -24,15 +25,15 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 
 /**
- * The {@code ReadMultiValueNode} represents one returned value from a MultiValueNode. A
- * MultiValueNode in this context is a node which returns a nullable scalarized inline object. E.g.
- * an {@link InvokeNode} which has a scalarized return can return multiple values in registers.
+ * The {@code ReadMultiValueNode} represents one returned value from a MultiValue. A MultiValue in
+ * this context is a node which returns a nullable scalarized inline object. E.g. an
+ * {@link InvokeNode} which has a scalarized return can return multiple values in registers.
  */
 @NodeInfo(nameTemplate = "ReadMultiValue#{p#index}", cycles = CYCLES_0, size = SIZE_0)
 public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable, NodeWithIdentity, Virtualizable {
     public static final NodeClass<ReadMultiValueNode> TYPE = NodeClass.create(ReadMultiValueNode.class);
 
-    @Input ValueNode multiValueNode;
+    @Input MultiValue multiValueNode;
 
     private final int index;
     private final boolean isNonNull;
@@ -42,7 +43,7 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return index;
     }
 
-    public ValueNode getMultiValueNode() {
+    public MultiValue getMultiValueNode() {
         return multiValueNode;
     }
 
@@ -54,7 +55,7 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return isOop;
     }
 
-    private ReadMultiValueNode(NodeClass<? extends FloatingNode> c, Stamp stamp, ValueNode multiValueNode, int index, boolean isOop, boolean isNonNull) {
+    private ReadMultiValueNode(NodeClass<? extends FloatingNode> c, Stamp stamp, MultiValue multiValueNode, int index, boolean isOop, boolean isNonNull) {
         super(c, stamp);
         this.multiValueNode = multiValueNode;
         this.index = index;
@@ -62,19 +63,19 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         this.isNonNull = isNonNull;
     }
 
-    public ReadMultiValueNode(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index, boolean isOop, boolean isNonNull) {
+    public ReadMultiValueNode(JavaType type, Assumptions assumptions, MultiValue multiValueNode, int index, boolean isOop, boolean isNonNull) {
         this(TYPE, StampFactory.forDeclaredType(assumptions, type, false).getTrustedStamp(), multiValueNode, index, isOop, isNonNull);
     }
 
-    public static ReadMultiValueNode createNonNull(ValueNode multiValueNode, int index) {
+    public static ReadMultiValueNode createNonNull(MultiValue multiValueNode, int index) {
         return new ReadMultiValueNode(TYPE, StampFactory.forKind(JavaKind.Int), multiValueNode, index, false, true);
     }
 
-    public static ReadMultiValueNode createOop(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index) {
+    public static ReadMultiValueNode createOop(JavaType type, Assumptions assumptions, MultiValue multiValueNode, int index) {
         return new ReadMultiValueNode(type, assumptions, multiValueNode, index, true, false);
     }
 
-    public static ReadMultiValueNode createFieldValue(JavaType type, Assumptions assumptions, ValueNode multiValueNode, int index) {
+    public static ReadMultiValueNode createFieldValue(JavaType type, Assumptions assumptions, MultiValue multiValueNode, int index) {
         return new ReadMultiValueNode(type, assumptions, multiValueNode, index, false, false);
     }
 
@@ -107,10 +108,10 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(multiValueNode);
+        ValueNode alias = tool.getAlias(multiValueNode.asNode());
         if (alias instanceof VirtualObjectNode virtualMultiValue) {
             if (isOop) {
-                // Just replace this node with the MultiValueNode, the InlineTypeNode will then
+                // Just replace this node with the MultiValue, the InlineTypeNode will then
                 // replace itself with the virtual oop value
                 tool.replaceWithVirtual(virtualMultiValue);
             } else {

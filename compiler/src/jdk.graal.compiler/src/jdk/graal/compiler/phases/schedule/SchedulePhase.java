@@ -432,7 +432,7 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
                     if (!(readMultiValueNode.getMultiValueNode() instanceof InvokeWithExceptionNode)) {
                         return false;
                     }
-                    flood.add(readMultiValueNode.getMultiValueNode());
+                    flood.add(readMultiValueNode.getMultiValueNode().asNode());
                 } else if (n instanceof VirtualObjectState virtualObjectState) {
 
                     // expect the object to be a virtual instance
