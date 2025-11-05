@@ -533,18 +533,28 @@ public abstract class LIRGenerator extends CoreProvidersDelegate implements LIRG
     protected boolean handleScalarizedReturn(ForeignCallLinkage linkage, Value[] argLocations, Value... args) {
         CallingConvention linkageCc = linkage.getOutgoingCallingConvention();
         if (InlineTypeUtil.foreignCallAllocatesInlineType(linkage)) {
-            // E.g. in x64 the register rsi (j_arg0) is the last one used in the Valhalla return
-            // convention, but the first one according to the Java calling convention.
-            // see CallNode::calling_convention in src/hotspot/share/opto/callnode.cpp and
-            // StubGenerator::generate_return_value_stub in
-            // src/hotspot/cpu/x86/stubGenerator_x86_64.cpp
+            /*
+             * E.g. in x64 the register rsi (j_arg0) is the last one used in the Valhalla return
+             * convention, but the first one according to the Java calling convention. See
+             * CallNode::calling_convention in src/hotspot/share/opto/callnode.cpp and
+             * StubGenerator::generate_return_value_stub in
+             * src/hotspot/cpu/x86/stubGenerator_x86_64.cpp. Jumping to the stub we would normally
+             * move the first argument into the first register according to the Java calling
+             * convention, so j_arg0. But this would mean we override the scalarized return value of
+             * the previous the call, so this is not allowed.
+             */
             if (((HotSpotForeignCallLinkage) linkage).isCompiledStub()) {
-                // Registers shouldn't be overwritten, we have just returned from a call, which may
-                // return an inline object scalarized and now want to jump to the stub.
-                // arg[0] lies in the first return register, keep it there
+                /*
+                 * Registers shouldn't be overwritten, we have just returned from a call, which may
+                 * return a value object scalarized and now want to jump to the stub. arg[0]
+                 * contains the oop or tagged hub which was returned from the call. It lies in the
+                 * first return register, e.g. rax in x64. We need to keep it there and don't move
+                 * it somewhere else.
+                 */
                 assert args.length == 1 : "argument count mismatch";
                 Value arg = args[0];
                 AllocatableValue loc = getRegisterConfig().getReturnRegister(JavaKind.Object).asValue(getValueKind(JavaKind.Object));
+                // don't move at all
                 emitMove(loc, arg);
                 argLocations[0] = loc;
             } else {
