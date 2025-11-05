@@ -1,8 +1,12 @@
 package jdk.graal.compiler.nodes.extended;
 
+import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_0;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
+import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -15,15 +19,19 @@ import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
+import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicNode;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
-import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
@@ -32,11 +40,14 @@ import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -149,28 +160,36 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return new InlineTypeNode(type, ConstantNode.defaultForKind(JavaKind.Object), fieldValues, nonNull, false);
     }
 
-    public static InlineTypeNode createFromInvoke(GraphBuilderContext b, Invoke invoke) {
-        ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(b.getMetaAccess());
+    public static InlineTypeNode createFromInvoke(Invoke invoke, MetaAccessProvider metaAccess) {
+        StructuredGraph graph = invoke.asNode().graph();
+        ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(metaAccess);
 
         // can also represent an oop or a null pointer
-        ReadMultiValueNode oop = b.add(ReadMultiValueNode.createOop(returnType, b.getAssumptions(), invoke, 0));
+        ReadMultiValueNode oop = graph.addOrUnique(ReadMultiValueNode.createOop(returnType, graph.getAssumptions(), invoke, 0));
 
         ResolvedJavaField[] fields = returnType.getInstanceFields(true);
         ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
-            fieldValues[i] = b.add(ReadMultiValueNode.createFieldValue(fields[i].getType(), b.getAssumptions(), invoke, i + 1));
+            fieldValues[i] = graph.addOrUnique(ReadMultiValueNode.createFieldValue(fields[i].getType(), graph.getAssumptions(), invoke, i + 1));
 
         }
 
-        ReadMultiValueNode nonNull = b.add(ReadMultiValueNode.createNonNull(
+        ReadMultiValueNode nonNull = graph.addOrUnique(ReadMultiValueNode.createNonNull(
                         invoke, fields.length + 1));
 
-        InlineTypeNode newInstance = b.append(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false, true));
+        InlineTypeNode inlineTypeNode = graph.addOrUnique(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false, true));
+        FixedNode addBefore;
+        if (invoke instanceof WithExceptionNode withExceptionNode) {
+            addBefore = withExceptionNode.next().next();
+        } else {
+            addBefore = ((FixedWithNextNode) invoke.asFixedNode()).next();
+        }
+        graph.addBeforeFixed(addBefore, inlineTypeNode);
 // b.append(new ForeignCallNode(LOG_OBJECT, oop, ConstantNode.forBoolean(true,
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
-        return newInstance;
+        return inlineTypeNode;
     }
 
     public void removeOnInlining() {
@@ -247,6 +266,23 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0;
     }
 
+    public ValueNode[] getScalarizedRepresentation(boolean isNonNull, boolean includeNonNullIfNonNull) {
+        ValueNode[] result;
+
+        if (isNonNull && !includeNonNullIfNonNull) {
+            result = entries.toArray(ValueNode.EMPTY_ARRAY);
+        } else {
+            List<ValueNode> list = new ArrayList<>(entries);
+            if (isNonNull) {
+                list.addFirst(ConstantNode.forInt(1, this.graph()));
+            } else {
+                list.addFirst(nonNull);
+            }
+            result = list.toArray(ValueNode.EMPTY_ARRAY);
+        }
+        return result;
+    }
+
     /**
      * Checks if we can use this node to perform canonicalization, e.g. replace a load field node
      * with an input of this node. This is not allowed if we may delete this node at a later stage,
@@ -288,6 +324,72 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             // create virtual object and hand over oop and non-null info
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, this.oop, this.nonNull, isAllocatedOrNull);
             tool.replaceWithVirtual(virtualObject);
+        }
+    }
+
+    @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
+    public static class Placeholder extends FixedWithNextNode implements NodeWithIdentity {
+        public static final NodeClass<Placeholder> TYPE = NodeClass.create(Placeholder.class);
+        @Input ValueNode object;
+        private final ResolvedJavaType type;
+        private final boolean nonNull;
+
+        public ValueNode object() {
+            return object;
+        }
+
+        public MethodCallTargetNode callTarget() {
+            for (Node usage : usages()) {
+                if (usage instanceof MethodCallTargetNode methodCallTargetNode && methodCallTargetNode.getScalarizedArguments().contains(this)) {
+                    return methodCallTargetNode;
+                }
+            }
+            throw GraalError.shouldNotReachHere("no call target found");
+        }
+
+        protected Placeholder(NodeClass<? extends Placeholder> c, ValueNode object, ResolvedJavaType type, boolean nonNull) {
+            super(c, StampFactory.forDeclaredType(null, type, nonNull).getTrustedStamp());
+            this.object = object;
+            this.type = type;
+            this.nonNull = nonNull;
+        }
+
+        public Placeholder(ValueNode object, ResolvedJavaType type, boolean nonNull) {
+            this(TYPE, object, type, nonNull);
+
+        }
+
+        public ValueNode[] makeReplacement() {
+            ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(this, object, List.of(type.getInstanceFields(true)), nonNull, !nonNull);
+
+            if (GraphUtil.unproxify(object) instanceof InlineTypeNode) {
+                // no need to create a new InlineTypeNode
+                this.replaceAtUsages(object);
+                graph().removeFixed(this);
+            } else {
+                if (!hasNoUsages()) {
+                    InlineTypeNode inlineTypeNode;
+                    if (nonNull) {
+                        inlineTypeNode = new InlineTypeNode(type, object, scalarizedValues, ConstantNode.forInt(1, graph()), true);
+                    } else {
+                        inlineTypeNode = new InlineTypeNode(type, object, Arrays.copyOfRange(scalarizedValues, 1, scalarizedValues.length), scalarizedValues[0], true);
+                    }
+                    graph().addOrUniqueWithInputs(inlineTypeNode);
+                    graph().replaceFixedWithFixed(this, inlineTypeNode);
+                } else {
+                    graph().removeFixed(this);
+                }
+            }
+            return scalarizedValues;
+
+        }
+
+        public void undo() {
+            if (!isAlive()) {
+                return;
+            }
+            this.replaceAtUsages(object);
+            graph().removeFixed(this);
         }
     }
 

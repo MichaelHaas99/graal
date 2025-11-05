@@ -24,14 +24,26 @@
  */
 package jdk.graal.compiler.phases.common;
 
+import java.util.List;
 import java.util.Optional;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
+
 import jdk.graal.compiler.debug.DebugCloseable;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.StructuredGraph;
+import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.nodes.util.GraphUtil;
+import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.phases.BasePhase;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Replace the arguments of a {@link MethodCallTargetNode} by the scalarized arguments demanded from
@@ -50,10 +62,45 @@ public class ValhallaCallingConventionPhase extends BasePhase<CoreProviders> {
     @SuppressWarnings("try")
     @Override
     protected void run(StructuredGraph graph, CoreProviders context) {
-        if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
+        graph.getGraphState().setDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION);
+        if (context.getValhallaOptionsProvider().callingConventionEnabled() || context.getValhallaOptionsProvider().returnConventionEnabled()) {
             for (MethodCallTargetNode n : graph.getNodes(MethodCallTargetNode.TYPE)) {
                 try (DebugCloseable scope = n.graph().withNodeSourcePosition(n)) {
-                    n.replaceArguments();
+                    ResolvedJavaMethod targetMethod = n.targetMethod();
+                    if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
+                        if (targetMethod.hasScalarizedParameters() && !(n instanceof ResolvedMethodHandleCallTargetNode) && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod)) {
+                            n.arguments().clear();
+                            List<ValueNode> scalarizedArguments = n.getScalarizedArguments().snapshot();
+                            n.getScalarizedArguments().clear();
+                            EconomicMap<ValueNode, ValueNode[]> map = EconomicMap.create(Equivalence.IDENTITY);
+                            for (int i = 0; i < scalarizedArguments.size(); i++) {
+                                if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                                    ValueNode[] cached = map.get(placeholder);
+                                    GraalError.guarantee(placeholder.isAlive() || cached != null, "can't get a result");
+                                    if (cached != null) {
+                                        n.arguments().addAll(List.of(cached));
+                                    } else {
+                                        ValueNode[] result = placeholder.makeReplacement();
+                                        map.put(placeholder, result);
+                                        n.arguments().addAll(List.of(result));
+                                    }
+                                } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true) &&
+                                                GraphUtil.unproxify(scalarizedArguments.get(i)) instanceof InlineTypeNode inlineTypeNode) {
+                                    boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
+                                    n.arguments().addAll(List.of(inlineTypeNode.getScalarizedRepresentation(nonNull, false)));
+                                } else {
+                                    n.arguments().add(scalarizedArguments.get(i));
+                                }
+                            }
+                        }
+                    }
+
+                    if (context.getValhallaOptionsProvider().returnConventionEnabled()) {
+                        if (n.targetMethod().hasScalarizedReturn() && !(n instanceof ResolvedMethodHandleCallTargetNode)) {
+                            InlineTypeUtil.handleScalarizedReturnOnInvoke(n.invoke(), context.getMetaAccess());
+                        }
+                    }
+
                 }
             }
         }

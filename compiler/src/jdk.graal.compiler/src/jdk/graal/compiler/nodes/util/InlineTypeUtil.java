@@ -43,6 +43,7 @@ import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.extended.PublishWritesNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ScalarizedReturnHandlerNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
@@ -58,6 +59,7 @@ import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -181,45 +183,85 @@ public class InlineTypeUtil {
         }
 
         List<ValueNode> arguments;
+        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
         if (graph.getGraphState().isAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
             // directly operate on the call target arguments
             assert callTargetNode.getScalarizedArguments().isEmpty() : "should be empty after Valhalla Calling Convention phase";
             arguments = callTargetNode.arguments();
+
+            boolean[] scalarizeParameters = new boolean[parameterLength];
+            int argumentIndex = 0;
+            for (int i = 0; i < parameterLength; i++) {
+                scalarizeParameters[i] = (!GraalValhallaServices.isScalarizedParameter(oldMethod, i, true) || nothingScalarizedYet) &&
+                                GraalValhallaServices.isScalarizedParameter(newMethod, i, true);
+            }
+            for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
+                if (scalarizeParameters[signatureIndex]) {
+                    ValueNode[] scalarized = createScalarizationCFGForInvokeArg(callTargetNode, arguments.get(argumentIndex), newMethod, signatureIndex);
+                    scalarizedArgs.addAll(List.of(scalarized));
+                    argumentIndex++;
+                } else {
+                    if (GraalValhallaServices.isScalarizedParameter(oldMethod, signatureIndex, true) && !nothingScalarizedYet) {
+                        int length = GraalValhallaServices.getScalarizedParameter(oldMethod, signatureIndex, true).size();
+                        scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
+                        argumentIndex += length;
+                    } else {
+                        scalarizedArgs.add(arguments.get(argumentIndex));
+                        argumentIndex++;
+                    }
+                }
+
+            }
         } else {
             // safe the arguments in an extra list
             if (callTargetNode.getScalarizedArguments().isEmpty()) {
                 callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
             }
             arguments = callTargetNode.getScalarizedArguments();
-
-        }
-
-        boolean[] scalarizeParameters = new boolean[parameterLength];
-        int argumentIndex = 0;
-        for (int i = 0; i < parameterLength; i++) {
-            scalarizeParameters[i] = (!GraalValhallaServices.isScalarizedParameter(oldMethod, i, true) || nothingScalarizedYet) &&
-                            GraalValhallaServices.isScalarizedParameter(newMethod, i, true);
-        }
-        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
-        for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
-            if (scalarizeParameters[signatureIndex]) {
-                ValueNode[] scalarized = createScalarizationCFGForInvokeArg(callTargetNode, arguments.get(argumentIndex), newMethod, signatureIndex);
-                scalarizedArgs.addAll(List.of(scalarized));
-                argumentIndex++;
-            } else {
-                if (GraalValhallaServices.isScalarizedParameter(oldMethod, signatureIndex, true) && !nothingScalarizedYet) {
-                    int length = GraalValhallaServices.getScalarizedParameter(oldMethod, signatureIndex, true).size();
-                    scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
-                    argumentIndex += length;
+            outer: for (int i = 0; i < parameterLength; i++) {
+                for (int j = 0; j < i; j++) {
+                    // perform simple gvn
+                    if (arguments.get(j).equals(arguments.get(i))) {
+                        scalarizedArgs.add(scalarizedArgs.get(j));
+                        continue outer;
+                    }
+                }
+                ValueNode unproxified = GraphUtil.unproxify(arguments.get(i));
+                if (GraalValhallaServices.isScalarizedParameter(newMethod, i, true) && !(unproxified instanceof InlineTypeNode.Placeholder placeholder && placeholder.callTarget() == callTargetNode) &&
+                                !(unproxified instanceof InlineTypeNode)) {
+                    ResolvedJavaType type = null;
+                    int index = i;
+                    if (!newMethod.isStatic()) {
+                        if (i == 0) {
+                            type = newMethod.getDeclaringClass();
+                        } else {
+                            index--;
+                        }
+                    }
+                    if (type == null) {
+                        type = (ResolvedJavaType) newMethod.getSignature().getParameterType(index, newMethod.getDeclaringClass());
+                    }
+                    InlineTypeNode.Placeholder placeholder = new InlineTypeNode.Placeholder(arguments.get(i), type, GraalValhallaServices.isParameterNullFree(newMethod, i, true));
+                    placeholder = graph.addOrUniqueWithInputs(placeholder);
+                    graph.addBeforeFixed(callTargetNode.invoke().asFixedNode(), placeholder);
+                    scalarizedArgs.add(placeholder);
                 } else {
-                    scalarizedArgs.add(arguments.get(argumentIndex));
-                    argumentIndex++;
+                    scalarizedArgs.add(arguments.get(i));
                 }
             }
-
         }
         arguments.clear();
         arguments.addAll(scalarizedArgs);
+    }
+
+    public static void inline(MethodCallTargetNode callTargetNode) {
+        List<ValueNode> scalarizedArgs = callTargetNode.getScalarizedArguments().snapshot();
+        callTargetNode.getScalarizedArguments().clear();
+        for (int i = 0; i < scalarizedArgs.size(); i++) {
+            if (scalarizedArgs.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                placeholder.undo();
+            }
+        }
     }
 
     /**
@@ -255,24 +297,23 @@ public class InlineTypeUtil {
      */
     private static ValueNode[] createScalarizationCFGForInvokeArg(FixedNode addBefore, ValueNode arg, ResolvedJavaMethod targetMethod, int signatureIndex) {
         boolean isNullFree = GraalValhallaServices.isParameterNullFree(targetMethod, signatureIndex, true);
-
-        if (GraphUtil.unproxify(arg) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
-            List<ValueNode> list = new ArrayList<>(inlineTypeNode.getEntries());
-            if (!isNullFree) {
-                ValueNode nonNull = inlineTypeNode.getNonNull();
-                if (StampTool.isPointerNonNull(arg)) {
-                    nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
-                }
-                list.addFirst(nonNull);
-            }
-            return list.toArray(new ValueNode[list.size()]);
-        }
         return createScalarizationCFG(addBefore, arg,
                         GraalValhallaServices.getScalarizedParameterFields(targetMethod, signatureIndex, true), isNullFree, !isNullFree);
     }
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
+        if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+            List<ValueNode> list = new ArrayList<>(inlineTypeNode.getEntries());
+            if (includeNonNullPhi) {
+                ValueNode nonNull = inlineTypeNode.getNonNull();
+                if (StampTool.isPointerNonNull(object)) {
+                    nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
+                }
+                list.addFirst(nonNull);
+            }
+            return list.toArray(new ValueNode[list.size()]);
+        }
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE);
     }
 
@@ -367,6 +408,7 @@ public class InlineTypeUtil {
         BeginNode falseBegin = graph.add(new BeginNode());
 
         IfNode ifNode = graph.add(new IfNode(graph.addOrUnique(nonNull), trueBegin, falseBegin, ProfileData.BranchProbabilityData.unknown()));
+        GraalError.guarantee(addBefore.predecessor() != null, addBefore.toString());
         ((FixedWithNextNode) addBefore.predecessor()).setNext(ifNode);
 
         // get a valid framestate for the merge node
@@ -474,39 +516,6 @@ public class InlineTypeUtil {
 
     private static <T> T[] reverseArray(T[] arr) {
         return List.of(arr).reversed().toArray(arr);
-    }
-
-    /**
-     * This function handles the case that an {@link Invoke} returns a nullable scalarized inline
-     * object. It appends multiple {@link jdk.graal.compiler.nodes.extended.ReadMultiValueNode} to
-     * the invoke node and creates an {@link InlineTypeNode} which gets these nodes as input. To
-     * model the concept of a nullable scalarized inline object after an invoke, a
-     * {@link VirtualInstanceNode} is pushed onto the framestate.
-     */
-    public static void handleScalarizedReturnOnInvoke(GraphBuilderContext b, Invoke invoke) {
-        InlineTypeNode result = InlineTypeNode.createFromInvoke(b, invoke);
-
-        // create virtual object representing nullable scalarized inline object in the framestate
-        VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
-        virtual.setObjectId(0);
-        b.append(virtual);
-
-        ValueNode[] newEntries = new ValueNode[result.getEntries().size()];
-
-        for (int i = 0; i < newEntries.length; i++) {
-            ValueNode entry = result.getEntries().get(i);
-            newEntries[i] = entry;
-        }
-
-        // create a framestate for invoke with virtual object
-        b.pop(JavaKind.Object);
-        b.push(JavaKind.Object, virtual);
-        b.setStateAfter(invoke);
-        invoke.stateAfter().addVirtualObjectMapping(b.append(new VirtualObjectState(virtual, newEntries, result.getNonNull())));
-        b.pop(JavaKind.Object);
-
-        // push the InlineTypeNode as result
-        b.push(JavaKind.Object, result);
     }
 
     public static void handlePossibleScalarizedReturn(GraphBuilderContext b, StateSplit invoke, int bci) {
@@ -822,5 +831,25 @@ public class InlineTypeUtil {
 
     private static boolean foreignCallAllocatesInlineType(ForeignCallDescriptor foreignCall) {
         return foreignCall.getSignature().getName().contains(ScalarizedReturnHandlerNode.STORE_INLINE_TYPE_FIELDS_TO.getName());
+    }
+
+    public static void handleScalarizedReturnOnInvoke(Invoke invoke, MetaAccessProvider metaAccess) {
+
+        StructuredGraph graph = invoke.asNode().graph();
+        InlineTypeNode result = InlineTypeNode.createFromInvoke(invoke, metaAccess);
+
+        // create virtual object representing scalarized value object in the framestate
+        VirtualObjectNode virtual = new VirtualInstanceNode(result.getType(), false);
+        virtual.setObjectId(0);
+        graph.add(virtual);
+
+        // create a framestate for invoke with virtual object
+        FrameState stateAfter = invoke.stateAfter();
+        stateAfter.addVirtualObjectMapping(graph.addOrUnique(new VirtualObjectState(virtual, result.getEntries().toArray(ValueNode.EMPTY_ARRAY), result.getNonNull())));
+        stateAfter.replaceFirstInput(invoke.asNode(), virtual);
+
+        // replace the invoke
+        invoke.asNode().replaceAtUsages(result, v -> !(v instanceof ReadMultiValueNode n && n.getMultiValueNode() == invoke));
+
     }
 }

@@ -396,6 +396,7 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.HasIdentityNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -2367,6 +2368,13 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                         GraalValhallaServices.hasScalarizedParameters(targetMethod) &&
                         !fromMethodHandle) {
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
+            List<ValueNode> scalarizedArguments = callTarget.getScalarizedArguments();
+            for (int i = 0; i < parameterLength; i++) {
+                if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                    // propagate the scalarized value object in the framestate
+                    replaceValueInFrameState(invokeArgs[i], placeholder);
+                }
+            }
         }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
@@ -2394,11 +2402,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             // check if the return type is already resolved
             if (!typeIsResolved(returnType)) {
                 InlineTypeUtil.handlePossibleScalarizedReturn(this, invoke, invoke.bci());
-                return invoke;
-            }
-
-            if (GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                InlineTypeUtil.handleScalarizedReturnOnInvoke(this, invoke);
                 return invoke;
             }
         }
