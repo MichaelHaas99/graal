@@ -6,6 +6,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.stream.Collectors;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
@@ -38,6 +39,7 @@ import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
+import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
@@ -51,6 +53,7 @@ import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.WriteNode;
 import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
+import jdk.graal.compiler.nodes.spi.ValueProxy;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -305,7 +308,7 @@ public class InlineTypeUtil {
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        if (GraphUtil.unproxifyExceptLoopProxies(object) instanceof InlineTypeNode inlineTypeNode) {
+        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
             return inlineTypeNode.getScalarizedRepresentation(StampTool.isPointerNonNull(object), includeNonNullPhi);
         }
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE);
@@ -845,5 +848,37 @@ public class InlineTypeUtil {
         // replace the invoke
         invoke.asNode().replaceAtUsages(result, v -> !(v instanceof ReadMultiValueNode n && n.getMultiValueNode() == invoke));
 
+    }
+
+    public static ValueNode unproxify(ValueNode value) {
+        if (value instanceof ValueProxy valueProxy) {
+            StructuredGraph graph = valueProxy.asNode().graph();
+            ValueNode originalNode = valueProxy.getOriginalNode();
+            ValueNode result = unproxify(originalNode);
+            if (result instanceof InlineTypeNode inlineTypeNode && valueProxy instanceof ValueProxyNode valueProxyNode) {
+                // push the InlineTypeNode through loops
+                ValueNode nonNull;
+                if (StampTool.isPointerNonNull(valueProxyNode)) {
+                    nonNull = ConstantNode.forInt(1, graph);
+                } else {
+                    nonNull = inlineTypeNode.getNonNull();
+                }
+                List<ValueNode> entries = inlineTypeNode.getEntries();
+                nonNull = graph.addOrUnique(new ValueProxyNode(nonNull, valueProxyNode.proxyPoint()));
+                entries = entries.stream().map(e -> graph.addWithoutUnique(new ValueProxyNode(e, valueProxyNode.proxyPoint()))).collect(Collectors.toList());
+                // Set the proxy as oop such that during PEA we just reuse the already created
+                // virtual object. We actually build a chain of InlineType nodes.
+                InlineTypeNode replacement = graph.add(new InlineTypeNode(inlineTypeNode.getType(), valueProxyNode, entries.toArray(ValueNode.EMPTY_ARRAY), nonNull, true));
+                graph.addAfterFixed(valueProxyNode.proxyPoint(), replacement);
+                FrameState state = valueProxyNode.proxyPoint().stateAfter();
+                // Don't touch the frame state of the loop exit as well as the inputs of the
+                // replacement.
+                valueProxyNode.replaceAtUsages(replacement, u -> !(u instanceof FrameState frameState && frameState == state) && !(u == replacement));
+                return replacement;
+            }
+            return result;
+        } else {
+            return value;
+        }
     }
 }

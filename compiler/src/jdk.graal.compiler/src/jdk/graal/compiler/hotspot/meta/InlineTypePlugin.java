@@ -56,7 +56,6 @@ import jdk.graal.compiler.nodes.java.StoreFlatElementNode;
 import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
@@ -111,7 +110,7 @@ public class InlineTypePlugin implements NodePlugin {
 
         }
 
-        if (GraphUtil.unproxifyExceptLoopProxies(object) instanceof InlineTypeNode inlineTypeNode) {
+        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
             b.nullCheckedValue(object, InvalidateReprofile);
             b.push(field.getJavaKind(), inlineTypeNode.getEntry(field));
             return true;
@@ -273,7 +272,7 @@ public class InlineTypePlugin implements NodePlugin {
         List<StoreFlatFieldNode.SingleWriteOperation> writeOperations = new ArrayList<>();
 
         boolean isAlreadyScalarized = false;
-        if (GraphUtil.unproxifyExceptLoopProxies(value) instanceof InlineTypeNode inlineTypeNode) {
+        if (InlineTypeUtil.unproxify(value) instanceof InlineTypeNode inlineTypeNode) {
             readOperations.addAll(inlineTypeNode.getEntries());
             isAlreadyScalarized = true;
         }

@@ -25,11 +25,9 @@ import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.Invoke;
-import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.WithExceptionNode;
-import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
@@ -83,10 +81,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     private final boolean isAllocatedOrNull;
     private final ResolvedJavaType type;
     private final ResolvedJavaField[] fields;
-    private final boolean handlesScalarizedReturn;
 
     @SuppressWarnings("this-escape")
-    private InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull, boolean handlesScalarizedReturn) {
+    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull) {
         super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
         this.oop = oop;
         this.nonNull = nonNull;
@@ -96,11 +93,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         this.type = type;
         this.fields = type.getInstanceFields(true);
         inferStamp();
-        this.handlesScalarizedReturn = handlesScalarizedReturn;
-    }
-
-    public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull) {
-        this(type, oop, entries, nonNull, isAllocatedOrNull, false);
     }
 
     public ValueNode getOop() {
@@ -113,12 +105,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public boolean isAllocatedOrNull() {
         return isAllocatedOrNull;
-    }
-
-    public LogicNode createNullCheck(boolean insertIntoGraph) {
-        assert !StampTool.isPointerNonNull(this) : "should only be called if node is not non-null";
-        LogicNode check = new IntegerEqualsNode(nonNull, ConstantNode.forInt(0, graph()));
-        return insertIntoGraph ? graph().addOrUnique(check) : check;
     }
 
     public List<ValueNode> getEntries() {
@@ -176,7 +162,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         ReadMultiValueNode nonNull = graph.addOrUnique(ReadMultiValueNode.createNonNull(
                         invoke, fields.length + 1));
 
-        InlineTypeNode inlineTypeNode = graph.addOrUnique(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false, true));
+        InlineTypeNode inlineTypeNode = graph.addOrUnique(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false));
         FixedNode addBefore;
         if (invoke instanceof WithExceptionNode withExceptionNode) {
             addBefore = withExceptionNode.next().next();

@@ -80,12 +80,12 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
 
     public static LogicNode create(ValueNode forValue) {
         assertNonNarrow(forValue);
-        return canonicalized(null, forValue, JavaConstant.NULL_POINTER);
+        return canonicalized(null, forValue, JavaConstant.NULL_POINTER, false);
     }
 
     public static LogicNode create(ValueNode forValue, JavaConstant nullConstant) {
         assert nullConstant.isNull() : "Null constant is not null: " + nullConstant;
-        return canonicalized(null, forValue, nullConstant);
+        return canonicalized(null, forValue, nullConstant, false);
     }
 
     private static void assertNonNarrow(ValueNode object) {
@@ -106,10 +106,10 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        return canonicalized(this, forValue, nullConstant);
+        return canonicalized(this, forValue, nullConstant, true);
     }
 
-    private static LogicNode canonicalized(IsNullNode node, ValueNode forValue, JavaConstant forNullConstant) {
+    private static LogicNode canonicalized(IsNullNode node, ValueNode forValue, JavaConstant forNullConstant, boolean isCanonicalization) {
         JavaConstant nullConstant = forNullConstant;
         ValueNode value = forValue;
 
@@ -150,7 +150,7 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
             }
 
             if (forValue instanceof InlineTypeNode inlineTypeNode) {
-                return inlineTypeNode.createNullCheck(false);
+                return new IntegerEqualsNode(!isCanonicalization ? ConstantNode.forInt(0, inlineTypeNode.graph()) : ConstantNode.forInt(0), inlineTypeNode.getNonNull());
             }
 
             /*

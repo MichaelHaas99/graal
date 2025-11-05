@@ -38,7 +38,6 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
-import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
@@ -88,7 +87,7 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                                         n.arguments().addAll(List.of(result));
                                     }
                                 } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true) &&
-                                                GraphUtil.unproxify(scalarizedArguments.get(i)) instanceof InlineTypeNode inlineTypeNode) {
+                                                InlineTypeUtil.unproxify(scalarizedArguments.get(i)) instanceof InlineTypeNode inlineTypeNode) {
                                     boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
                                     n.arguments().addAll(List.of(inlineTypeNode.getScalarizedRepresentation(nonNull, false)));
                                 } else {

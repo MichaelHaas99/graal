@@ -19,7 +19,6 @@ import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -64,7 +63,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
         ReturnScalarizedNode returnNode;
-        if (GraphUtil.unproxifyExceptLoopProxies(result) instanceof InlineTypeNode inlineTypeNode) {
+        if (InlineTypeUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode) {
             List<ValueNode> list = inlineTypeNode.getEntries();
             if (inlineTypeNode.isAllocatedOrNull()) {
                 returnNode = b.add(new ReturnScalarizedNode(inlineTypeNode.getOop(), list));
