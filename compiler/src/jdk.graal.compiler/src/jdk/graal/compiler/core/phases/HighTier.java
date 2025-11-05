@@ -73,7 +73,7 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new DeadCodeEliminationPhase(Optional));
         }
 
-        appendPhase(new ValhallaCallingConventionPhase());
+        appendPhase(new ValhallaCallingConventionPhase(canonicalizer));
 
         appendPhase(new DisableOverflownCountedLoopsPhase());
 

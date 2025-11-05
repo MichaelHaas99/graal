@@ -259,7 +259,9 @@ public class InlineTypeUtil {
         callTargetNode.getScalarizedArguments().clear();
         for (int i = 0; i < scalarizedArgs.size(); i++) {
             if (scalarizedArgs.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
-                placeholder.undo();
+                if (placeholder.isAlive()) {
+                    placeholder.undo();
+                }
             }
         }
     }
@@ -303,7 +305,7 @@ public class InlineTypeUtil {
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+        if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
             List<ValueNode> list = new ArrayList<>(inlineTypeNode.getEntries());
             if (includeNonNullPhi) {
                 ValueNode nonNull = inlineTypeNode.getNonNull();

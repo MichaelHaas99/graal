@@ -64,7 +64,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
         ReturnScalarizedNode returnNode;
-        if (GraphUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+        if (GraphUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode) {
             List<ValueNode> list = inlineTypeNode.getEntries();
             if (inlineTypeNode.isAllocatedOrNull()) {
                 returnNode = b.add(new ReturnScalarizedNode(inlineTypeNode.getOop(), list));

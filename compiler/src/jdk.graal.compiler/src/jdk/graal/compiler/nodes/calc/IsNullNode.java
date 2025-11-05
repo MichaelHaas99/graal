@@ -149,7 +149,7 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
                 }
             }
 
-            if (forValue instanceof InlineTypeNode inlineTypeNode && inlineTypeNode.canBeUsedInCanonicalization()) {
+            if (forValue instanceof InlineTypeNode inlineTypeNode) {
                 return inlineTypeNode.createNullCheck(false);
             }
 

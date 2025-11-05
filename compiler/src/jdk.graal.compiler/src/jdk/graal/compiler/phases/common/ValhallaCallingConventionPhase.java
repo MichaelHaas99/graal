@@ -40,7 +40,6 @@ import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
-import jdk.graal.compiler.phases.BasePhase;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -50,7 +49,11 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  * the Valhalla Calling Convention. This is done after inlining such that overhead is avoided, but
  * before PEA such that materializations don't happen.
  */
-public class ValhallaCallingConventionPhase extends BasePhase<CoreProviders> {
+public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase<CoreProviders> {
+
+    public ValhallaCallingConventionPhase(CanonicalizerPhase canonicalizer) {
+        super(canonicalizer);
+    }
 
     @Override
     public Optional<NotApplicable> notApplicableTo(GraphState graphState) {

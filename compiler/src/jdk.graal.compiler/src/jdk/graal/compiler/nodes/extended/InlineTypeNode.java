@@ -24,7 +24,6 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -217,9 +216,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     // comment to see inline type node getting materialized to null for test6_verifier
     @Override
     public void simplify(SimplifierTool tool) {
-        if (!canBeUsedInCanonicalization()) {
-            return;
-        }
 
         if (StampTool.isPointerAlwaysNull(this)) {
             List<Node> inputSnapshot = inputs().snapshot();
@@ -283,28 +279,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return result;
     }
 
-    /**
-     * Checks if we can use this node to perform canonicalization, e.g. replace a load field node
-     * with an input of this node. This is not allowed if we may delete this node at a later stage,
-     * e.g. the invoke node whose scalarized return this node catches is inlined.
-     */
-    public boolean canBeUsedInCanonicalization() {
-        return !handlesScalarizedReturn;
-    }
-
-    /**
-     * We are not allowed to virtualize before the final partial escape phase, as the invoke whose
-     * scalarized return we handle with this node may be inlined and this node has to be deleted.
-     */
-    public boolean canVirtualize() {
-        return canBeUsedInCanonicalization() || this.graph().getGraphState().isDuringStage(GraphState.StageFlag.FINAL_PARTIAL_ESCAPE);
-    }
-
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!canVirtualize()) {
-            return;
-        }
 
         ValueNode oopAlias = tool.getAlias(oop);
         if (oopAlias instanceof VirtualObjectNode virtualOop) {
@@ -385,9 +361,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         }
 
         public void undo() {
-            if (!isAlive()) {
-                return;
-            }
             this.replaceAtUsages(object);
             graph().removeFixed(this);
         }
