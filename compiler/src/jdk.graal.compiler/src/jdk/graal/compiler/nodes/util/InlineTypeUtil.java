@@ -226,7 +226,7 @@ public class InlineTypeUtil {
                         continue outer;
                     }
                 }
-                ValueNode unproxified = GraphUtil.unproxify(arguments.get(i));
+                ValueNode unproxified = GraphUtil.unproxifyExceptLoopProxies(arguments.get(i));
                 if (GraalValhallaServices.isScalarizedParameter(newMethod, i, true) && !(unproxified instanceof InlineTypeNode.Placeholder placeholder && placeholder.callTarget() == callTargetNode) &&
                                 !(unproxified instanceof InlineTypeNode)) {
                     ResolvedJavaType type = null;
@@ -305,16 +305,8 @@ public class InlineTypeUtil {
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
-            List<ValueNode> list = new ArrayList<>(inlineTypeNode.getEntries());
-            if (includeNonNullPhi) {
-                ValueNode nonNull = inlineTypeNode.getNonNull();
-                if (StampTool.isPointerNonNull(object)) {
-                    nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
-                }
-                list.addFirst(nonNull);
-            }
-            return list.toArray(new ValueNode[list.size()]);
+        if (GraphUtil.unproxifyExceptLoopProxies(object) instanceof InlineTypeNode inlineTypeNode) {
+            return inlineTypeNode.getScalarizedRepresentation(StampTool.isPointerNonNull(object), includeNonNullPhi);
         }
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE);
     }

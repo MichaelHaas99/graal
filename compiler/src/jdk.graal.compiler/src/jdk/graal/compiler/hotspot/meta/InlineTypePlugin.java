@@ -111,7 +111,7 @@ public class InlineTypePlugin implements NodePlugin {
 
         }
 
-        if (GraphUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
+        if (GraphUtil.unproxifyExceptLoopProxies(object) instanceof InlineTypeNode inlineTypeNode) {
             b.nullCheckedValue(object, InvalidateReprofile);
             b.push(field.getJavaKind(), inlineTypeNode.getEntry(field));
             return true;
@@ -273,7 +273,7 @@ public class InlineTypePlugin implements NodePlugin {
         List<StoreFlatFieldNode.SingleWriteOperation> writeOperations = new ArrayList<>();
 
         boolean isAlreadyScalarized = false;
-        if (GraphUtil.unproxify(value) instanceof InlineTypeNode inlineTypeNode) {
+        if (GraphUtil.unproxifyExceptLoopProxies(value) instanceof InlineTypeNode inlineTypeNode) {
             readOperations.addAll(inlineTypeNode.getEntries());
             isAlreadyScalarized = true;
         }
