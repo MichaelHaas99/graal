@@ -31,7 +31,6 @@ import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
-import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
@@ -189,23 +188,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 // b.getGraph()), ConstantNode.forBoolean(true, b.getGraph())));
 
         return inlineTypeNode;
-    }
-
-    public void removeOnInlining() {
-        MultiValue invoke = ((ReadMultiValueNode) oop).getMultiValueNode();
-        assert invoke instanceof Invoke : "should only be called on inlining of invoke nodes";
-        replaceAtUsages(invoke.asNode());
-
-        // remove inputs of ReadMultiValueNode to MultiValueNode
-        ((ReadMultiValueNode) oop).delete();
-        ((ReadMultiValueNode) nonNull).delete();
-        for (ValueNode p : entries) {
-            ((ReadMultiValueNode) p).delete();
-        }
-
-        // set control flow correctly and delete
-        graph().removeFixed(this);
-
     }
 
     @Override

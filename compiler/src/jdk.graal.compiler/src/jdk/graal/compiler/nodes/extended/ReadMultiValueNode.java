@@ -79,11 +79,6 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return new ReadMultiValueNode(type, assumptions, multiValueNode, index, false, false);
     }
 
-    public void delete() {
-        replaceAtUsages(null);
-        safeDelete();
-    }
-
     public InlineTypeNode getInlineTypeNode() {
         assert hasExactlyOneUsage() : "only one usage expected";
         return (InlineTypeNode) usages().first();

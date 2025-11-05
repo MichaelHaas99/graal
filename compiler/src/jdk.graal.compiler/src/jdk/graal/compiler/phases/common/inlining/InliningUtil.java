@@ -97,7 +97,6 @@ import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.GuardedNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.extended.ScalarizedReturnHandlerNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
@@ -114,7 +113,6 @@ import jdk.graal.compiler.phases.common.util.EconomicSetNodeEventListener;
 import jdk.graal.compiler.phases.util.ValueMergeUtil;
 import jdk.graal.compiler.replacements.nodes.MacroInvokable;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
-import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.serviceprovider.SpeculationReasonGroup;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -512,10 +510,6 @@ public class InliningUtil extends ValueMergeUtil {
             if (methodHandle.targetMethod().equals(macroInvokable.getTargetMethod()) && getDepth(invoke.stateAfter()) == getDepth(macroInvokable.stateAfter())) {
                 macroInvokable.addMethodHandleInfo(methodHandle);
             }
-        }
-
-        if (invoke.next() instanceof InlineTypeNode inlineTypeNode && GraalValhallaServices.hasScalarizedReturn(inlineeMethod)) {
-            inlineTypeNode.removeOnInlining();
         }
 
         FixedNode next = invoke.next();
