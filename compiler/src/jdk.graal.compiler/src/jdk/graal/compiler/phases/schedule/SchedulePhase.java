@@ -409,13 +409,16 @@ public final class SchedulePhase extends BasePhase<CoreProviders> {
          * nothing can be scheduled after it in the same block. But in case it has a scalarized
          * return value, multiple {@link ReadMultiValueNode} will be attached to it. Their results
          * will be generated during {@link InvokeWithExceptionNode#generate(NodeLIRBuilderTool)}.The
-         * scheduler can therefore make an exception for this case. A valid graph has this cycle:
-         * InvokeWithExceptionNode -> Framestate -> ReadMultiValueNode -> InvokeWithExceptionNode.
+         * scheduler can therefore make an exception for this case, similar to what is done for
+         * framestates in {@link #checkLatestEarliestRelation(Node, HIRBlock, HIRBlock, Node)}. A
+         * valid graph has this cycle: InvokeWithExceptionNode -> Framestate -> ReadMultiValueNode
+         * -> InvokeWithExceptionNode.
          */
         private static boolean checkInvokeWithExceptionScalarizedReturn(Node currentNode, HIRBlock earliestBlock, HIRBlock latestBlock, Node currentUsage) {
-            if (!((currentNode instanceof ReadMultiValueNode && (currentUsage == null || currentUsage instanceof VirtualObjectState)) ||
-                            (currentNode instanceof VirtualObjectState && (currentUsage == null || currentUsage instanceof FrameState))))
+            if (!(currentNode instanceof ReadMultiValueNode) &&
+                            !(currentNode instanceof VirtualObjectState)) {
                 return false;
+            }
 
             if (latestBlock != earliestBlock.getDominator()) {
                 return false;
