@@ -45,8 +45,9 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Replace the arguments of a {@link MethodCallTargetNode} by the scalarized arguments demanded from
- * the Valhalla Calling Convention. This is done after inlining such that overhead is avoided, but
- * before PEA such that materializations don't happen.
+ * the Valhalla Calling Convention and also attaches multiple nodes to each {@code Invoke} to
+ * confirm to the Valhalla Return Convention. This is done after inlining such that overhead of dead
+ * scalarization graphs is avoided, but before PEA such that materializations don't happen.
  */
 public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase<CoreProviders> {
 
@@ -74,9 +75,12 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                             n.arguments().clear();
                             List<ValueNode> scalarizedArguments = n.getScalarizedArguments().snapshot();
                             n.getScalarizedArguments().clear();
+                            // In case the list contains a node multiple times it will be dead after
+                            // the first time, so we just use a cache.
                             EconomicMap<ValueNode, ValueNode[]> map = EconomicMap.create(Equivalence.IDENTITY);
                             for (int i = 0; i < scalarizedArguments.size(); i++) {
                                 if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                                    // handle the placeholder
                                     ValueNode[] cached = map.get(placeholder);
                                     GraalError.guarantee(placeholder.isAlive() || cached != null, "can't get a result");
                                     if (cached != null) {
@@ -88,9 +92,11 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                                     }
                                 } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true) &&
                                                 InlineTypeUtil.unproxify(scalarizedArguments.get(i)) instanceof InlineTypeNode inlineTypeNode) {
+                                    // the value object is already scalarized
                                     boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
                                     n.arguments().addAll(List.of(inlineTypeNode.getScalarizedRepresentation(nonNull, false)));
                                 } else {
+                                    // just add the argument
                                     n.arguments().add(scalarizedArguments.get(i));
                                 }
                             }

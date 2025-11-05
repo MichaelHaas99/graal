@@ -850,6 +850,14 @@ public class InlineTypeUtil {
 
     }
 
+    /**
+     * Similar to {@code GraphUtil#unproxify}, although we do it recursively. When coming back with
+     * an unproxified value, we try to push it through loops. This is necessary as each value of the
+     * value object needs to be put into a {@link ValueProxyNode}. We just copy the node and place
+     * it at the loop exit. During PEA the first value object will become virtual. The second value
+     * object will replace itself with the virtual object of the first value object. See
+     * {@code InlineTypeNode#virtualize}.
+     */
     public static ValueNode unproxify(ValueNode value) {
         if (value instanceof ValueProxy valueProxy) {
             StructuredGraph graph = valueProxy.asNode().graph();

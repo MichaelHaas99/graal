@@ -271,6 +271,13 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         }
     }
 
+    /**
+     * A placeholder for the {@link InlineTypeNode}. This is useful in case we don't know during
+     * parsing if we need to scalarize a value object. E.g. a method can be inlined during {@code
+     * InliningPhase} making the scalarization graph for a value object being passed as argument
+     * obsolete. The phase {@code ValhallaCallingConventionPhase} makes sure that this node is
+     * either replaced by an {@code InlineTypeNode} or by its previous value {@link #object}.
+     */
     @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
     public static class Placeholder extends FixedWithNextNode implements NodeWithIdentity {
         public static final NodeClass<Placeholder> TYPE = NodeClass.create(Placeholder.class);
