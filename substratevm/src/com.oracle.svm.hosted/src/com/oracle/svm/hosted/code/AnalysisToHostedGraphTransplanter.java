@@ -188,31 +188,42 @@ public class AnalysisToHostedGraphTransplanter {
 
     private void transplantUnsetFields(CommitAllocationNode node) {
         int i = 0;
-        List<boolean[]> unsetFieldsList = node.getUnsetFields();
-        List<boolean[]> hUnsetFieldsList = new ArrayList<>(unsetFieldsList.size());
+        List<Boolean> unsetFieldsList = node.getUnsetFieldsList();
+        List<Integer> unsetFieldsIndexes = node.getUnsetFieldsIndexes();
+        ArrayList<Boolean> hUnsetFieldsList = new ArrayList<>(unsetFieldsList.size());
+        ArrayList<Integer> hUnsetFieldsIndexes = new ArrayList<>(unsetFieldsIndexes.size());
+        hUnsetFieldsIndexes.add(0);
         for (VirtualObjectNode virtualObject : node.getVirtualObjects()) {
-            boolean[] aUnsetFields = unsetFieldsList.get(i);
-            if (aUnsetFields.length != 0) {
+            List<Boolean> aUnsetFields = node.getUnsetFieldsList(i);
+            if (!aUnsetFields.isEmpty()) {
                 AnalysisType aType = (AnalysisType) virtualObject.type();
                 HostedField[] hFields = universe.lookup(aType).getInstanceFields(true);
-                boolean[] hUnsetFields = new boolean[hFields.length];
-                int j = 0;
+                List<Boolean> hUnsetFields = new ArrayList<>(hFields.length);
                 for (HostedField hField : hFields) {
                     int aPosition = hField.wrapped.getPosition();
-                    hUnsetFields[j] = aUnsetFields[aPosition];
-                    j++;
+                    hUnsetFields.add(aUnsetFields.get(aPosition));
                 }
-                hUnsetFieldsList.add(hUnsetFields);
+                hUnsetFieldsList.addAll(hUnsetFields);
+                hUnsetFieldsIndexes.add(hUnsetFieldsList.size());
             } else {
-                hUnsetFieldsList.add(aUnsetFields);
+                hUnsetFieldsList.addAll(aUnsetFields);
+                hUnsetFieldsIndexes.add(hUnsetFieldsList.size());
             }
             i++;
         }
 
         Fields nodeClassDataFields = node.getNodeClass().getData();
+        /*
+         * TODO: for some reason the builder uses the same list also for ensureVirtual if the
+         * content is equal. So we can't do a identity check on the field value to decide where to
+         * store the new list. I use the field names instead.
+         */
         for (int j = 0; j < nodeClassDataFields.getCount(); j++) {
-            if (nodeClassDataFields.get(node, j) == unsetFieldsList) {
+            if (nodeClassDataFields.getName(j).equals("unsetFields")) {
                 nodeClassDataFields.putObjectChecked(node, j, hUnsetFieldsList);
+            }
+            if (nodeClassDataFields.getName(j).equals("unsetFieldsIndexes")) {
+                nodeClassDataFields.putObjectChecked(node, j, hUnsetFieldsIndexes);
             }
         }
     }
