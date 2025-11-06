@@ -84,7 +84,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     @SuppressWarnings("this-escape")
     public InlineTypeNode(ResolvedJavaType type, ValueNode oop, ValueNode[] entries, ValueNode nonNull, boolean isAllocatedOrNull) {
-        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), nonNull == null));
+        super(TYPE, StampFactory.object(TypeReference.createExactTrusted(type), false));
         this.oop = oop;
         this.nonNull = nonNull;
         this.isAllocatedOrNull = isAllocatedOrNull;

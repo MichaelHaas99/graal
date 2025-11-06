@@ -169,6 +169,14 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public void castToNonNull(VirtualObjectNode virtualObject) {
+        if (isNonNull(virtualObject)) {
+            return;
+        }
+        state.setNonNull(virtualObject.getObjectId(), ConstantNode.forInt(1, closure.cfg.graph));
+    }
+
+    @Override
     public void setUnsetFields(VirtualObjectNode virtualObjectNode, boolean[] unsetFields) {
         GraalError.guarantee(unsetFields != null, "unsetFields to track larval state should not be null");
         GraalError.guarantee(unsetFields.length == 0 || virtualObjectNode.entryCount() == unsetFields.length, "unsetFields list does not contain a value for each field");
@@ -433,33 +441,6 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             assert virtualObject.getNodeSourcePosition() == null || virtualObject.getNodeSourcePosition() == sourcePosition : "unexpected source pos!";
             virtualObject.setNodeSourcePosition(sourcePosition);
         }
-    }
-
-    @Override
-    public VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from, NodeSourcePosition sourcePosition) {
-        if (StampTool.isPointerNonNull(from)) {
-            return from;
-        }
-        VirtualInstanceNode virtualObject = new VirtualInstanceNode(from.type(), from.hasIdentity());
-        effects.addFloatingNode(virtualObject, "newVirtualObject");
-        int id = virtualObject.getObjectId();
-        if (id == -1) {
-            id = closure.virtualObjects.size();
-            closure.virtualObjects.add(virtualObject);
-            virtualObject.setObjectId(id);
-        }
-        ObjectState newState = this.state.getObjectState(from).cloneState();
-        newState.clearCachedState();
-        ValueNode constOne = ConstantNode.forInt(1);
-        ensureAdded(constOne);
-        newState.setNonNull(constOne);
-        this.state.addObject(id, newState);
-        closure.addVirtualAlias(virtualObject, virtualObject);
-        if (sourcePosition != null) {
-            assert virtualObject.getNodeSourcePosition() == null || virtualObject.getNodeSourcePosition() == sourcePosition : "unexpected source pos!";
-            virtualObject.setNodeSourcePosition(sourcePosition);
-        }
-        return virtualObject;
     }
 
     @Override

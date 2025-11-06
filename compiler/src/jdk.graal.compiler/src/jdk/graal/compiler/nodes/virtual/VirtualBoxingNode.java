@@ -29,7 +29,6 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.BoxNode;
-
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -61,7 +60,7 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks, ValueNode nonNull) {
         assert entries.length == 1 : entries;
         assert locks == null;
 

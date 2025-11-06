@@ -136,7 +136,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks, ValueNode nonNull) {
         AllocatedObjectNode node = new AllocatedObjectNode(this);
         node.setNodeSourcePosition(this.getNodeSourcePosition());
         return node;

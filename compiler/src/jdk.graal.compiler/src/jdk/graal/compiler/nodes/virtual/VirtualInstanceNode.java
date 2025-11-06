@@ -25,11 +25,14 @@
 package jdk.graal.compiler.nodes.virtual;
 
 import jdk.graal.compiler.core.common.spi.MetaAccessExtensionProvider;
+import jdk.graal.compiler.core.common.type.Stamp;
+import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.FixedNode;
+import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.vm.ci.meta.JavaKind;
@@ -47,7 +50,6 @@ public class VirtualInstanceNode extends VirtualObjectNode implements VirtualNod
     public VirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
         this(type, type.getInstanceFields(true), hasIdentity);
     }
-
 
     public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
         this(TYPE, type, fields, hasIdentity);
@@ -127,8 +129,17 @@ public class VirtualInstanceNode extends VirtualObjectNode implements VirtualNod
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
-        AllocatedObjectNode node = new AllocatedObjectNode(this);
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks, ValueNode nonNull) {
+        /*
+         * The stamp of a virtual object can be nullable. We can't update it when it is input to a
+         * Pi node as it may be associated to multiple object states. We are allowed to improve its
+         * allocated version though.
+         */
+        Stamp stamp = stamp(NodeView.DEFAULT);
+        if (!StampTool.isPointerNonNull(this) && nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1) {
+            stamp = stamp.improveWith(StampFactory.objectNonNull());
+        }
+        AllocatedObjectNode node = new AllocatedObjectNode(this, stamp);
         node.setNodeSourcePosition(this.getNodeSourcePosition());
         return node;
     }

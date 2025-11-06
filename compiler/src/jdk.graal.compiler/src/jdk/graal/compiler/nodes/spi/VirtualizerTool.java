@@ -73,8 +73,6 @@ public interface VirtualizerTool extends CoreProviders {
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oop,
                     ValueNode nonNull, boolean isAllocatedOrNull);
 
-    VirtualObjectNode copyVirtualObjectNonNull(VirtualObjectNode from, NodeSourcePosition sourcePosition);
-
     /**
      * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still
      * virtual, the materialized value of the given value is aliased with a virtual object that was
@@ -142,6 +140,12 @@ public interface VirtualizerTool extends CoreProviders {
      * returns a constant one node.
      */
     void nullCheckAndCast(VirtualObjectNode virtualObject);
+
+    /**
+     * Changes the object state of a virtual object such that {@link #getNonNull(VirtualObjectNode)}
+     * returns a constant one node.
+     */
+    void castToNonNull(VirtualObjectNode virtualObject);
 
     /**
      * Calling this function tells the tool to explicitly track the larval state of the virtual

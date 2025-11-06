@@ -762,7 +762,7 @@ public class GraphUtil {
      * @return the first non-proxy value encountered
      */
     public static ValueNode unproxify(ValueNode value) {
-        if (value instanceof ValueProxy valueProxy && !valueProxy.stopUnproxify()) {
+        if (value instanceof ValueProxy valueProxy) {
             return unproxify(valueProxy);
         } else {
             return value;
@@ -778,7 +778,7 @@ public class GraphUtil {
     public static ValueNode unproxify(ValueProxy value) {
         if (value != null) {
             ValueNode result = value.getOriginalNode();
-            while (result instanceof ValueProxy valueProxy && !valueProxy.stopUnproxify()) {
+            while (result instanceof ValueProxy valueProxy) {
                 result = valueProxy.getOriginalNode();
             }
             return result;
