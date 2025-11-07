@@ -231,7 +231,7 @@ public class MonitorSnippets implements Snippets {
      * CAS operation.
      */
     @Snippet
-    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter boolean canBeInlineType, @ConstantParameter boolean isInlineType,
+    public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter boolean canBeInlineType,
                     @ConstantParameter int lockDepth,
                     @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
                     @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
@@ -248,13 +248,14 @@ public class MonitorSnippets implements Snippets {
 
         incCounter();
 
-        if (canBeInlineType) {
+        if (probability(NOT_FREQUENT_PROBABILITY, canBeInlineType)) {
 
             // check if object has no identity
             GuardingNode anchorNode = SnippetAnchorNode.anchor();
             Object nonNullObject = PiNode.piCastNonNull(object, anchorNode);
-            if (probability(NOT_FREQUENT_PROBABILITY, isInlineType || !hasIdentity(nonNullObject))) {
+            if (probability(NOT_FREQUENT_PROBABILITY, !hasIdentity(nonNullObject))) {
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
+                return;
             }
         }
 
@@ -911,7 +912,6 @@ public class MonitorSnippets implements Snippets {
             args.add("object", monitorenterNode.object());
             args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
             args.add("canBeInlineType", StampTool.canBeInlineType(monitorenterNode.object(), tool.getValhallaOptionsProvider()));
-            args.add("isInlineType", StampTool.isInlineType(monitorenterNode.object(), tool.getValhallaOptionsProvider()));
             args.add("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
             args.add("threadRegister", registers.getThreadRegister());
             args.add("stackPointerRegister", registers.getStackPointerRegister());

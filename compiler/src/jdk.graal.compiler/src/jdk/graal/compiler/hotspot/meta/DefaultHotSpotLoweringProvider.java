@@ -538,14 +538,18 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 monitorSnippets.lower((MonitorEnterNode) n, registers, tool);
             } else {
-                loadHubForMonitorEnterNode((MonitorEnterNode) n, tool, graph);
+                MonitorEnterNode monitorEnterNode = (MonitorEnterNode) n;
+                loadHubForMonitorEnterNode(monitorEnterNode, tool, graph);
+
+                if (StampTool.isInlineType(monitorEnterNode.object(), tool.getValhallaOptionsProvider())) {
+                    tool.createGuard(monitorEnterNode, LogicConstantNode.contradiction(graph), DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile);
+                }
             }
         } else if (n instanceof MonitorExitNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 monitorSnippets.lower((MonitorExitNode) n, registers, tool);
             }
         } else if (n instanceof ValhallaObjectEqualsNode objectEqualsNode) {
-            // TODO: probably better to not rely on a snippet
             objectEqualsSnippets.lower(objectEqualsNode, tool);
         } else if (n instanceof ArrayCopyNode) {
             arraycopySnippets.lower((ArrayCopyNode) n, tool);
