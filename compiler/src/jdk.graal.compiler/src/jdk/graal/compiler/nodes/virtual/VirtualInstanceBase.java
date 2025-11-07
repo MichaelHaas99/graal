@@ -26,7 +26,7 @@ package jdk.graal.compiler.nodes.virtual;
 
 import jdk.vm.ci.meta.ResolvedJavaField;
 
-public interface VirtualNode {
+public interface VirtualInstanceBase {
 
     default ResolvedJavaField field(int index) {
         return getFields()[index];

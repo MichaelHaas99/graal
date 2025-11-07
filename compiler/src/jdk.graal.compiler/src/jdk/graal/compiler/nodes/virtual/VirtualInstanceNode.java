@@ -41,7 +41,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(nameTemplate = "VirtualInstance({p#objectId}) {p#type/s}")
-public class VirtualInstanceNode extends VirtualObjectNode implements VirtualNode {
+public class VirtualInstanceNode extends VirtualObjectNode implements VirtualInstanceBase {
 
     public static final NodeClass<VirtualInstanceNode> TYPE = NodeClass.create(VirtualInstanceNode.class);
     protected final ResolvedJavaType type;

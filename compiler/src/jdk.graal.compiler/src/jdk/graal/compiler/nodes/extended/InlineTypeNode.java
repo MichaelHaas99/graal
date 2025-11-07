@@ -38,8 +38,8 @@ import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceBase;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -71,7 +71,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  *
  */
 @NodeInfo(nameTemplate = "InlineType", cycles = CYCLES_8, cyclesRationale = "tlab alloc + header init", size = SIZE_8)
-public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable, VirtualNode {
+public class InlineTypeNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, VirtualizableAllocation, Simplifiable, VirtualInstanceBase {
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
