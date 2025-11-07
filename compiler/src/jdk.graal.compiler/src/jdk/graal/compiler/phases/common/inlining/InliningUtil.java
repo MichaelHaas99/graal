@@ -389,7 +389,7 @@ public class InliningUtil extends ValueMergeUtil {
         FixedNode invokeNode = invoke.asFixedNode();
         StructuredGraph graph = invokeNode.graph();
         final NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
-        InlineTypeUtil.inline((MethodCallTargetNode) invoke.callTarget());
+        InlineTypeUtil.deleteScalarizationPlaceholders((MethodCallTargetNode) invoke.callTarget());
 
         assert inlineGraph.getGuardsStage().ordinal() >= graph.getGuardsStage().ordinal() : Assertions.errorMessageContext("inlineGraph", inlineGraph, "inline graph stage",
                         inlineGraph.getGuardsStage(), "graph", graph, "graph.guardsStage", graph.getGuardsStage());

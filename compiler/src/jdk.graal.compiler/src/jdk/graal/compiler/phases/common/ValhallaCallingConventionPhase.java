@@ -72,6 +72,15 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                     ResolvedJavaMethod targetMethod = n.targetMethod();
                     if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
                         if (targetMethod.hasScalarizedParameters() && !(n instanceof ResolvedMethodHandleCallTargetNode) && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod)) {
+                            /*
+                             * TODO: Phases like the MultiTypeGuardInliningInfo may delete the
+                             * placeholder for the fallback invoke. We could make sure that
+                             * placeholders are always re-inserted here instead of handling them
+                             * explicitly somewhere else, but this would not be very clean. To do so
+                             * use: InlineTypeUtil.handleDevirtualizationOnCallTarget(n,
+                             * n.targetMethod(), targetMethod, false);
+                             * 
+                             */
                             n.arguments().clear();
                             List<ValueNode> scalarizedArguments = n.getScalarizedArguments().snapshot();
                             n.getScalarizedArguments().clear();

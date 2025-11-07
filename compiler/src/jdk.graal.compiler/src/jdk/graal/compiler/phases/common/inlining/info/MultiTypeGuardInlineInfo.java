@@ -54,6 +54,7 @@ import jdk.graal.compiler.nodes.ProfileData.SwitchProbabilityData;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
 import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
@@ -409,6 +410,21 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
         if (returnValuePhi != null) {
             returnValuePhi.addInput(duplicatedInvoke.asNode());
         }
+
+        if (!useForInlining) {
+            // copy all placeholders to the new branch, as they will be deleted in the dominator
+            // block
+            MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) duplicatedInvoke.callTarget();
+            List<ValueNode> scalarizedArguments = methodCallTargetNode.getScalarizedArguments();
+            for (int i = 0; i < scalarizedArguments.size(); i++) {
+                if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                    InlineTypeNode.Placeholder newPlaceholder = (InlineTypeNode.Placeholder) placeholder.copyWithInputs(true);
+                    graph.addBeforeFixed(duplicatedInvoke.asFixedNode(), newPlaceholder);
+                    scalarizedArguments.set(i, newPlaceholder);
+                }
+            }
+        }
+
         return calleeEntryNode;
     }
 
