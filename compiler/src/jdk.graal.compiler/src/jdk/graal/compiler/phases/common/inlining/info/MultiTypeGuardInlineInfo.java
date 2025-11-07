@@ -416,7 +416,14 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             // block
             MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) duplicatedInvoke.callTarget();
             List<ValueNode> scalarizedArguments = methodCallTargetNode.getScalarizedArguments();
-            for (int i = 0; i < scalarizedArguments.size(); i++) {
+            List<ValueNode> originalScalarizedArguments = methodCallTargetNode.getScalarizedArguments().snapshot();
+            outer: for (int i = 0; i < scalarizedArguments.size(); i++) {
+                for (int j = 0; j < i; j++) {
+                    if (originalScalarizedArguments.get(j).equals(originalScalarizedArguments.get(i))) {
+                        scalarizedArguments.set(i, scalarizedArguments.get(j));
+                        continue outer;
+                    }
+                }
                 if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
                     InlineTypeNode.Placeholder newPlaceholder = (InlineTypeNode.Placeholder) placeholder.copyWithInputs(true);
                     graph.addBeforeFixed(duplicatedInvoke.asFixedNode(), newPlaceholder);
