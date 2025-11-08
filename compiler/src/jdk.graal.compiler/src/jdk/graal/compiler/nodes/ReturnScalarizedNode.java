@@ -9,6 +9,7 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
@@ -83,8 +84,10 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             b.add(scalarizationNode);
             returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
             returnNode.fieldValues.clear();
-            ScalarizationNode.Data data = ScalarizationNode.appendReadMultiValueNodes(b.getGraph(), scalarizationNode);
-            returnNode.fieldValues.addAll(List.of(data.fieldValues()));
+
+            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createForScalarization(scalarizationNode, b.getAssumptions());
+            multiValues.add(b.getGraph());
+            returnNode.fieldValues.addAll(List.of(multiValues.fieldValues()));
         }
         return returnNode;
     }

@@ -311,7 +311,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 StructuredGraph graph = graph();
                 ScalarizationNode scalarizationNode = graph.add(new ScalarizationNode(object, type));
                 graph.addBeforeFixed(this, scalarizationNode);
-                ScalarizationNode.Data data = ScalarizationNode.appendReadMultiValueNodes(graph, scalarizationNode);
+                ReadMultiValueNode.MultiValues data = ReadMultiValueNode.createForScalarization(scalarizationNode, graph.getAssumptions());
+                data.add(graph);
                 if (nonNull) {
                     inlineTypeNode = new InlineTypeNode(type, object, data.fieldValues(), ConstantNode.forInt(1, graph()), true);
                 } else {

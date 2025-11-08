@@ -10,6 +10,7 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.InvokeNode;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.calc.FloatingNode;
 import jdk.graal.compiler.nodes.java.MultiValue;
@@ -23,6 +24,7 @@ import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
  * The {@code ReadMultiValueNode} represents one returned value from a MultiValue. A MultiValue in
@@ -122,5 +124,30 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
             tool.replaceWith(tool.getEntry(virtualMultiValue, getIndex() - 1));
         }
 
+    }
+
+    public static MultiValues createForScalarization(ScalarizationNode node, Assumptions assumptions) {
+        ReadMultiValueNode oop = ReadMultiValueNode.createOop(node.getType(), assumptions, node, 0);
+
+        ResolvedJavaField[] fields = node.getType().getInstanceFields(true);
+        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
+
+        for (int i = 0; i < fields.length; i++) {
+            fieldValues[i] = ReadMultiValueNode.createFieldValue(fields[i].getType(), assumptions, node, i + 1);
+        }
+        ReadMultiValueNode nonNull = ReadMultiValueNode.createNonNull(
+                        node, fields.length + 1);
+        return new MultiValues(oop, fieldValues, nonNull);
+    }
+
+    public record MultiValues(ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull) {
+
+        public void add(StructuredGraph graph) {
+            graph.addOrUnique(oop);
+            graph.addOrUnique(nonNull);
+            for (ReadMultiValueNode fieldValue : fieldValues) {
+                graph.addOrUnique(fieldValue);
+            }
+        }
     }
 }

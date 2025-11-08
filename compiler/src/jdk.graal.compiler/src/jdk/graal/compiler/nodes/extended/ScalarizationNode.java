@@ -11,14 +11,12 @@ import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
-import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -49,27 +47,6 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
 
     public ScalarizationNode(ValueNode object, ResolvedJavaType type) {
         this(TYPE, object, type);
-    }
-
-    public static Data appendReadMultiValueNodes(StructuredGraph graph, ScalarizationNode node) {
-
-        // can also represent an oop or a null pointer
-        ReadMultiValueNode oop = graph.addOrUnique(ReadMultiValueNode.createOop(node.getType(), graph.getAssumptions(), node, 0));
-
-        ResolvedJavaField[] fields = node.getType().getInstanceFields(true);
-        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
-
-        for (int i = 0; i < fields.length; i++) {
-            fieldValues[i] = graph.addOrUnique(ReadMultiValueNode.createFieldValue(fields[i].getType(), graph.getAssumptions(), node, i + 1));
-
-        }
-
-        ReadMultiValueNode nonNull = graph.addOrUnique(ReadMultiValueNode.createNonNull(
-                        node, fields.length + 1));
-        return new Data(oop, fieldValues, nonNull);
-    }
-
-    public record Data(ReadMultiValueNode oop, ReadMultiValueNode[] fieldValues, ReadMultiValueNode nonNull) {
     }
 
     @Override
