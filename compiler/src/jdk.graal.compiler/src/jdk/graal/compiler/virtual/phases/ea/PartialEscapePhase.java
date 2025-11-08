@@ -121,7 +121,7 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
     @Override
     protected void postIteration(StructuredGraph graph, CoreProviders context, EconomicSet<Node> changedNodes) {
         super.postIteration(graph, context, changedNodes);
-        new ScalarizationExpansionPhase().apply(graph, context);
+        applyScalarizationExpansionPhase(graph, context);
         if (cleanupPhase != null) {
             cleanupPhase.apply(graph, context);
         }
@@ -163,5 +163,15 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
     @Override
     public boolean checkContract() {
         return false;
+    }
+
+    /**
+     * {@link PartialEscapePhase} may insert {@code ScalarizationNode} which need
+     * {@link ScalarizationExpansionPhase} to be replaced with a scalarization graph.
+     * {@code SnippetTemplate} creates and applies {@link PartialEscapePhase}, so we also need to
+     * apply a {@link ScalarizationExpansionPhase}.
+     */
+    private void applyScalarizationExpansionPhase(StructuredGraph graph, CoreProviders context) {
+        new ScalarizationExpansionPhase().apply(graph, context);
     }
 }
