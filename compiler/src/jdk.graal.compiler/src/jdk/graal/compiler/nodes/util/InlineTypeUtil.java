@@ -899,6 +899,15 @@ public class InlineTypeUtil {
                 return replacement;
             }
             return result;
+        } else if (value instanceof InlineTypeNode.Placeholder placeholder && placeholder.graph().getGraphState().isDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
+            /*
+             * We try to replace placeholder further up in the graph first. Consequently, we don't
+             * need placeholder nodes to be processed in a reverse post order. They can be processed
+             * in any order.
+             */
+            unproxify(placeholder.object());
+            // make the replacement
+            return placeholder.makeReplacement();
         } else {
             return value;
         }

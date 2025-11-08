@@ -36,12 +36,10 @@ import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.VirtualizableAllocation;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
-import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceBase;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -184,20 +182,6 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     // comment to see inline type node getting materialized to null for test6_verifier
     @Override
     public void simplify(SimplifierTool tool) {
-
-        if (StampTool.isPointerAlwaysNull(this)) {
-            List<Node> inputSnapshot = inputs().snapshot();
-            List<Node> usages = this.usages().snapshot();
-
-            ValueNode nullPointer = graph().addOrUnique(ConstantNode.forConstant(JavaConstant.NULL_POINTER, null));
-            tool.addToWorkList(usages);
-            this.replaceAtUsages(nullPointer);
-            graph().removeFixed(this);
-            for (Node input : inputSnapshot) {
-                tool.removeIfUnused(input);
-            }
-        }
-
         if (usages().count() == 0) {
             List<Node> inputSnapshot = inputs().snapshot();
             graph().removeFixed(this);
@@ -230,17 +214,17 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         return nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 0;
     }
 
-    public ValueNode[] getScalarizedRepresentation(boolean isNonNull, boolean includeNonNullIfNonNull) {
+    public ValueNode[] getScalarizedRepresentation(boolean isNonNull, boolean includeNonNullValue) {
         ValueNode[] result;
 
-        if (isNonNull && !includeNonNullIfNonNull) {
+        if (!includeNonNullValue) {
             result = entries.toArray(ValueNode.EMPTY_ARRAY);
         } else {
             List<ValueNode> list = new ArrayList<>(entries);
             if (isNonNull) {
                 list.addFirst(ConstantNode.forInt(1, this.graph()));
             } else {
-                list.addFirst(nonNull);
+                list.addFirst(this.nonNull);
             }
             result = list.toArray(ValueNode.EMPTY_ARRAY);
         }
@@ -283,10 +267,14 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         public static final NodeClass<Placeholder> TYPE = NodeClass.create(Placeholder.class);
         @Input ValueNode object;
         private final ResolvedJavaType type;
-        private final boolean nonNull;
+        public final boolean nonNull;
 
         public ValueNode object() {
             return object;
+        }
+
+        public boolean isNonNull() {
+            return nonNull;
         }
 
         public MethodCallTargetNode callTarget() {
@@ -310,28 +298,26 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         }
 
-        public ValueNode[] makeReplacement() {
-            ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(this, object, List.of(type.getInstanceFields(true)), nonNull, !nonNull);
+        public InlineTypeNode makeReplacement() {
 
-            if (GraphUtil.unproxify(object) instanceof InlineTypeNode) {
-                // no need to create a new InlineTypeNode
+            InlineTypeNode inlineTypeNode;
+            if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode unproxifiedInlineTypeNode) {
+                // We got the values from an existing InlineType node, so no need to create a new
+                // one.
+                inlineTypeNode = unproxifiedInlineTypeNode;
                 this.replaceAtUsages(object);
                 graph().removeFixed(this);
             } else {
-                if (!hasNoUsages()) {
-                    InlineTypeNode inlineTypeNode;
-                    if (nonNull) {
-                        inlineTypeNode = new InlineTypeNode(type, object, scalarizedValues, ConstantNode.forInt(1, graph()), true);
-                    } else {
-                        inlineTypeNode = new InlineTypeNode(type, object, Arrays.copyOfRange(scalarizedValues, 1, scalarizedValues.length), scalarizedValues[0], true);
-                    }
-                    graph().addOrUniqueWithInputs(inlineTypeNode);
-                    graph().replaceFixedWithFixed(this, inlineTypeNode);
+                ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(this, object, List.of(type.getInstanceFields(true)), nonNull, !nonNull);
+                if (nonNull) {
+                    inlineTypeNode = new InlineTypeNode(type, object, scalarizedValues, ConstantNode.forInt(1, graph()), true);
                 } else {
-                    graph().removeFixed(this);
+                    inlineTypeNode = new InlineTypeNode(type, object, Arrays.copyOfRange(scalarizedValues, 1, scalarizedValues.length), scalarizedValues[0], true);
                 }
+                graph().addOrUniqueWithInputs(inlineTypeNode);
+                graph().replaceFixedWithFixed(this, inlineTypeNode);
             }
-            return scalarizedValues;
+            return inlineTypeNode;
 
         }
 

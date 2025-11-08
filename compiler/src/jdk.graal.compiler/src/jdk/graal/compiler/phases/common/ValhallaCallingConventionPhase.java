@@ -27,9 +27,6 @@ package jdk.graal.compiler.phases.common;
 import java.util.List;
 import java.util.Optional;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
-
 import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.nodes.GraphState;
@@ -82,33 +79,28 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                              * 
                              */
                             n.arguments().clear();
-                            List<ValueNode> scalarizedArguments = n.getScalarizedArguments().snapshot();
-                            n.getScalarizedArguments().clear();
-                            // In case the list contains a node multiple times it will be dead after
-                            // the first time, so we just use a cache.
-                            EconomicMap<ValueNode, ValueNode[]> map = EconomicMap.create(Equivalence.IDENTITY);
+                            List<ValueNode> scalarizedArguments = n.getScalarizedArguments();
                             for (int i = 0; i < scalarizedArguments.size(); i++) {
                                 if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
                                     // handle the placeholder
-                                    ValueNode[] cached = map.get(placeholder);
-                                    GraalError.guarantee(placeholder.isAlive() || cached != null, "can't get a result");
-                                    if (cached != null) {
-                                        n.arguments().addAll(List.of(cached));
-                                    } else {
-                                        ValueNode[] result = placeholder.makeReplacement();
-                                        map.put(placeholder, result);
-                                        n.arguments().addAll(List.of(result));
-                                    }
-                                } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true) &&
-                                                InlineTypeUtil.unproxify(scalarizedArguments.get(i)) instanceof InlineTypeNode inlineTypeNode) {
+                                    boolean isNonNull = placeholder.isNonNull();
+                                    InlineTypeNode replacement = placeholder.makeReplacement();
+                                    ValueNode[] result = replacement.getScalarizedRepresentation(isNonNull, !isNonNull);
+                                    n.arguments().addAll(List.of(result));
+                                } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true)) {
+                                    ValueNode unproxified = InlineTypeUtil.unproxify(scalarizedArguments.get(i));
+                                    GraalError.guarantee(unproxified instanceof InlineTypeNode, "%s should be scalarized", unproxified);
+                                    InlineTypeNode inlineTypeNode = (InlineTypeNode) unproxified;
                                     // the value object is already scalarized
-                                    boolean nonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
-                                    n.arguments().addAll(List.of(inlineTypeNode.getScalarizedRepresentation(nonNull, false)));
+                                    boolean isNonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
+                                    ValueNode[] result = inlineTypeNode.getScalarizedRepresentation(isNonNull, !isNonNull);
+                                    n.arguments().addAll(List.of(result));
                                 } else {
                                     // just add the argument
                                     n.arguments().add(scalarizedArguments.get(i));
                                 }
                             }
+                            n.getScalarizedArguments().clear();
                         }
                     }
 
