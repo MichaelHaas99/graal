@@ -10,6 +10,7 @@ import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
+import jdk.graal.compiler.nodes.extended.ScalarizationNode;
 import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
@@ -78,10 +79,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             }
         } else {
             // need to add the return node here as the util adds the cfg before a fixed node
+            ScalarizationNode scalarizationNode = b.add(new ScalarizationNode(result, type));
+            b.add(scalarizationNode);
             returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
             returnNode.fieldValues.clear();
-            ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, List.of(fields), false, false);
-            returnNode.fieldValues.addAll(List.of(phis));
+            ScalarizationNode.Data data = ScalarizationNode.appendReadMultiValueNodes(b.getGraph(), scalarizationNode);
+            returnNode.fieldValues.addAll(List.of(data.fieldValues()));
         }
         return returnNode;
     }

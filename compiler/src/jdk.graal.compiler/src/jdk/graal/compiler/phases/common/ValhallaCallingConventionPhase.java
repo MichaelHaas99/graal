@@ -84,10 +84,10 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                                 if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
                                     // handle the placeholder
                                     boolean isNonNull = placeholder.isNonNull();
-                                    InlineTypeNode replacement = placeholder.makeReplacement();
-                                    ValueNode[] result = replacement.getScalarizedRepresentation(isNonNull, !isNonNull);
+                                    InlineTypeNode inlineTypeNode = placeholder.makeReplacement();
+                                    ValueNode[] result = inlineTypeNode.getScalarizedRepresentation(isNonNull, !isNonNull);
                                     n.arguments().addAll(List.of(result));
-                                } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true)) {
+                                } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true) && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod)) {
                                     ValueNode unproxified = InlineTypeUtil.unproxify(scalarizedArguments.get(i));
                                     GraalError.guarantee(unproxified instanceof InlineTypeNode, "%s should be scalarized", unproxified);
                                     InlineTypeNode inlineTypeNode = (InlineTypeNode) unproxified;
@@ -100,7 +100,7 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                                     n.arguments().add(scalarizedArguments.get(i));
                                 }
                             }
-                            n.getScalarizedArguments().clear();
+                            scalarizedArguments.clear();
                         }
                     }
 

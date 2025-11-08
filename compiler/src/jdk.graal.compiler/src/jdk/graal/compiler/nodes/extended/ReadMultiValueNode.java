@@ -68,7 +68,7 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
     }
 
     public static ReadMultiValueNode createNonNull(MultiValue multiValueNode, int index) {
-        return new ReadMultiValueNode(TYPE, StampFactory.forKind(JavaKind.Int), multiValueNode, index, false, true);
+        return new ReadMultiValueNode(TYPE, StampFactory.forInteger(JavaKind.Int, 0, 1), multiValueNode, index, false, true);
     }
 
     public static ReadMultiValueNode createOop(JavaType type, Assumptions assumptions, MultiValue multiValueNode, int index) {
@@ -109,9 +109,17 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
                 // Just replace this node with the MultiValue, the InlineTypeNode will then
                 // replace itself with the virtual oop value
                 tool.replaceWithVirtual(virtualMultiValue);
-            } else {
-                tool.delete();
+                return;
             }
+            if (isNonNull) {
+                tool.replaceWith(tool.getNonNull(virtualMultiValue));
+                return;
+            }
+            /*
+             * The ReadMultiValue node with index is the oop. Field values start with index 1, so we
+             * need to subtract 1. The nonNull info has the highest index.
+             */
+            tool.replaceWith(tool.getEntry(virtualMultiValue, getIndex() - 1));
         }
 
     }

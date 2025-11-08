@@ -6,12 +6,12 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.TypeReference;
@@ -301,18 +301,21 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         public InlineTypeNode makeReplacement() {
 
             InlineTypeNode inlineTypeNode;
-            if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode unproxifiedInlineTypeNode) {
+            if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode unproxifiedInlineTypeNode && !GraalOptions.StressScalarization.getValue(getOptions())) {
                 // We got the values from an existing InlineType node, so no need to create a new
                 // one.
                 inlineTypeNode = unproxifiedInlineTypeNode;
                 this.replaceAtUsages(object);
                 graph().removeFixed(this);
             } else {
-                ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(this, object, List.of(type.getInstanceFields(true)), nonNull, !nonNull);
+                StructuredGraph graph = graph();
+                ScalarizationNode scalarizationNode = graph.add(new ScalarizationNode(object, type));
+                graph.addBeforeFixed(this, scalarizationNode);
+                ScalarizationNode.Data data = ScalarizationNode.appendReadMultiValueNodes(graph, scalarizationNode);
                 if (nonNull) {
-                    inlineTypeNode = new InlineTypeNode(type, object, scalarizedValues, ConstantNode.forInt(1, graph()), true);
+                    inlineTypeNode = new InlineTypeNode(type, object, data.fieldValues(), ConstantNode.forInt(1, graph()), true);
                 } else {
-                    inlineTypeNode = new InlineTypeNode(type, object, Arrays.copyOfRange(scalarizedValues, 1, scalarizedValues.length), scalarizedValues[0], true);
+                    inlineTypeNode = new InlineTypeNode(type, object, data.fieldValues(), data.nonNull(), true);
                 }
                 graph().addOrUniqueWithInputs(inlineTypeNode);
                 graph().replaceFixedWithFixed(this, inlineTypeNode);

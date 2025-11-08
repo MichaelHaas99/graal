@@ -408,7 +408,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                     ParameterNode nonNull = null;
                     if (!GraalValhallaServices.isParameterNullFree(method, i, false)) {
                         nonNull = graph.addOrUnique(
-                                        new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, GraalValhallaServices.getScalarizedParameterNonNullType(method, i, false), false)));
+                                        new ParameterNode(index++, StampPair.createSingle(StampFactory.forInteger(JavaKind.Int, 0, 1))));
                         // TODO: create an option to decided if the arguments should be logged
 // ForeignCallNode foreign = graph.add(new ForeignCallNode(LOG_PRIMITIVE,
 // ConstantNode.forInt(JavaKind.Byte.getTypeChar(), graph), nonNull, ConstantNode.forBoolean(true,
@@ -567,7 +567,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                     ParameterNode nonNull = null;
                     if (!GraalValhallaServices.isParameterNullFree(method, i, false)) {
                         nonNull = graph.addOrUnique(
-                                        new ParameterNode(index++, StampFactory.forDeclaredType(assumptions, GraalValhallaServices.getScalarizedParameterNonNullType(method, i, false), false)));
+                                        new ParameterNode(index++, StampPair.createSingle(StampFactory.forInteger(JavaKind.Int, 0, 1))));
                     }
                     ParameterNode[] scalarizedValues = new ParameterNode[parameterTypes.size()];
                     for (int j = 0; j < parameterTypes.size(); j++) {
@@ -931,7 +931,9 @@ public final class FrameStateBuilder implements SideEffectsState {
     public void insertLoopPhis(LocalLiveness liveness, int loopId, LoopBeginNode loopBegin, boolean forcePhis, boolean stampFromValueForForcedPhis) {
         for (int i = 0; i < localsSize(); i++) {
             boolean changedInLoop = liveness.localIsChangedInLoop(loopId, i);
-            if (forcePhis || changedInLoop) {
+            // TODO: In order to replace locals with their scalarized version during loop parsing we
+            // need a phi at the beginning. This solution is only temporary.
+            if (forcePhis || changedInLoop || !this.tool.parsingIntrinsic()) {
                 locals[i] = createLoopPhi(loopBegin, locals[i], stampFromValueForForcedPhis && !changedInLoop);
             }
         }

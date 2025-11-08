@@ -335,4 +335,6 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> CreateValhallaEntryPointWithGraph = new OptionKey<>(true);
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> CheckNullableVirtualInputs = new OptionKey<>(false);
+    @Option(help = "Stress the code emitting scalarization nodes at every scalarization request.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> StressScalarization = new OptionKey<>(false);
 }

@@ -12,6 +12,7 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
 import jdk.graal.compiler.core.common.type.StampFactory;
@@ -322,7 +323,7 @@ public class InlineTypeUtil {
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
+        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && !GraalOptions.StressScalarization.getValue(addBefore.getOptions())) {
             return inlineTypeNode.getScalarizedRepresentation(StampTool.isPointerNonNull(object), includeNonNullPhi);
         }
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE);
