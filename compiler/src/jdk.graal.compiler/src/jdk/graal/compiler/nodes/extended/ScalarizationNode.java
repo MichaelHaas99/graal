@@ -7,6 +7,7 @@ import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.IterableNodeType;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
@@ -14,6 +15,8 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
+import jdk.graal.compiler.nodes.spi.Canonicalizable;
+import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -25,7 +28,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * deleting this node.
  */
 @NodeInfo(cycles = CYCLES_UNKNOWN, cyclesRationale = "We don't know statically how many, and which, objects we are gonna scalarize.", size = SIZE_UNKNOWN, sizeRationale = "We don't know statically how much code for which scalarization has to be generated.")
-public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess, Virtualizable, MultiValue, IterableNodeType, NodeWithIdentity {
+public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess, Virtualizable, MultiValue, IterableNodeType, NodeWithIdentity, Canonicalizable {
 
     public static final NodeClass<ScalarizationNode> TYPE = NodeClass.create(ScalarizationNode.class);
     @Input ValueNode object;
@@ -60,5 +63,13 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
             tool.replaceWithVirtual(virtualObjectNode);
         }
 
+    }
+
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        if (tool.allUsagesAvailable() && hasNoUsages()) {
+            return null;
+        }
+        return this;
     }
 }

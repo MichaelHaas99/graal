@@ -30,6 +30,7 @@ import static jdk.graal.compiler.core.common.GraalOptions.EscapeAnalyzeOnly;
 import java.util.Optional;
 
 import org.graalvm.collections.EconomicSet;
+
 import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.GraphState;
@@ -47,6 +48,7 @@ import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.BasePhase;
 import jdk.graal.compiler.phases.common.CanonicalizerPhase;
+import jdk.graal.compiler.phases.common.ScalarizationExpansionPhase;
 import jdk.graal.compiler.phases.graph.ReentrantBlockIterator;
 import jdk.graal.compiler.phases.schedule.SchedulePhase;
 
@@ -119,6 +121,7 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
     @Override
     protected void postIteration(StructuredGraph graph, CoreProviders context, EconomicSet<Node> changedNodes) {
         super.postIteration(graph, context, changedNodes);
+        new ScalarizationExpansionPhase().apply(graph, context);
         if (cleanupPhase != null) {
             cleanupPhase.apply(graph, context);
         }

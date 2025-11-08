@@ -21,8 +21,7 @@ public class ScalarizationExpansionPhase extends BasePhase<CoreProviders> {
     @Override
     public Optional<NotApplicable> notApplicableTo(GraphState graphState) {
         return NotApplicable.ifAny(
-                        NotApplicable.unlessRunBefore(this, GraphState.StageFlag.HIGH_TIER_LOWERING, graphState),
-                        NotApplicable.unlessRunAfter(this, GraphState.StageFlag.VALHALLA_CALLING_CONVENTION, graphState));
+                        NotApplicable.unlessRunBefore(this, GraphState.StageFlag.HIGH_TIER_LOWERING, graphState));
     }
 
     @SuppressWarnings("try")
