@@ -85,7 +85,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
             returnNode.fieldValues.clear();
 
-            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createForScalarization(scalarizationNode, b.getAssumptions());
+            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, b.getAssumptions());
             multiValues.add(b.getGraph());
             returnNode.fieldValues.addAll(List.of(multiValues.fieldValues()));
         }

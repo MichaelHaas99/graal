@@ -25,6 +25,7 @@ import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code ReadMultiValueNode} represents one returned value from a MultiValue. A MultiValue in
@@ -126,10 +127,14 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
 
     }
 
-    public static MultiValues createForScalarization(ScalarizationNode node, Assumptions assumptions) {
-        ReadMultiValueNode oop = ReadMultiValueNode.createOop(node.getType(), assumptions, node, 0);
+    public static MultiValues createNodes(ScalarizationNode node, Assumptions assumptions) {
+        return createNodes(node, node.getType(), assumptions);
+    }
 
-        ResolvedJavaField[] fields = node.getType().getInstanceFields(true);
+    public static MultiValues createNodes(MultiValue node, ResolvedJavaType type, Assumptions assumptions) {
+        ReadMultiValueNode oop = ReadMultiValueNode.createOop(type, assumptions, node, 0);
+
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
         ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {

@@ -2221,7 +2221,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
             } else {
                 ScalarizationNode scalarizationNode = new ScalarizationNode(node, instanceClass);
-                ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createForScalarization(scalarizationNode, tool.getAssumptions());
+                ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, tool.getAssumptions());
                 bEffects.addFixedNodeBefore(scalarizationNode, block.getEndNode());
 
                 bEffects.addFloatingNode(multiValues.nonNull(), "virtualNonNullValue");

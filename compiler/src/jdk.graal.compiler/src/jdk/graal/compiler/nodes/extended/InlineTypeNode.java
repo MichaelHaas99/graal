@@ -145,22 +145,10 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
     public static InlineTypeNode createFromInvoke(Invoke invoke, MetaAccessProvider metaAccess) {
         StructuredGraph graph = invoke.asNode().graph();
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(metaAccess);
+        ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(invoke, returnType, graph.getAssumptions());
+        multiValues.add(graph);
 
-        // can also represent an oop or a null pointer
-        ReadMultiValueNode oop = graph.addOrUnique(ReadMultiValueNode.createOop(returnType, graph.getAssumptions(), invoke, 0));
-
-        ResolvedJavaField[] fields = returnType.getInstanceFields(true);
-        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
-
-        for (int i = 0; i < fields.length; i++) {
-            fieldValues[i] = graph.addOrUnique(ReadMultiValueNode.createFieldValue(fields[i].getType(), graph.getAssumptions(), invoke, i + 1));
-
-        }
-
-        ReadMultiValueNode nonNull = graph.addOrUnique(ReadMultiValueNode.createNonNull(
-                        invoke, fields.length + 1));
-
-        InlineTypeNode inlineTypeNode = graph.addOrUnique(new InlineTypeNode(returnType, oop, fieldValues, nonNull, false));
+        InlineTypeNode inlineTypeNode = graph.addOrUnique(new InlineTypeNode(returnType, multiValues.oop(), multiValues.fieldValues(), multiValues.nonNull(), false));
         FixedNode addBefore;
         if (invoke instanceof WithExceptionNode withExceptionNode) {
             addBefore = withExceptionNode.next().next();
@@ -311,7 +299,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 StructuredGraph graph = graph();
                 ScalarizationNode scalarizationNode = graph.add(new ScalarizationNode(object, type));
                 graph.addBeforeFixed(this, scalarizationNode);
-                ReadMultiValueNode.MultiValues data = ReadMultiValueNode.createForScalarization(scalarizationNode, graph.getAssumptions());
+                ReadMultiValueNode.MultiValues data = ReadMultiValueNode.createNodes(scalarizationNode, graph.getAssumptions());
                 data.add(graph);
                 if (nonNull) {
                     inlineTypeNode = new InlineTypeNode(type, object, data.fieldValues(), ConstantNode.forInt(1, graph()), true);
