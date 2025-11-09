@@ -73,9 +73,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
     public static final NodeClass<InlineTypeNode> TYPE = NodeClass.create(InlineTypeNode.class);
 
-    @OptionalInput ValueNode oop;
-    @OptionalInput NodeInputList<ValueNode> entries;
-    @OptionalInput ValueNode nonNull;
+    @Input ValueNode oop;
+    @Input NodeInputList<ValueNode> entries;
+    @Input ValueNode nonNull;
     private final boolean isAllocatedOrNull;
     private final ResolvedJavaType type;
     private final ResolvedJavaField[] fields;
