@@ -108,8 +108,10 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         ValueNode alias = tool.getAlias(multiValueNode.asNode());
         if (alias instanceof VirtualObjectNode virtualMultiValue) {
             if (isOop) {
-                // Just replace this node with the MultiValue, the InlineTypeNode will then
-                // replace itself with the virtual oop value
+                /*
+                 * Just replace this node with the MultiValue, the InlineType node will then replace
+                 * itself with the virtual oop value.
+                 */
                 tool.replaceWithVirtual(virtualMultiValue);
                 return;
             }
