@@ -931,9 +931,7 @@ public final class FrameStateBuilder implements SideEffectsState {
     public void insertLoopPhis(LocalLiveness liveness, int loopId, LoopBeginNode loopBegin, boolean forcePhis, boolean stampFromValueForForcedPhis) {
         for (int i = 0; i < localsSize(); i++) {
             boolean changedInLoop = liveness.localIsChangedInLoop(loopId, i);
-            // TODO: In order to replace locals with their scalarized version during loop parsing we
-            // need a phi at the beginning. This solution is only temporary.
-            if (forcePhis || changedInLoop || !this.tool.parsingIntrinsic()) {
+            if (forcePhis || changedInLoop) {
                 locals[i] = createLoopPhi(loopBegin, locals[i], stampFromValueForForcedPhis && !changedInLoop);
             }
         }

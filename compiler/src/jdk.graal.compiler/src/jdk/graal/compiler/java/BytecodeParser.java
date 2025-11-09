@@ -4013,7 +4013,12 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     /* Also a hook for subclasses. */
     protected boolean forceLoopPhis() {
-        return graph.isOSR();
+        /*
+         * In order to replace locals with their scalarized version during loop parsing in Valhalla,
+         * we need a phi at the beginning. We replace a local with its scalarized version if it is
+         * passed as a method argument and the method signature says it is a scalarized parameter.
+         */
+        return graph.isOSR() || (getValhallaOptionsProvider().valhallaEnabled() && !parsingIntrinsic());
     }
 
     /* Hook for subclasses. */
