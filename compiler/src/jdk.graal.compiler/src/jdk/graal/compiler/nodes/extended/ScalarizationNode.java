@@ -9,7 +9,6 @@ import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
-import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -28,7 +27,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * deleting this node.
  */
 @NodeInfo(cycles = CYCLES_UNKNOWN, cyclesRationale = "We don't know statically how many, and which, objects we are gonna scalarize.", size = SIZE_UNKNOWN, sizeRationale = "We don't know statically how much code for which scalarization has to be generated.")
-public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess, Virtualizable, MultiValue, IterableNodeType, NodeWithIdentity, Canonicalizable {
+public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess, Virtualizable, MultiValue, IterableNodeType, Canonicalizable {
 
     public static final NodeClass<ScalarizationNode> TYPE = NodeClass.create(ScalarizationNode.class);
     @Input ValueNode object;
