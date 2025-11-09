@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.type.ObjectStamp;
-import jdk.graal.compiler.core.common.type.TypeReference;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
@@ -22,7 +21,6 @@ import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -82,11 +80,10 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             // need to add the return node here as the util adds the cfg before a fixed node
             ScalarizationNode scalarizationNode = b.add(new ScalarizationNode(result, type));
             b.add(scalarizationNode);
-            returnNode = b.add(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
-            returnNode.fieldValues.clear();
-
             ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, b.getAssumptions());
             multiValues.add(b.getGraph());
+            returnNode = b.add(new ReturnScalarizedNode(multiValues.oop(), new ArrayList<>(fields.length)));
+            returnNode.fieldValues.clear();
             returnNode.fieldValues.addAll(List.of(multiValues.fieldValues()));
         }
         return returnNode;
@@ -133,8 +130,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
 
     }
 
-    private boolean virtualize = true;
-
     @Override
     public boolean virtualizeHandlesNullableVirtualInputs() {
         return true;
@@ -142,38 +137,27 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (!virtualize) {
-            return;
-        }
-
         ValueNode alias = tool.getAlias(result);
 
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
             // make sure oop stays virtual and instead return hub with bit zero set
-            TypeReference typeReference = StampTool.typeReferenceOrNull(alias);
-            assert typeReference != null && typeReference.isExact() : "type should not be null for constant hub node in scalarized return";
+            ResolvedJavaType type = virtualObjectNode.type();
 
             if (!tool.isNonNull(virtualObjectNode) || !tool.hasNullOop(virtualObjectNode)) {
-                // nullable scalarized inline object or non-null scalarized inline object including
+                // nullable virtual value object or non-null virtual value object including
                 // oop
                 ValueNode oop = tool.getOop((VirtualObjectNode) alias);
                 ValueNode nonNull = tool.getNonNull((VirtualObjectNode) alias);
                 assert oop != null && nonNull != null : "nullable scalarized object expected oop and non-null information to be set";
 
                 // get hub
-                ConstantNode hub = createHub(tool, result, typeReference.getType());
+                ConstantNode hub = createHub(tool, result, type);
                 tool.addNode(hub);
 
 // ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
 // ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), returnResultDecider,
 // ConstantNode.forBoolean(true, graph()));
 // tool.addNode(print);
-
-                // The nullable virtual inline object contains correct values for both cases (null
-                // and non-null). Therefore use its values to replace the input list.
-                // At a later stage this will remove the CFG which was created for the scalarized
-                // return.
-                replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, typeReference.getType());
 
                 if (tool.isAllocatedOrNull(virtualObjectNode)) {
                     tool.replaceFirstInput(result, oop);
@@ -186,12 +170,8 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
 
             }
 
-            // materialize before tagged hub node, a klass pointer in a register is dangerous, make
-            // sure it comes last
-            replaceAndMaterializeFields(tool, (VirtualInstanceNode) virtualObjectNode, typeReference.getType());
-
             // get hub
-            ConstantNode hub = createHub(tool, result, typeReference.getType());
+            ConstantNode hub = createHub(tool, result, type);
             tool.addNode(hub);
 
             // set bit zero to one
@@ -205,44 +185,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
 // ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), taggedHub,
 // ConstantNode.forBoolean(true, graph()));
 // tool.addNode(print);
-        } else {
-            // materialize the field values if they are virtual
-            materializeFields(tool);
         }
     }
 
     private static ConstantNode createHub(CoreProviders providers, ValueNode node, ResolvedJavaType type) {
         return ConstantNode.forConstant(providers.getStampProvider().createHubStamp(((ObjectStamp) node.stamp(NodeView.DEFAULT))),
                         providers.getConstantReflection().asObjectHub(type), providers.getMetaAccess());
-    }
-
-    private void materializeFields(VirtualizerTool tool) {
-        for (int i = 0; i < fieldValues.size(); i++) {
-            ValueNode field = tool.getAlias(fieldValues.get(i));
-            if (field instanceof VirtualObjectNode virtualObjectNode) {
-                tool.ensureMaterialized(virtualObjectNode);
-            }
-        }
-    }
-
-    private void replaceAndMaterializeFields(VirtualizerTool tool, VirtualInstanceNode alias, ResolvedJavaType type) {
-        ResolvedJavaField[] fields = type.getInstanceFields(true);
-        for (int i = 0; i < fields.length; i++) {
-            int fieldIndex = alias.fieldIndex(fields[i]);
-            ValueNode entry = tool.getEntry(alias, fieldIndex);
-            replaceInputWithMaterializedValue(tool, entry, i);
-        }
-    }
-
-    private void replaceInputWithMaterializedValue(VirtualizerTool tool, ValueNode entry, int index) {
-        if (entry instanceof VirtualObjectNode virtualObjectNode) {
-            tool.ensureMaterialized(virtualObjectNode);
-        }
-        ValueNode alias = tool.getAlias(entry);
-        if (alias instanceof VirtualObjectNode virtualObjectNode) {
-            tool.replaceFirstInput(fieldValues.get(index), tool.getOop(virtualObjectNode));
-        }
-        tool.replaceFirstInput(fieldValues.get(index), tool.getAlias(entry));
     }
 
     @Override
