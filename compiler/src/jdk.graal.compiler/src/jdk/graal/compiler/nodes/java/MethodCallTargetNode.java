@@ -32,7 +32,6 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
-import jdk.graal.compiler.graph.NodeInputList;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodeinfo.Verbosity;
 import jdk.graal.compiler.nodes.BeginNode;
@@ -65,12 +64,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class MethodCallTargetNode extends CallTargetNode implements IterableNodeType, Simplifiable {
     public static final NodeClass<MethodCallTargetNode> TYPE = NodeClass.create(MethodCallTargetNode.class);
     protected JavaTypeProfile typeProfile;
-
-    @Input NodeInputList<ValueNode> scalarizedArguments = new NodeInputList<>(this);
-
-    public NodeInputList<ValueNode> getScalarizedArguments() {
-        return scalarizedArguments;
-    }
 
     @SuppressWarnings("this-escape")
     public MethodCallTargetNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] arguments, StampPair returnStamp, JavaTypeProfile typeProfile) {

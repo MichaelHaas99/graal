@@ -2350,7 +2350,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
     protected Invoke createNonInlinedInvoke(ExceptionEdgeAction exceptionEdge, int invokeBci, ValueNode[] invokeArgs, ResolvedJavaMethod targetMethod,
                     InvokeKind invokeKind, JavaKind resultType, JavaType returnType, JavaTypeProfile profile, boolean fromMethodHandle) {
 
-// emit null checks for non-null parameters before the scalarization
+        // emit null checks for non-null parameters before the scalarization
         int parameterLength = targetMethod.getSignature().getParameterCount(!targetMethod.isStatic());
         for (int i = 0; i < parameterLength; i++) {
             if (GraalValhallaServices.isParameterNullFree(targetMethod, i, true)) {
@@ -2368,9 +2368,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                         GraalValhallaServices.hasScalarizedParameters(targetMethod) &&
                         !fromMethodHandle) {
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
-            List<ValueNode> scalarizedArguments = callTarget.getScalarizedArguments();
+            List<ValueNode> arguments = callTarget.arguments();
             for (int i = 0; i < parameterLength; i++) {
-                if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
                     // propagate the scalarized value object in the framestate
                     replaceValueInFrameState(invokeArgs[i], placeholder);
                 }

@@ -186,13 +186,10 @@ public class InlineTypeUtil {
                 throw new GraalError("Expected actual argument size to be equal to signature parameter size" + callTargetNode.toString() + "\n" + callTargetNode.arguments() + "\n");
         }
 
-        List<ValueNode> arguments;
-        ArrayList<ValueNode> scalarizedArgs = new ArrayList<>(parameterLength);
+        List<ValueNode> originalArguments = callTargetNode.arguments().snapshot();
+        List<ValueNode> arguments = callTargetNode.arguments();
         if (graph.getGraphState().isAfterStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
-            // directly operate on the call target arguments
-            assert callTargetNode.getScalarizedArguments().isEmpty() : "should be empty after Valhalla Calling Convention phase";
-            arguments = callTargetNode.arguments();
-
+            arguments.clear();
             boolean[] scalarizeParameters = new boolean[parameterLength];
             int argumentIndex = 0;
             for (int i = 0; i < parameterLength; i++) {
@@ -201,27 +198,22 @@ public class InlineTypeUtil {
             }
             for (int signatureIndex = 0; signatureIndex < parameterLength; signatureIndex++) {
                 if (scalarizeParameters[signatureIndex]) {
-                    ValueNode[] scalarized = createScalarizationCFGForInvokeArg(callTargetNode, arguments.get(argumentIndex), newMethod, signatureIndex);
-                    scalarizedArgs.addAll(List.of(scalarized));
+                    ValueNode[] scalarized = createScalarizationCFGForInvokeArg(callTargetNode, originalArguments.get(argumentIndex), newMethod, signatureIndex);
+                    arguments.addAll(List.of(scalarized));
                     argumentIndex++;
                 } else {
                     if (GraalValhallaServices.isScalarizedParameter(oldMethod, signatureIndex, true) && !nothingScalarizedYet) {
                         int length = GraalValhallaServices.getScalarizedParameter(oldMethod, signatureIndex, true).size();
-                        scalarizedArgs.addAll(arguments.subList(argumentIndex, argumentIndex + length));
+                        arguments.addAll(originalArguments.subList(argumentIndex, argumentIndex + length));
                         argumentIndex += length;
                     } else {
-                        scalarizedArgs.add(arguments.get(argumentIndex));
+                        arguments.add(originalArguments.get(argumentIndex));
                         argumentIndex++;
                     }
                 }
 
             }
         } else {
-            // safe the arguments in an extra list
-            if (callTargetNode.getScalarizedArguments().isEmpty()) {
-                callTargetNode.getScalarizedArguments().addAll(callTargetNode.arguments());
-            }
-            arguments = callTargetNode.getScalarizedArguments();
             outer: for (int i = 0; i < parameterLength; i++) {
 
                 if (GraalValhallaServices.isScalarizedParameter(newMethod, i, true)) {
@@ -230,13 +222,13 @@ public class InlineTypeUtil {
                          * Perform simple gvn by checking if a previous argument is the same to
                          * avoid creation of multiple placeholders.
                          */
-                        if (arguments.get(j).equals(arguments.get(i))) {
-                            scalarizedArgs.add(scalarizedArgs.get(j));
+                        if (originalArguments.get(j).equals(originalArguments.get(i))) {
+                            arguments.set(i, arguments.get(j));
                             continue outer;
                         }
                     }
 
-                    ValueNode unproxified = InlineTypeUtil.unproxify(arguments.get(i));
+                    ValueNode unproxified = InlineTypeUtil.unproxify(originalArguments.get(i));
                     /*
                      * Check if the call target already contains a placeholder or a scalarized value
                      * object. The placeholder is only valid if it belongs to this call target.
@@ -255,31 +247,23 @@ public class InlineTypeUtil {
                         if (type == null) {
                             type = (ResolvedJavaType) newMethod.getSignature().getParameterType(index, newMethod.getDeclaringClass());
                         }
-                        InlineTypeNode.Placeholder placeholder = new InlineTypeNode.Placeholder(arguments.get(i), type, GraalValhallaServices.isParameterNullFree(newMethod, i, true));
+                        InlineTypeNode.Placeholder placeholder = new InlineTypeNode.Placeholder(originalArguments.get(i), type, GraalValhallaServices.isParameterNullFree(newMethod, i, true));
                         placeholder = graph.addOrUniqueWithInputs(placeholder);
                         graph.addBeforeFixed(callTargetNode.invoke().asFixedNode(), placeholder);
-                        scalarizedArgs.add(placeholder);
-                    } else {
-                        scalarizedArgs.add(arguments.get(i));
+                        arguments.set(i, placeholder);
+                        continue;
                     }
-                } else {
-                    scalarizedArgs.add(arguments.get(i));
                 }
+                arguments.set(i, originalArguments.get(i));
             }
         }
-        arguments.clear();
-        arguments.addAll(scalarizedArgs);
     }
 
     public static void deleteScalarizationPlaceholders(MethodCallTargetNode callTargetNode) {
-        List<ValueNode> scalarizedArgs = callTargetNode.getScalarizedArguments().snapshot();
-        callTargetNode.getScalarizedArguments().clear();
-        for (int i = 0; i < scalarizedArgs.size(); i++) {
-            if (scalarizedArgs.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
-                // in case a previous argument was the same the node is already dead
-                if (placeholder.isAlive()) {
-                    placeholder.undo();
-                }
+        List<ValueNode> arguments = callTargetNode.arguments();
+        for (int i = 0; i < arguments.size(); i++) {
+            if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                placeholder.undo();
             }
         }
     }

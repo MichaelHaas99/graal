@@ -267,7 +267,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         public MethodCallTargetNode callTarget() {
             for (Node usage : usages()) {
-                if (usage instanceof MethodCallTargetNode methodCallTargetNode && methodCallTargetNode.getScalarizedArguments().contains(this)) {
+                if (usage instanceof MethodCallTargetNode methodCallTargetNode && methodCallTargetNode.arguments().contains(this)) {
                     return methodCallTargetNode;
                 }
             }

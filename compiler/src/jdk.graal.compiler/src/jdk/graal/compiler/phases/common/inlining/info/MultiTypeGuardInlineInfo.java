@@ -415,19 +415,19 @@ public class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
             // copy all placeholders to the new branch, as they will be deleted in the dominator
             // block
             MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) duplicatedInvoke.callTarget();
-            List<ValueNode> scalarizedArguments = methodCallTargetNode.getScalarizedArguments();
-            List<ValueNode> originalScalarizedArguments = methodCallTargetNode.getScalarizedArguments().snapshot();
-            outer: for (int i = 0; i < scalarizedArguments.size(); i++) {
+            List<ValueNode> arguments = methodCallTargetNode.arguments();
+            List<ValueNode> originalArguments = methodCallTargetNode.arguments().snapshot();
+            outer: for (int i = 0; i < arguments.size(); i++) {
                 for (int j = 0; j < i; j++) {
-                    if (originalScalarizedArguments.get(j).equals(originalScalarizedArguments.get(i))) {
-                        scalarizedArguments.set(i, scalarizedArguments.get(j));
+                    if (originalArguments.get(j).equals(originalArguments.get(i))) {
+                        arguments.set(i, arguments.get(j));
                         continue outer;
                     }
                 }
-                if (scalarizedArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
                     InlineTypeNode.Placeholder newPlaceholder = (InlineTypeNode.Placeholder) placeholder.copyWithInputs(true);
                     graph.addBeforeFixed(duplicatedInvoke.asFixedNode(), newPlaceholder);
-                    scalarizedArguments.set(i, newPlaceholder);
+                    arguments.set(i, newPlaceholder);
                 }
             }
         }
