@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.phases.common;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -78,29 +79,30 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                              * n.targetMethod(), targetMethod, false);
                              * 
                              */
-                            List<ValueNode> oldArguments = n.arguments().snapshot();
                             List<ValueNode> arguments = n.arguments();
-                            arguments.clear();
-                            for (int i = 0; i < oldArguments.size(); i++) {
-                                if (oldArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                            List<ValueNode> scalarizedArguments = new ArrayList<>();
+                            for (int i = 0; i < arguments.size(); i++) {
+                                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
                                     // handle the placeholder
                                     boolean isNonNull = placeholder.isNonNull();
                                     InlineTypeNode inlineTypeNode = placeholder.makeReplacement();
                                     ValueNode[] result = inlineTypeNode.getScalarizedRepresentation(isNonNull, !isNonNull);
-                                    arguments.addAll(List.of(result));
+                                    scalarizedArguments.addAll(List.of(result));
                                 } else if (GraalValhallaServices.isScalarizedParameter(targetMethod, i, true) && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod)) {
-                                    ValueNode unproxified = InlineTypeUtil.unproxify(oldArguments.get(i));
+                                    ValueNode unproxified = InlineTypeUtil.unproxify(arguments.get(i));
                                     GraalError.guarantee(unproxified instanceof InlineTypeNode, "%s should be scalarized", unproxified);
                                     InlineTypeNode inlineTypeNode = (InlineTypeNode) unproxified;
                                     // the value object is already scalarized
                                     boolean isNonNull = GraalValhallaServices.isParameterNullFree(targetMethod, i, true);
                                     ValueNode[] result = inlineTypeNode.getScalarizedRepresentation(isNonNull, !isNonNull);
-                                    arguments.addAll(List.of(result));
+                                    scalarizedArguments.addAll(List.of(result));
                                 } else {
                                     // just add the argument
-                                    arguments.add(oldArguments.get(i));
+                                    scalarizedArguments.add(arguments.get(i));
                                 }
                             }
+                            arguments.clear();
+                            arguments.addAll(scalarizedArguments);
                         }
                     }
 
