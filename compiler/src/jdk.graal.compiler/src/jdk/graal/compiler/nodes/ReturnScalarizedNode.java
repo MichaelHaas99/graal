@@ -11,7 +11,6 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
-import jdk.graal.compiler.nodes.extended.TagHubNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.Lowerable;
@@ -139,51 +138,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         ValueNode alias = tool.getAlias(result);
 
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
-            // make sure oop stays virtual and instead return hub with bit zero set
             ResolvedJavaType type = virtualObjectNode.type();
-
-            if (!tool.isNonNull(virtualObjectNode) || !tool.hasNullOop(virtualObjectNode)) {
-                // nullable virtual value object or non-null virtual value object including
-                // oop
-                ValueNode oop = tool.getOop((VirtualObjectNode) alias);
-                ValueNode nonNull = tool.getNonNull((VirtualObjectNode) alias);
-                assert oop != null && nonNull != null : "nullable scalarized object expected oop and non-null information to be set";
-
-                // get hub
-                ConstantNode hub = createHub(tool, result, type);
-                tool.addNode(hub);
-
-// ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
-// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), returnResultDecider,
-// ConstantNode.forBoolean(true, graph()));
-// tool.addNode(print);
-
-                if (tool.isAllocatedOrNull(virtualObjectNode)) {
-                    tool.replaceFirstInput(result, oop);
-                } else {
-                    ValueNode returnResultDecider = ReturnResultDeciderNode.create(tool.getWordTypes().getWordKind(), nonNull, oop, hub);
-                    tool.ensureAdded(returnResultDecider);
-                    tool.replaceFirstInput(result, returnResultDecider);
-                }
-                return;
-
-            }
-
-            // get hub
             ConstantNode hub = createHub(tool, result, type);
             tool.addNode(hub);
 
-            // set bit zero to one
-            ValueNode taggedHub = new TagHubNode(hub);
-            tool.addNode(taggedHub);
-
-            // replace the object with the hub to avoid materialization
-            tool.replaceFirstInput(result, taggedHub);
-
-// ForeignCallNode print = new ForeignCallNode(LOG_PRIMITIVE,
-// ConstantNode.forInt(JavaKind.Long.getTypeChar(), graph()), taggedHub,
-// ConstantNode.forBoolean(true, graph()));
-// tool.addNode(print);
+            ValueNode newFirstInput = ReturnResultDeciderNode.virtualizeReturnResultDecider(tool, virtualObjectNode, hub, true);
+            tool.replaceFirstInput(result, newFirstInput);
         }
     }
 

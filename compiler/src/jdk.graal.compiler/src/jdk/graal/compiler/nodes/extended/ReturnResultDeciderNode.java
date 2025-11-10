@@ -84,12 +84,41 @@ public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowera
         return true;
     }
 
+    public static ValueNode virtualizeReturnResultDecider(VirtualizerTool tool, VirtualObjectNode virtualObjectNode, ValueNode hub, boolean hasObjectStamp) {
+        ValueNode result;
+
+        boolean maybeNull = !tool.isNonNull(virtualObjectNode);
+        boolean oopIsNonNull = !tool.hasNullOop(virtualObjectNode);
+        boolean isAllocatedOrNull = tool.isAllocatedOrNull(virtualObjectNode);
+        if (!hasObjectStamp || (maybeNull || oopIsNonNull) && !isAllocatedOrNull) {
+            /*
+             * In the case the virtual object was propagated through multiple chained InlineType
+             * nodes, the alias originally came from the InlineType node at the highest position in
+             * the graph. To avoid materialization here use its oop. For non-object stamps we are
+             * not allowed to return the oop for the allocated case, as the node has no object
+             * stamp.
+             */
+            ValueNode newNode = ReturnResultDeciderNode.create(tool.getWordTypes().getWordKind(), tool.getNonNull(virtualObjectNode), tool.getOop(virtualObjectNode), hub);
+            tool.ensureAdded(newNode);
+            result = newNode;
+        } else if ((maybeNull || oopIsNonNull)) {
+            // allocated
+            result = tool.getOop(virtualObjectNode);
+        } else {
+            // set bit zero to one
+            ValueNode taggedHub = new TagHubNode(hub);
+            tool.addNode(taggedHub);
+            result = taggedHub;
+        }
+        return result;
+
+    }
+
     @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(oop);
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
-            ValueNode newNode = ReturnResultDeciderNode.create(this.getStackKind(), nonNull, tool.getOop(virtualObjectNode), hub);
-            tool.ensureAdded(newNode);
+            ValueNode newNode = virtualizeReturnResultDecider(tool, virtualObjectNode, hub, false);
             tool.replaceWith(newNode);
         }
     }
