@@ -878,26 +878,33 @@ public class InlineTypeUtil {
             StructuredGraph graph = valueProxy.asNode().graph();
             ValueNode originalNode = valueProxy.getOriginalNode();
             ValueNode result = unproxify(originalNode);
-            if (result instanceof InlineTypeNode inlineTypeNode && valueProxy instanceof ValueProxyNode valueProxyNode) {
-                // push the InlineTypeNode through loops
-                ValueNode nonNull;
-                if (StampTool.isPointerNonNull(valueProxyNode)) {
-                    nonNull = ConstantNode.forInt(1, graph);
-                } else {
-                    nonNull = inlineTypeNode.getNonNull();
+            if (result instanceof InlineTypeNode inlineTypeNode) {
+                if (valueProxy instanceof ValueProxyNode valueProxyNode) {
+                    // push the InlineTypeNode through loops
+                    ValueNode nonNull;
+                    if (StampTool.isPointerNonNull(valueProxyNode)) {
+                        nonNull = ConstantNode.forInt(1, graph);
+                    } else {
+                        nonNull = inlineTypeNode.getNonNull();
+                    }
+                    List<ValueNode> entries = inlineTypeNode.getEntries();
+                    nonNull = graph.addOrUnique(new ValueProxyNode(nonNull, valueProxyNode.proxyPoint()));
+                    entries = entries.stream().map(e -> graph.addWithoutUnique(new ValueProxyNode(e, valueProxyNode.proxyPoint()))).collect(Collectors.toList());
+                    // Set the proxy as oop such that during PEA we just reuse the already created
+                    // virtual object. We actually build a chain of InlineType nodes.
+                    InlineTypeNode replacement = graph.add(new InlineTypeNode(inlineTypeNode.getType(), valueProxyNode, entries.toArray(ValueNode.EMPTY_ARRAY), nonNull, true));
+                    graph.addAfterFixed(valueProxyNode.proxyPoint(), replacement);
+                    FrameState state = valueProxyNode.proxyPoint().stateAfter();
+                    // Don't touch the frame state of the loop exit as well as the inputs of the
+                    // replacement.
+                    valueProxyNode.replaceAtUsages(replacement, u -> !(u instanceof FrameState frameState && frameState == state) && !(u == replacement));
+                    return replacement;
+                } else if (valueProxy instanceof PiNode piNode) {
+                    ResolvedJavaType type = StampTool.typeOrNull(piNode);
+                    if (type == null || !type.isAssignableFrom(inlineTypeNode.getType())) {
+                        return piNode;
+                    }
                 }
-                List<ValueNode> entries = inlineTypeNode.getEntries();
-                nonNull = graph.addOrUnique(new ValueProxyNode(nonNull, valueProxyNode.proxyPoint()));
-                entries = entries.stream().map(e -> graph.addWithoutUnique(new ValueProxyNode(e, valueProxyNode.proxyPoint()))).collect(Collectors.toList());
-                // Set the proxy as oop such that during PEA we just reuse the already created
-                // virtual object. We actually build a chain of InlineType nodes.
-                InlineTypeNode replacement = graph.add(new InlineTypeNode(inlineTypeNode.getType(), valueProxyNode, entries.toArray(ValueNode.EMPTY_ARRAY), nonNull, true));
-                graph.addAfterFixed(valueProxyNode.proxyPoint(), replacement);
-                FrameState state = valueProxyNode.proxyPoint().stateAfter();
-                // Don't touch the frame state of the loop exit as well as the inputs of the
-                // replacement.
-                valueProxyNode.replaceAtUsages(replacement, u -> !(u instanceof FrameState frameState && frameState == state) && !(u == replacement));
-                return replacement;
             }
             return result;
         } else if (value instanceof InlineTypeNode.Placeholder placeholder && placeholder.graph().getGraphState().isDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {

@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.nodes.spi;
 
+import jdk.graal.compiler.nodes.ValueNodeInterface;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 
 /**
@@ -31,6 +32,17 @@ import jdk.graal.compiler.nodes.extended.GuardingNode;
  * situations where the value itself should be guarded by another invariant expressed as a
  * {@link GuardingNode}.
  */
-public interface ValueProxy extends LimitedValueProxy {
+public interface ValueProxy extends LimitedValueProxy, Simplifiable, ValueNodeInterface {
     GuardingNode getGuard();
+
+    /**
+     * Changes on the inputs of such a node should be propagated e.g. to trigger
+     * {@code LoadFieldNode#simplify}.
+     */
+    @Override
+    default void simplify(SimplifierTool tool) {
+        if (tool.getValhallaOptionsProvider().valhallaEnabled()) {
+            tool.addToWorkList(asNode().usages());
+        }
+    }
 }
