@@ -77,7 +77,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
                 returnNode = b.add(new ReturnScalarizedNode(returnResultDecider, list));
             }
         } else {
-            // need to add the return node here as the util adds the cfg before a fixed node
             ScalarizationNode scalarizationNode = b.add(new ScalarizationNode(result, type));
             b.add(scalarizationNode);
             ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, b.getAssumptions());
