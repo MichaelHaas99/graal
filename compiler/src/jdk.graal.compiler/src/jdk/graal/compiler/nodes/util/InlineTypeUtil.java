@@ -260,10 +260,13 @@ public class InlineTypeUtil {
     }
 
     public static void deleteScalarizationPlaceholders(MethodCallTargetNode callTargetNode) {
-        List<ValueNode> arguments = callTargetNode.arguments();
-        for (int i = 0; i < arguments.size(); i++) {
-            if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
-                placeholder.undo();
+        List<ValueNode> originalArguments = callTargetNode.arguments().snapshot();
+        for (int i = 0; i < originalArguments.size(); i++) {
+            if (originalArguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                // in case a previous argument was the same the node is already dead
+                if (placeholder.isAlive()) {
+                    placeholder.undo();
+                }
             }
         }
     }
