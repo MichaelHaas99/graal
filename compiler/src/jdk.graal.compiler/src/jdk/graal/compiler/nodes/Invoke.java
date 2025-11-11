@@ -30,7 +30,6 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
-import jdk.graal.compiler.nodes.java.MultiValue;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;

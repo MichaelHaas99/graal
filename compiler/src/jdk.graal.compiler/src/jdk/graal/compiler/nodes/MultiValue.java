@@ -1,12 +1,10 @@
-package jdk.graal.compiler.nodes.java;
+package jdk.graal.compiler.nodes;
 
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import jdk.graal.compiler.graph.Node;
-import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.ValueNodeInterface;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 
 /**
@@ -31,6 +29,15 @@ public interface MultiValue extends ValueNodeInterface {
             ReadMultiValueNode read = (ReadMultiValueNode) r;
             return !read.isOop() && !read.isNonNull();
         });
+    }
+
+    default ReadMultiValueNode getFieldValue(int index) {
+        for (ReadMultiValueNode fieldValue : getFieldValues()) {
+            if (fieldValue.getIndex() == index) {
+                return fieldValue;
+            }
+        }
+        return null;
     }
 
     private static ReadMultiValueNode getUsage(ValueNode node, Predicate<Node> p) {
