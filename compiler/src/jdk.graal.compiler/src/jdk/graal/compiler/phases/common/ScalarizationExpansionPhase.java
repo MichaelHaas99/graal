@@ -33,20 +33,17 @@ public class ScalarizationExpansionPhase extends BasePhase<CoreProviders> {
                 ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(n, n.object(), List.of(n.getType().getInstanceFields(true)), false, true);
                 ReadMultiValueNode nonNull = n.getNonNull();
                 if (nonNull != null) {
-                    nonNull.replaceAtAllUsages(scalarizedValues[0], true);
-                    nonNull.safeDelete();
+                    nonNull.replaceAndDelete(scalarizedValues[0]);
                 }
                 ReadMultiValueNode oop = n.getOop();
                 if (oop != null) {
-                    oop.replaceAtAllUsages(n.object(), true);
-                    oop.safeDelete();
+                    oop.replaceAndDelete(n.object());
                 }
                 List<ReadMultiValueNode> entries = n.getFieldValues();
                 for (ReadMultiValueNode entry : entries) {
                     // The lowest index for a field value is 1. As the field values in
                     // scalarizedValues also start at index 1, no index correction is necessary.
-                    entry.replaceAtAllUsages(scalarizedValues[entry.getIndex()], true);
-                    entry.safeDelete();
+                    entry.replaceAndDelete(scalarizedValues[entry.getIndex()]);
                 }
                 graph.removeFixed(n);
 
