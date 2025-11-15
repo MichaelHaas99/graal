@@ -12,7 +12,6 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
-import jdk.graal.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
@@ -98,14 +97,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             return returnScalarizedNode;
         }
 
-    }
-
-    public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
-        List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
-        ReturnScalarizedNode newReturnNode = create(null, result, type, b, b.getAssumptions(), fixedNodesToAdd);
-        fixedNodesToAdd.forEach(b::add);
-        b.add(newReturnNode);
-        return newReturnNode;
     }
 
     /**
