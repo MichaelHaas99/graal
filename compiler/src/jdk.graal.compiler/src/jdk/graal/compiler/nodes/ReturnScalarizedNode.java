@@ -66,12 +66,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
 
     public static ReturnScalarizedNode create(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
                     List<FixedWithNextNode> fixedNodesToAdd) {
-        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, fixedNodesToAdd);
+        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, fixedNodesToAdd, null);
     }
 
     private static ReturnScalarizedNode simplified(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
-                    List<FixedWithNextNode> fixedNodesToAdd) {
-        if (InlineTypeUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode && result != inlineTypeNode.getOop()) {
+                    List<FixedWithNextNode> fixedNodesToAdd, SimplifierTool tool) {
+        if (InlineTypeUtil.unproxify(result, tool) instanceof InlineTypeNode inlineTypeNode && result != inlineTypeNode.getOop()) {
             List<ValueNode> list = inlineTypeNode.getEntries();
             if (inlineTypeNode.isAllocatedOrNull()) {
                 return new ReturnScalarizedNode(inlineTypeNode.getOop(), list, returnType);
@@ -198,7 +198,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             return;
         }
         List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
-        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), fixedNodesToAdd);
+        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), fixedNodesToAdd, tool);
         if (newReturnNode != this) {
             fixedNodesToAdd.forEach((FixedWithNextNode fixedWithNextNode) -> {
                 graph().addOrUniqueWithInputs(fixedWithNextNode);

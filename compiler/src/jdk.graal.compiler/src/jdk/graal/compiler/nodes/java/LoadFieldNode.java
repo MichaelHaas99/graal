@@ -27,13 +27,17 @@ package jdk.graal.compiler.nodes.java;
 import static jdk.graal.compiler.graph.iterators.NodePredicates.isNotA;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 
+import java.util.List;
+
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.memory.MemoryOrderMode;
 import jdk.graal.compiler.core.common.spi.ConstantFieldProvider;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.core.common.type.StampPair;
+import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodeinfo.NodeCycles;
@@ -44,7 +48,6 @@ import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PhiNode;
-import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.calc.IntegerEqualsNode;
@@ -256,8 +259,10 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
-            StructuredGraph graph = graph();
+        if (GraalOptions.PartialEscapeAnalysis.getValue(getOptions())) {
+            return;
+        }
+        if (InlineTypeUtil.unproxify(object, tool) instanceof InlineTypeNode inlineTypeNode) {
             int index = inlineTypeNode.fieldIndex(field());
             if (index != -1) {
                 if (!StampTool.isPointerNonNull(object())) {
@@ -266,7 +271,12 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
                     graph().addBeforeFixed(this, guard);
                 }
                 this.replaceAtAllUsages(inlineTypeNode.getEntry(index), true);
-                graph.removeFixed(this);
+                tool.addToWorkList(this.usages());
+                List<Node> inputSnapshot = inputs().snapshot();
+                graph().removeFixed(this);
+                for (Node input : inputSnapshot) {
+                    tool.removeIfUnused(input);
+                }
             }
         }
     }

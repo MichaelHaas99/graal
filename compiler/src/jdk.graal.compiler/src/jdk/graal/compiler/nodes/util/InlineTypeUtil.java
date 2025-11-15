@@ -53,6 +53,7 @@ import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.memory.WriteNode;
+import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.ValhallaOptionsProvider;
 import jdk.graal.compiler.nodes.spi.ValueProxy;
 import jdk.graal.compiler.nodes.type.StampTool;
@@ -852,6 +853,10 @@ public class InlineTypeUtil {
 
     }
 
+    public static ValueNode unproxify(ValueNode value) {
+        return unproxify(value, null);
+    }
+
     /**
      * Similar to {@code GraphUtil#unproxify}, although we do it recursively. When coming back with
      * an unproxified value, we try to push it through loops. This is necessary as each value of the
@@ -860,7 +865,7 @@ public class InlineTypeUtil {
      * object will replace itself with the virtual object of the first value object. See
      * {@code InlineTypeNode#virtualize}.
      */
-    public static ValueNode unproxify(ValueNode value) {
+    public static ValueNode unproxify(ValueNode value, SimplifierTool tool) {
         if (value instanceof ValueProxy valueProxy) {
             StructuredGraph graph = valueProxy.asNode().graph();
             ValueNode originalNode = valueProxy.getOriginalNode();
@@ -894,6 +899,9 @@ public class InlineTypeUtil {
                     // Don't touch the frame state of the loop exit as well as the inputs of the
                     // replacement.
                     valueProxyNode.replaceAtUsages(replacement, u -> !(u instanceof FrameState frameState && frameState == state) && !(u == replacement));
+                    if (tool != null) {
+                        tool.addToWorkList(replacement.usages());
+                    }
                     return replacement;
                 } else if (valueProxy instanceof PiNode piNode) {
                     ResolvedJavaType type = StampTool.typeOrNull(piNode);
