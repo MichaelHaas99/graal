@@ -2370,7 +2370,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
             List<ValueNode> arguments = callTarget.arguments();
             for (int i = 0; i < parameterLength; i++) {
-                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder) {
+                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder && !placeholder.object().isNullConstant()) {
                     // propagate the scalarized value object in the framestate
                     replaceValueInFrameState(invokeArgs[i], placeholder);
                 }
