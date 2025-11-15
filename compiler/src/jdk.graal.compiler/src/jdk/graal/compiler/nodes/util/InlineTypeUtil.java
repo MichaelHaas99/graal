@@ -867,7 +867,16 @@ public class InlineTypeUtil {
             ValueNode result = unproxify(originalNode);
             if (result instanceof InlineTypeNode inlineTypeNode) {
                 if (valueProxy instanceof ValueProxyNode valueProxyNode) {
-                    // push the InlineTypeNode through loops
+                    // push the InlineType node through loops
+                    ValueNode current = valueProxyNode.proxyPoint();
+                    while (current instanceof FixedWithNextNode) {
+                        FixedWithNextNode next = (FixedWithNextNode) current;
+                        if (next instanceof InlineTypeNode inlineTypeNodeAfterLoopExit && inlineTypeNodeAfterLoopExit.getOop() == valueProxyNode) {
+                            // already pushed the InlineType node through the loop
+                            return inlineTypeNodeAfterLoopExit;
+                        }
+                        current = next.next();
+                    }
                     ValueNode nonNull;
                     if (StampTool.isPointerNonNull(valueProxyNode)) {
                         nonNull = ConstantNode.forInt(1, graph);

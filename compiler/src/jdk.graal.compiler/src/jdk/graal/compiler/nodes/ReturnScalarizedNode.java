@@ -3,6 +3,7 @@ package jdk.graal.compiler.nodes;
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
@@ -16,11 +17,14 @@ import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
+import jdk.graal.compiler.nodes.spi.Simplifiable;
+import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -38,15 +42,17 @@ import jdk.vm.ci.meta.Value;
  * This not the case for substrate.
  */
 @NodeInfo(nameTemplate = "ReturnScalarized")
-public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, Lowerable {
+public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, Lowerable, Simplifiable {
     public static final NodeClass<ReturnScalarizedNode> TYPE = NodeClass.create(ReturnScalarizedNode.class);
 
     @OptionalInput private NodeInputList<ValueNode> fieldValues;
+    private final ResolvedJavaType returnType;
 
     @SuppressWarnings("this-escape")
-    public ReturnScalarizedNode(ValueNode result, List<ValueNode> fieldValues) {
+    public ReturnScalarizedNode(ValueNode result, List<ValueNode> fieldValues, ResolvedJavaType returnType) {
         super(TYPE, result);
         this.fieldValues = new NodeInputList<>(this, fieldValues);
+        this.returnType = returnType;
     }
 
     public void setResult(ValueNode newResult) {
@@ -58,33 +64,48 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         return fieldValues.get(index);
     }
 
-    public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
-        ResolvedJavaField[] fields = type.getInstanceFields(true);
+    public static ReturnScalarizedNode create(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
+                    List<FixedWithNextNode> fixedNodesToAdd) {
+        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, fixedNodesToAdd);
+    }
 
-        ReturnScalarizedNode returnNode;
-        if (InlineTypeUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode) {
+    private static ReturnScalarizedNode simplified(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
+                    List<FixedWithNextNode> fixedNodesToAdd) {
+        if (InlineTypeUtil.unproxify(result) instanceof InlineTypeNode inlineTypeNode && result != inlineTypeNode.getOop()) {
             List<ValueNode> list = inlineTypeNode.getEntries();
             if (inlineTypeNode.isAllocatedOrNull()) {
-                returnNode = b.add(new ReturnScalarizedNode(inlineTypeNode.getOop(), list));
+                return new ReturnScalarizedNode(inlineTypeNode.getOop(), list, returnType);
             } else {
-                ConstantNode hub = b.add(createHub(b, result, inlineTypeNode.getType()));
+                ConstantNode hub = createHub(coreProviders, result, inlineTypeNode.getType());
                 ValueNode nonNull = inlineTypeNode.getNonNull();
                 if (StampTool.isPointerNonNull(result)) {
                     nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
                 }
-                ValueNode returnResultDecider = b.add(ReturnResultDeciderNode.create(b.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOop(), hub));
-                returnNode = b.add(new ReturnScalarizedNode(returnResultDecider, list));
+                ValueNode returnResultDecider = ReturnResultDeciderNode.create(coreProviders.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOop(), hub);
+                if (returnResultDecider instanceof FixedWithNextNode fixedWithNextNode) {
+                    fixedNodesToAdd.add(fixedWithNextNode);
+                }
+                return new ReturnScalarizedNode(returnResultDecider, list, returnType);
             }
+        } else if (returnScalarizedNode == null) {
+            ReturnScalarizedNode newReturnNode;
+            ScalarizationNode scalarizationNode = new ScalarizationNode(result, returnType);
+            fixedNodesToAdd.add(scalarizationNode);
+            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, assumptions);
+            newReturnNode = new ReturnScalarizedNode(multiValues.oop(), List.of(multiValues.fieldValues()), returnType);
+            return newReturnNode;
         } else {
-            ScalarizationNode scalarizationNode = b.add(new ScalarizationNode(result, type));
-            b.add(scalarizationNode);
-            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, b.getAssumptions());
-            multiValues.add(b.getGraph());
-            returnNode = b.add(new ReturnScalarizedNode(multiValues.oop(), new ArrayList<>(fields.length)));
-            returnNode.fieldValues.clear();
-            returnNode.fieldValues.addAll(List.of(multiValues.fieldValues()));
+            return returnScalarizedNode;
         }
-        return returnNode;
+
+    }
+
+    public static ReturnNode createAndAppend(GraphBuilderContext b, ValueNode result, ResolvedJavaType type) {
+        List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
+        ReturnScalarizedNode newReturnNode = create(null, result, type, b, b.getAssumptions(), fixedNodesToAdd);
+        fixedNodesToAdd.forEach(b::add);
+        b.add(newReturnNode);
+        return newReturnNode;
     }
 
     /**
@@ -99,7 +120,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         ResolvedJavaField[] fields = type.getInstanceFields(true);
 
         // PEA will replace oop with tagged hub if it is virtual
-        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<>(fields.length)));
+        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<>(fields.length), type));
         FixedWithNextNode previous = (FixedWithNextNode) oldReturn.predecessor();
         previous.setNext(returnNode);
         oldReturn.replaceAtUsages(returnNode);
@@ -171,4 +192,21 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         }
     }
 
+    @Override
+    public void simplify(SimplifierTool tool) {
+        if (GraalOptions.PartialEscapeAnalysis.getValue(getOptions())) {
+            return;
+        }
+        List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
+        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), fixedNodesToAdd);
+        if (newReturnNode != this) {
+            fixedNodesToAdd.forEach((FixedWithNextNode fixedWithNextNode) -> {
+                graph().addOrUniqueWithInputs(fixedWithNextNode);
+                graph().addBeforeFixed(this, fixedWithNextNode);
+            });
+            this.setResult(newReturnNode.result);
+            this.fieldValues.clear();
+            this.fieldValues.addAll(newReturnNode.fieldValues);
+        }
+    }
 }
