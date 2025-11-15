@@ -217,7 +217,7 @@ public class InlineTypeUtil {
         } else {
             outer: for (int i = 0; i < parameterLength; i++) {
 
-                if (GraalValhallaServices.isScalarizedParameter(newMethod, i, true)) {
+                if (GraalValhallaServices.isScalarizedParameter(newMethod, i, true) && !GraalValhallaServices.hasCallingConventionMismatch(newMethod)) {
                     for (int j = 0; j < i; j++) {
                         /*
                          * Perform simple gvn by checking if a previous argument is the same to
@@ -229,13 +229,8 @@ public class InlineTypeUtil {
                         }
                     }
 
-                    ValueNode unproxified = InlineTypeUtil.unproxify(originalArguments.get(i));
-                    /*
-                     * Check if the call target already contains a placeholder or a scalarized value
-                     * object. The placeholder is only valid if it belongs to this call target.
-                     */
-                    if (!(unproxified instanceof InlineTypeNode.Placeholder placeholder && placeholder.callTarget() == callTargetNode) &&
-                                    !(unproxified instanceof InlineTypeNode)) {
+                    ValueNode originalArgument = originalArguments.get(i);
+                    if (!(originalArgument instanceof InlineTypeNode.Placeholder placeholder && placeholder.callTarget() == callTargetNode)) {
                         ResolvedJavaType type = null;
                         int index = i;
                         if (!newMethod.isStatic()) {
@@ -248,7 +243,7 @@ public class InlineTypeUtil {
                         if (type == null) {
                             type = (ResolvedJavaType) newMethod.getSignature().getParameterType(index, newMethod.getDeclaringClass());
                         }
-                        InlineTypeNode.Placeholder placeholder = new InlineTypeNode.Placeholder(originalArguments.get(i), type, GraalValhallaServices.isParameterNullFree(newMethod, i, true));
+                        InlineTypeNode.Placeholder placeholder = new InlineTypeNode.Placeholder(originalArgument, type, GraalValhallaServices.isParameterNullFree(newMethod, i, true));
                         placeholder = graph.addOrUniqueWithInputs(placeholder);
                         graph.addBeforeFixed(callTargetNode.invoke().asFixedNode(), placeholder);
                         arguments.set(i, placeholder);
@@ -911,15 +906,6 @@ public class InlineTypeUtil {
                 }
             }
             return result;
-        } else if (value instanceof InlineTypeNode.Placeholder placeholder && placeholder.graph().getGraphState().isDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION)) {
-            /*
-             * We try to replace placeholder further up in the graph first. Consequently, we don't
-             * need placeholder nodes to be processed in a reverse post order. They can be processed
-             * in any order.
-             */
-            unproxify(placeholder.object());
-            // make the replacement
-            return placeholder.makeReplacement();
         } else {
             return value;
         }
