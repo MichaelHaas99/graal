@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.nodes.calc;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.AbstractPointerStamp;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.core.common.type.Stamp;
@@ -150,7 +151,11 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable {
             }
 
             if (forValue instanceof InlineTypeNode inlineTypeNode) {
-                return new IntegerEqualsNode(!isCanonicalization ? ConstantNode.forInt(0, inlineTypeNode.graph()) : ConstantNode.forInt(0), inlineTypeNode.getNonNull());
+                if (!isCanonicalization) {
+                    return new IntegerEqualsNode(ConstantNode.forInt(0, inlineTypeNode.graph()), inlineTypeNode.getNonNull());
+                } else if (!GraalOptions.PartialEscapeAnalysis.getValue(node.getOptions())) {
+                    return new IntegerEqualsNode(ConstantNode.forInt(0), inlineTypeNode.getNonNull());
+                }
             }
 
             /*
