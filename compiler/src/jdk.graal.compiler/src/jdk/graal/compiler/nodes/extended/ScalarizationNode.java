@@ -12,8 +12,10 @@ import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.MultiValue;
+import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
@@ -22,6 +24,7 @@ import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -91,6 +94,27 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
             }
             for (ReadMultiValueNode fieldValue : getFieldValues()) {
                 fieldValue.replaceAndDelete(inlineTypeNode.getEntry(fieldValue.getIndex() - 1));
+            }
+            tool.addToWorkList(objectUsages);
+            // add to worklist again in case it has no usages now
+            tool.addToWorkList(this);
+            return;
+        }
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
+        if (object.isNullConstant()) {
+            StructuredGraph graph = graph();
+            ReadMultiValueNode oop = getOop();
+            if (oop != null) {
+                getOop().replaceAndDelete(object);
+            }
+            ReadMultiValueNode nonNull = getNonNull();
+            if (nonNull != null) {
+                getNonNull().replaceAndDelete(ConstantNode.forInt(0, graph));
+            }
+            for (ReadMultiValueNode fieldValue : getFieldValues()) {
+                ResolvedJavaField field = fields[fieldValue.getIndex() - 1];
+                ValueNode defaultValue = graph().addOrUnique(ConstantNode.defaultForKind(field.getJavaKind(), graph));
+                fieldValue.replaceAndDelete(defaultValue);
             }
             tool.addToWorkList(objectUsages);
             tool.addToWorkList(this);
