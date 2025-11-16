@@ -36,6 +36,7 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.MapCursor;
+import org.graalvm.collections.Pair;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.RetryableBailoutException;
@@ -79,7 +80,6 @@ import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.AccessMonitorNode;
-import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
@@ -2186,13 +2186,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
             // try to get cached values e.g. by read elimination
             List<ResolvedJavaField> fieldsWithoutValue = new ArrayList<>();
-            List<Integer> fieldsWithoutValueIndexes = new ArrayList<>();
+            List<Integer> fieldsWithoutValueIndexes = null;
             ValueNode[] entryState;
             if (StampTool.isPointerAlwaysNull(node)) {
                 ResolvedJavaField[] fields = instanceClass.getInstanceFields(true);
                 fieldsWithoutValue = List.of(fields);
                 entryState = new ValueNode[fields.length];
             } else {
+                fieldsWithoutValueIndexes = new ArrayList<>();
                 entryState = getScalarValues(node, state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes);
             }
             ValueNode nonNull;
@@ -2205,32 +2206,20 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
             FixedNode addBeforeFixed = block.getEndNode();
             int entryStateIndex = 0;
-            if (StampTool.isPointerNonNull(node)) {
-                nonNull = ConstantNode.forInt(1, graph());
-                for (int i = 0; i < fieldsToLoad.length; i++) {
-                    LoadFieldNode load = LoadFieldNode.create(graph().getAssumptions(), node, fieldsToLoad[i]);
-                    bEffects.addFixedNodeBefore(load, addBeforeFixed);
-                    loadedFieldValues[loadedFieldValuesIndex++] = load;
-                }
-            } else if (StampTool.isPointerAlwaysNull(node)) {
-                nonNull = ConstantNode.forInt(0, graph());
-                for (int i = 0; i < fieldsToLoad.length; i++) {
-                    ConstantNode load = ConstantNode.defaultForKind(fieldsToLoad[i].getJavaKind());
-                    bEffects.addFloatingNode(load, "scalarizing null value");
-                    loadedFieldValues[loadedFieldValuesIndex++] = load;
-                }
-            } else {
-                ScalarizationNode scalarizationNode = new ScalarizationNode(node, instanceClass);
-                ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, tool.getAssumptions());
+            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(node, instanceClass, tool.getAssumptions());
+            ScalarizationNode scalarizationNode = pair.getLeft();
+            ReadMultiValueNode.MultiValues multiValues = pair.getRight();
+            if (scalarizationNode != null) {
                 bEffects.addFixedNodeBefore(scalarizationNode, block.getEndNode());
+            }
 
-                bEffects.addFloatingNode(multiValues.nonNull(), "virtualNonNullValue");
-                nonNull = multiValues.nonNull();
-                for (int j = 0; j < fieldsToLoad.length; j++) {
-                    ValueNode value = multiValues.fieldValues()[fieldsWithoutValueIndexes.get(j)];
-                    bEffects.addFloatingNode(value, "virtualValues");
-                    loadedFieldValues[loadedFieldValuesIndex++] = value;
-                }
+            bEffects.addFloatingNode(multiValues.nonNull(), "virtualNonNullValue");
+            nonNull = multiValues.nonNull();
+            for (int j = 0; j < fieldsToLoad.length; j++) {
+                int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
+                ValueNode value = multiValues.fieldValues()[index];
+                bEffects.addFloatingNode(value, "virtualValues");
+                loadedFieldValues[loadedFieldValuesIndex++] = value;
             }
 
             // save the loaded values in the entry state of the new virtual object

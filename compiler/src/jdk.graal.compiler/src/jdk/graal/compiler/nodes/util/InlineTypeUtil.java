@@ -12,7 +12,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 
-import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.spi.ForeignCallDescriptor;
 import jdk.graal.compiler.core.common.spi.ForeignCallLinkage;
 import jdk.graal.compiler.core.common.type.StampFactory;
@@ -306,7 +305,7 @@ public class InlineTypeUtil {
 
     public static ValueNode[] createScalarizationCFG(FixedNode addBefore, ValueNode object, List<ResolvedJavaField> fields, boolean assumeObjectNonNull,
                     boolean includeNonNullPhi) {
-        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode && !GraalOptions.StressScalarization.getValue(addBefore.getOptions())) {
+        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
             return inlineTypeNode.getScalarizedRepresentation(StampTool.isPointerNonNull(object), includeNonNullPhi);
         }
         return createScalarizationCFG(addBefore, object, fields, assumeObjectNonNull, includeNonNullPhi, ScalarizationNodes.SHOULD_CREATE);
@@ -896,6 +895,9 @@ public class InlineTypeUtil {
                     valueProxyNode.replaceAtUsages(replacement, u -> !(u instanceof FrameState frameState && frameState == state) && !(u == replacement));
                     if (tool != null) {
                         tool.addToWorkList(replacement.usages());
+                        tool.addToWorkList(replacement.inputs());
+                        tool.addToWorkList(replacement.predecessor());
+                        tool.addToWorkList(replacement.next());
                     }
                     return replacement;
                 } else if (valueProxy instanceof PiNode piNode) {

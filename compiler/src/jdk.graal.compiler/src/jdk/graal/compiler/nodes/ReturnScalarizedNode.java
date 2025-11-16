@@ -3,6 +3,8 @@ package jdk.graal.compiler.nodes;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.graalvm.collections.Pair;
+
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.ObjectStamp;
 import jdk.graal.compiler.graph.NodeClass;
@@ -88,9 +90,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             }
         } else if (returnScalarizedNode == null) {
             ReturnScalarizedNode newReturnNode;
-            ScalarizationNode scalarizationNode = new ScalarizationNode(result, returnType);
-            fixedNodesToAdd.add(scalarizationNode);
-            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(scalarizationNode, assumptions);
+            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(result, returnType, assumptions);
+            ScalarizationNode scalarizationNode = pair.getLeft();
+            ReadMultiValueNode.MultiValues multiValues = pair.getRight();
+            if (scalarizationNode != null) {
+                fixedNodesToAdd.add(scalarizationNode);
+            }
             newReturnNode = new ReturnScalarizedNode(multiValues.oop(), List.of(multiValues.fieldValues()), returnType);
             return newReturnNode;
         } else {

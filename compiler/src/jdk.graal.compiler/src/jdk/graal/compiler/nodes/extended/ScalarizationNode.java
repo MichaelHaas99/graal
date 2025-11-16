@@ -5,8 +5,10 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
 import java.util.List;
 
+import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
+import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.IterableNodeType;
 import jdk.graal.compiler.graph.Node;
@@ -22,8 +24,10 @@ import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -53,8 +57,43 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
         this.type = type;
     }
 
-    public ScalarizationNode(ValueNode object, ResolvedJavaType type) {
+    protected ScalarizationNode(ValueNode object, ResolvedJavaType type) {
         this(TYPE, object, type);
+    }
+
+    public static Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> create(ValueNode object, ResolvedJavaType type, Assumptions assumptions) {
+        return simplified(null, object, type, assumptions, null);
+    }
+
+    public static Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> simplified(ScalarizationNode scalarizationNode, ValueNode object, ResolvedJavaType type, Assumptions assumptions,
+                    SimplifierTool tool) {
+        ResolvedJavaField[] fields = type.getInstanceFields(true);
+        if (StampTool.isPointerAlwaysNull(object)) {
+            ValueNode oop = object;
+            ValueNode nonNull = ConstantNode.forInt(0);
+            ValueNode[] fieldValues = new ValueNode[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                fieldValues[i] = ConstantNode.defaultForKind(fields[i].getJavaKind());
+            }
+            return Pair.create(null, new ReadMultiValueNode.MultiValues(oop, fieldValues, nonNull));
+        }
+
+        if (InlineTypeUtil.unproxify(object, tool) instanceof InlineTypeNode inlineTypeNode) {
+            ValueNode oop = inlineTypeNode;
+            ValueNode nonNull = inlineTypeNode.getNonNull();
+            if (StampTool.isPointerAlwaysNull(object)) {
+                nonNull = ConstantNode.forInt(1);
+            }
+            ValueNode[] fieldValues = inlineTypeNode.getEntries().toArray(ValueNode.EMPTY_ARRAY);
+            return Pair.create(null, new ReadMultiValueNode.MultiValues(oop, fieldValues, nonNull));
+        }
+        if (scalarizationNode == null) {
+            ScalarizationNode newScalarizationNode = new ScalarizationNode(object, type);
+            ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(newScalarizationNode, assumptions);
+            return Pair.create(newScalarizationNode, multiValues);
+        } else {
+            return Pair.create(scalarizationNode, null);
+        }
     }
 
     @Override
@@ -81,42 +120,30 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
             return;
         }
 
+        if (GraalOptions.PartialEscapeAnalysis.getValue(getOptions())) {
+            return;
+        }
+
         List<Node> objectUsages = object.usages().snapshot();
-        ValueNode unproxified = InlineTypeUtil.unproxify(object);
-        if (unproxified instanceof InlineTypeNode inlineTypeNode) {
+        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = simplified(this, object, type, tool.getAssumptions(), tool);
+        ScalarizationNode newScalarizationNode = pair.getLeft();
+        if (newScalarizationNode != this) {
+            StructuredGraph graph = graph();
+            ReadMultiValueNode.MultiValues newMultiValues = pair.getRight();
             ReadMultiValueNode oop = getOop();
             if (oop != null) {
-                getOop().replaceAndDelete(inlineTypeNode);
+                getOop().replaceAndDelete(graph.addOrUnique(newMultiValues.oop()));
             }
             ReadMultiValueNode nonNull = getNonNull();
             if (nonNull != null) {
-                getNonNull().replaceAndDelete(inlineTypeNode.getNonNull());
+                getNonNull().replaceAndDelete(graph.addOrUnique(newMultiValues.nonNull()));
             }
+            ValueNode[] newFieldValues = newMultiValues.fieldValues();
             for (ReadMultiValueNode fieldValue : getFieldValues()) {
-                fieldValue.replaceAndDelete(inlineTypeNode.getEntry(fieldValue.getIndex() - 1));
+                fieldValue.replaceAndDelete(graph.addOrUnique(newFieldValues[fieldValue.getIndex() - 1]));
             }
             tool.addToWorkList(objectUsages);
             // add to worklist again in case it has no usages now
-            tool.addToWorkList(this);
-            return;
-        }
-        ResolvedJavaField[] fields = type.getInstanceFields(true);
-        if (object.isNullConstant()) {
-            StructuredGraph graph = graph();
-            ReadMultiValueNode oop = getOop();
-            if (oop != null) {
-                getOop().replaceAndDelete(object);
-            }
-            ReadMultiValueNode nonNull = getNonNull();
-            if (nonNull != null) {
-                getNonNull().replaceAndDelete(ConstantNode.forInt(0, graph));
-            }
-            for (ReadMultiValueNode fieldValue : getFieldValues()) {
-                ResolvedJavaField field = fields[fieldValue.getIndex() - 1];
-                ValueNode defaultValue = graph().addOrUnique(ConstantNode.defaultForKind(field.getJavaKind(), graph));
-                fieldValue.replaceAndDelete(defaultValue);
-            }
-            tool.addToWorkList(objectUsages);
             tool.addToWorkList(this);
         }
     }
