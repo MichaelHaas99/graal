@@ -282,6 +282,15 @@ public abstract class HotSpotHostBackend extends HotSpotBackend implements LIRGe
         if (performStackExtension) {
             entryPointStackExtension(crb);
         }
+        emitEntryPointLIR(crb);
+    }
+
+    /**
+     * Subclasses can override this method to extend the stack before code emission of the entry
+     * point LIR. E.g. needed for spill slots or outgoing arguments for foreign calls due to GC
+     * barriers (ZGC).
+     */
+    protected void emitEntryPointLIR(CompilationResultBuilder crb) {
         crb.emitLIR(false);
     }
 

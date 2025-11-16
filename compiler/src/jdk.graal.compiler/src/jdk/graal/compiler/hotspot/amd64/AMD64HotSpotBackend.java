@@ -446,15 +446,15 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
     }
 
     @Override
-    public void emitEntryPointCode(CompilationResultBuilder crb) {
+    public void emitEntryPointLIR(CompilationResultBuilder crb) {
         AMD64MacroAssembler asm = (AMD64MacroAssembler) crb.asm;
         HotSpotEntryPointFrameMap frameMap = (HotSpotEntryPointFrameMap) crb.frameMap;
         if (frameMap.frameSize() > 0) {
             asm.subq(rsp, frameMap.frameSize());
-            super.emitEntryPointCode(crb);
+            super.emitEntryPointLIR(crb);
             asm.addq(rsp, frameMap.frameSize());
         } else {
-            super.emitEntryPointCode(crb);
+            super.emitEntryPointLIR(crb);
         }
     }
 
