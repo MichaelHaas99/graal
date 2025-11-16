@@ -145,9 +145,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
         StructuredGraph graph = invoke.asNode().graph();
         ResolvedJavaType returnType = invoke.callTarget().returnStamp().getTrustedStamp().javaType(metaAccess);
         ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(invoke, returnType, graph.getAssumptions());
-        multiValues.add(graph);
 
-        InlineTypeNode inlineTypeNode = graph.addOrUnique(new InlineTypeNode(returnType, multiValues.oop(), multiValues.fieldValues(), multiValues.nonNull(), false));
+        InlineTypeNode inlineTypeNode = graph.addOrUniqueWithInputs(new InlineTypeNode(returnType, multiValues.oop(), multiValues.fieldValues(), multiValues.nonNull(), false));
         FixedNode addBefore;
         if (invoke instanceof WithExceptionNode withExceptionNode) {
             addBefore = withExceptionNode.next().next();
@@ -279,27 +278,26 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         }
 
-        public InlineTypeNode makeReplacement() {
-
-            InlineTypeNode inlineTypeNode;
+        public ReadMultiValueNode.MultiValues makeReplacement() {
             StructuredGraph graph = graph();
             Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(object, type, graph.getAssumptions());
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (multiValues.oop() instanceof InlineTypeNode existingInlineTypeNode) {
                 this.replaceAtAllUsages(existingInlineTypeNode, true);
+                multiValues = multiValues.add(graph);
                 graph.removeFixed(this);
-                return existingInlineTypeNode;
+            } else {
+                if (scalarizationNode != null) {
+                    graph.addOrUnique(scalarizationNode);
+                    graph.addBeforeFixed(this, scalarizationNode);
+                }
+                multiValues = multiValues.add(graph);
+                InlineTypeNode inlineTypeNode = new InlineTypeNode(type, object, multiValues.fieldValues(), multiValues.nonNull(), true);
+                graph.addOrUniqueWithInputs(inlineTypeNode);
+                graph.replaceFixedWithFixed(this, inlineTypeNode);
             }
-            if (scalarizationNode != null) {
-                graph.addOrUnique(scalarizationNode);
-                graph.addBeforeFixed(this, scalarizationNode);
-            }
-            multiValues.add(graph);
-            inlineTypeNode = new InlineTypeNode(type, object, multiValues.fieldValues(), multiValues.nonNull(), true);
-            graph.addOrUniqueWithInputs(inlineTypeNode);
-            graph.replaceFixedWithFixed(this, inlineTypeNode);
-            return inlineTypeNode;
+            return multiValues;
 
         }
 

@@ -148,12 +148,14 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
 
     public record MultiValues(ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull) {
 
-        public void add(StructuredGraph graph) {
-            graph.addOrUnique(oop);
-            graph.addOrUnique(nonNull);
-            for (ValueNode fieldValue : fieldValues) {
-                graph.addOrUnique(fieldValue);
+        public MultiValues add(StructuredGraph graph) {
+            ValueNode oop = graph.addOrUnique(this.oop);
+            ValueNode nonNull = graph.addOrUnique(this.nonNull);
+            ValueNode[] fieldValues = new ValueNode[this.fieldValues.length];
+            for (int i = 0; i < this.fieldValues.length; i++) {
+                fieldValues[i] = graph.addOrUnique(this.fieldValues[i]);
             }
+            return new MultiValues(oop, fieldValues, nonNull);
         }
     }
 }

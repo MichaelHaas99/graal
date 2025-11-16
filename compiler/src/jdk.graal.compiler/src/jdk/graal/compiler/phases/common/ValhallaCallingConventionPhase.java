@@ -33,6 +33,7 @@ import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
@@ -88,13 +89,15 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                                 ValueNode argument = arguments.get(i);
                                 if (argument instanceof InlineTypeNode.Placeholder placeholder) {
                                     // handle the placeholder
-                                    InlineTypeNode inlineTypeNode = placeholder.makeReplacement();
+                                    ReadMultiValueNode.MultiValues multiValues = placeholder.makeReplacement();
                                     for (int j = i; j >= 0; j--) {
                                         if (scalarizedArguments.get(j) == argument) {
                                             boolean isNonNull = GraalValhallaServices.isParameterNullFree(targetMethod, j, true);
-                                            ValueNode[] result = inlineTypeNode.getScalarizedRepresentation(isNonNull, !isNonNull);
                                             scalarizedArguments.remove(j);
-                                            scalarizedArguments.addAll(j, List.of(result));
+                                            scalarizedArguments.addAll(j, List.of(multiValues.fieldValues()));
+                                            if (!isNonNull) {
+                                                scalarizedArguments.add(j, multiValues.nonNull());
+                                            }
                                             alreadyProcessed[j] = true;
                                         }
                                     }
