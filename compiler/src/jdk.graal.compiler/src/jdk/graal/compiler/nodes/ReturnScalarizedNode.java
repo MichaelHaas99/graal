@@ -72,6 +72,7 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
 
     private static ReturnScalarizedNode simplified(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
                     List<FixedWithNextNode> fixedNodesToAdd, SimplifierTool tool) {
+        // only simplify in case the result does not already point to the proxy node
         if (InlineTypeUtil.unproxify(result, tool) instanceof InlineTypeNode inlineTypeNode && result != inlineTypeNode.getOop()) {
             List<ValueNode> list = inlineTypeNode.getEntries();
             if (inlineTypeNode.isAllocatedOrNull()) {

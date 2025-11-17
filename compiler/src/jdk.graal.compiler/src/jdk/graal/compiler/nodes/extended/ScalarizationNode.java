@@ -17,6 +17,7 @@ import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.MultiValue;
+import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
@@ -79,9 +80,10 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
         }
 
         if (InlineTypeUtil.unproxify(object, tool) instanceof InlineTypeNode inlineTypeNode) {
-            ValueNode oop = inlineTypeNode;
+            boolean equalStamps = object.stamp(NodeView.DEFAULT).equals(inlineTypeNode.stamp(NodeView.DEFAULT));
+            ValueNode oop = equalStamps ? inlineTypeNode : object;
             ValueNode nonNull = inlineTypeNode.getNonNull();
-            if (StampTool.isPointerAlwaysNull(object)) {
+            if (StampTool.isPointerNonNull(object)) {
                 nonNull = ConstantNode.forInt(1);
             }
             ValueNode[] fieldValues = inlineTypeNode.getEntries().toArray(ValueNode.EMPTY_ARRAY);
