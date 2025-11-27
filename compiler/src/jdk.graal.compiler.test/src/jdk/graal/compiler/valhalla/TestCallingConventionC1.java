@@ -137,6 +137,41 @@ public class TestCallingConventionC1 extends JTTTest {
         runTest(DEMO_OPTIONS_WITHOUT_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test42_helper",eightFloatsField,eightFloatsField,eightFloatsField, pointField, 3, 4, 5, floatPointField, 7, new MyValue1());
     }
 
+    // Test calling a method that has circular register/stack dependencies when unpacking value class arguments
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    value class TestValue23 {
+        double f1;
+
+        TestValue23(double val) {
+            f1 = val;
+        }
+    }
+
+    static double test23Callee(int i1, int i2, int i3, int i4, int i5, int i6,
+                               TestValue23 v1, TestValue23 v2, TestValue23 v3, TestValue23 v4, TestValue23 v5, TestValue23 v6, TestValue23 v7, TestValue23 v8,
+                               double d1, double d2, double d3, double d4, double d5, double d6, double d7, double d8) {
+        return i1 + i2 + i3 + i4 + i5 + i6 + v1.f1 + v2.f1 + v3.f1 + v4.f1 + v5.f1 + v6.f1 + v7.f1 + v8.f1 + d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8;
+    }
+
+    public static double test23(int i1, int i2, int i3, int i4, int i5, int i6,
+                         TestValue23 v1, TestValue23 v2, TestValue23 v3, TestValue23 v4, TestValue23 v5, TestValue23 v6, TestValue23 v7, TestValue23 v8,
+                         double d1, double d2, double d3, double d4, double d5, double d6, double d7, double d8) {
+        return test23Callee(i1, i2, i3, i4, i5, i6,
+                v1, v2, v3, v4, v5, v6, v7, v8,
+                d1, d2, d3, d4, d5, d6, d7, d8);
+    }
+
+    @Test
+    public void run3() throws Throwable{
+        int rI = 3;
+        double rD = 4.0;
+        TestValue23 vt = new TestValue23(rI);
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,EnumSet.allOf(DeoptimizationReason.class), "test23",rI, rI, rI, rI, rI, rI,
+                vt, vt, vt, vt, vt, vt, vt, vt,
+                rD, rD, rD, rD, rD, rD, rD, rD);
+    }
+
     static interface Intf {
         public int func1(int a, int b);
         public int func2(int a, int b, Point p);
@@ -182,6 +217,7 @@ public class TestCallingConventionC1 extends JTTTest {
         }
     }
 
+    @BytecodeParserForceInline
     public int test108(Intf intf, int a, int b) {
         return intf.func2(a, b, pointField);
     }
@@ -210,6 +246,7 @@ public class TestCallingConventionC1 extends JTTTest {
         @DontInline // will be compiled with counters
         public int func1(int a, int b)             { return field + a + b + 300; }
 
+        @BytecodeParserNeverInline
         @DontInline // will be compiled with counters
         public int func2(int a, int b, Point p)    { return field + a + b + p.x + p.y + 300; }
     }
@@ -238,10 +275,36 @@ public class TestCallingConventionC1 extends JTTTest {
 
     }
 
+    private static final OptionValues WITHOUT_INLINING = new OptionValues(getInitialOptions(), HighTier.Options.Inline, false, UseTrappingNullChecksPhase.Options.UseTrappingNullChecks, false,HotspotSnippetsOptions.TraceSubstitutabilityCheckMethodFilter, "test121");
+
+
     @Test
     public void test108(){
-        getCode(getResolvedJavaMethod("test108_verifier"), null, true, false, getInitialOptions());
+        getCode(getResolvedJavaMethod("test108_verifier"), null, true, false, WITHOUT_INLINING);
     }
 
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    value class MyValue {
+        // Make sure the payload size is <= 64-bit to enable flattening
+        short x;
+        short y;
+
+        MyValue(short x, short y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        MyValue incrementAndCheck() {
+            Assert.assertEquals((Object)x,(Object) y);
+            return this;
+        }
+    }
+
+    @Test
+    public void testMy(){
+        Short s = Short.valueOf((short)3);
+        getCode(getResolvedJavaMethod(MyValue.class, "incrementAndCheck"), null, true, false, WITHOUT_INLINING);
+    }
 
 }

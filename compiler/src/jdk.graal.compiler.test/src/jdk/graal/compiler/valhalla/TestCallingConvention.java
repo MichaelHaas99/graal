@@ -3,6 +3,7 @@ package jdk.graal.compiler.valhalla;
 import java.util.Arrays;
 import java.util.EnumSet;
 
+import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.phases.HighTier;
 import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
@@ -174,8 +175,22 @@ public class TestCallingConvention extends JTTTest {
     // demonstration purpose
 
     public static value class MyValue{
-        int i=2;
-        float f=3.0f;
+        int i;
+        float f;
+
+        MyValue(){
+            this.i = 2;
+            this.f = 3.0f;
+        }
+
+        MyValue(int i, float f){
+            this.i = i;
+            this.f = f;
+        }
+
+        @BytecodeParserNeverInline
+        public void scalarizedValueObjectArgument(){
+        }
     }
 
     public static MyValue demonstrateReturnNonNull(){
@@ -194,8 +209,15 @@ public class TestCallingConvention extends JTTTest {
         return s;
     }
 
+    @BytecodeParserNeverInline
+    public static MyValue random2(MyValue v){
+        MyValue s = new MyValue();
+        randomGlobal = s;
+        return s;
+    }
+
     public static MyValue demonstrateFramestate(){
-        return random();
+        return random2(new MyValue());
     }
 
     public static MyValue demonstratePEA(){
@@ -246,6 +268,43 @@ public class TestCallingConvention extends JTTTest {
     public void runDemo3() throws Throwable {
         resetCache();
         runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstratePEA");
+    }
+
+    @BytecodeParserNeverInline
+    public static MyValue scalarizedValueObjectReturn(){
+        return null;
+    }
+
+    @BytecodeParserNeverInline
+    public static void scalarizedValueObjectArgument(MyValue m) {
+    }
+
+    public static MyValue demonstrateUnproxify(int max) {
+        MyValue m;
+        do {
+            m = scalarizedValueObjectReturn();
+        } while(max-- > 0);
+        scalarizedValueObjectArgument(m);
+        return m;
+    }
+
+    @Test
+    public void runDemo33() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstrateUnproxify", 5);
+    }
+
+    public static MyValue demonstrateUnproxify2() {
+        MyValue m=null;
+        scalarizedValueObjectArgument(m);
+        scalarizedValueObjectArgument(m);
+        return m;
+    }
+
+    @Test
+    public void runDemo34() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstrateUnproxify2");
     }
 
     @Test

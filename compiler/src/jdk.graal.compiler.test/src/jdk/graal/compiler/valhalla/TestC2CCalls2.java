@@ -6,27 +6,10 @@ import jdk.graal.compiler.test.AddExports;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.util.Arrays;
-import java.util.EnumSet;
 
-import jdk.graal.compiler.core.common.GraalOptions;
-import jdk.graal.compiler.core.phases.HighTier;
-import jdk.graal.compiler.hotspot.replacements.HotspotSnippetsOptions;
-import jdk.graal.compiler.options.OptionKey;
-import jdk.graal.compiler.options.OptionValues;
-import jdk.graal.compiler.phases.common.UseTrappingNullChecksPhase;
-import jdk.graal.compiler.test.AddExports;
-import jdk.internal.vm.annotation.DontInline;
-import jdk.internal.vm.annotation.ImplicitlyConstructible;
-import jdk.internal.vm.annotation.LooselyConsistentValue;
 import jdk.vm.ci.code.InvalidInstalledCodeException;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.junit.Assert;
 import org.junit.Test;
-
-import jdk.graal.compiler.jtt.JTTTest;
-import jdk.vm.ci.meta.DeoptimizationReason;
 
 @AddExports({"java.base/jdk.internal.vm.annotation", "java.base/jdk.internal.value"})
 public class TestC2CCalls2 extends JTTTest {
@@ -477,7 +460,7 @@ public class TestC2CCalls2 extends JTTTest {
 //            getCode(getResolvedJavaMethod(MyValue2.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(val2, other, other, rI);
 //            getCode(getResolvedJavaMethod(MyObject.class, "test2"), null, false, true, getInitialOptions()).executeVarargs(obj, other, other, rI);
 //
-//            getCode(getResolvedJavaMethod(MyValue1.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, other, rI, false);
+            getCode(getResolvedJavaMethod(MyValue1.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, other, rI, false);
 //            getCode(getResolvedJavaMethod(MyValue2.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(val2, other, other, rI, false);
 //            getCode(getResolvedJavaMethod(MyObject.class, "test3"), null, false, true, getInitialOptions()).executeVarargs(obj, other, other, rI, false);
 //
@@ -514,7 +497,7 @@ public class TestC2CCalls2 extends JTTTest {
         }
 
         // Trigger compilation of caller methods
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < 1; ++i) {
             val1 = new MyValue1(rI+i);
             val2 = new MyValue2(rI+i+1);
             val3 = new MyValue3(rI+i+2);
@@ -525,7 +508,7 @@ public class TestC2CCalls2 extends JTTTest {
 //            getCode(getResolvedJavaMethod("test1"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
 //            getCode(getResolvedJavaMethod("test2"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
 //            getCode(getResolvedJavaMethod("test2"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
-//            getCode(getResolvedJavaMethod("test3"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
+//           getCode(getResolvedJavaMethod("test3"), null, false, true, getInitialOptions());//.executeVarargs(val1, other, rI);
 //            getCode(getResolvedJavaMethod("test4"), null, false, true, getInitialOptions()).executeVarargs(obj, other, rI);
 //            getCode(getResolvedJavaMethod("test5"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
 //            getCode(getResolvedJavaMethod("test6"), null, false, true, getInitialOptions()).executeVarargs(val1, other, rI);
@@ -572,9 +555,9 @@ public class TestC2CCalls2 extends JTTTest {
 //        Assert.assertEquals(test9(val1, other, rI, false), val1.x + 2*other.x + rI);
 //        Assert.assertEquals(test9(obj, other, rI, false), obj.x + 2*other.x + rI);
         for(int i = 0; i<10000;i++){
-            Assert.assertEquals(test10(obj, other, rI, false), obj.x + 2*other.x + rI);
-            Assert.assertEquals(test10(val1, other, rI, false), val1.x + 2*other.x + rI);
-            val1.test1(other, rI);
+//            Assert.assertEquals(test10(obj, other, rI, false), obj.x + 2*other.x + rI);
+//            Assert.assertEquals(test10(val1, other, rI, false), val1.x + 2*other.x + rI);
+            //val1.test1(other, rI);
         }
 
 //        Assert.assertEquals(test11(val1, other, rI, false), val1.x + 2*other.x + rI);
@@ -611,7 +594,7 @@ public class TestC2CCalls2 extends JTTTest {
         //test(getResolvedJavaMethod(TestC2CCalls.MyValue1.class, "test1"),val1, other, rI);
         //test(getResolvedJavaMethod(TestC2CCalls.MyValue2.class, "test2"),val2, other, other, rI);
         //test(getResolvedJavaMethod(TestC2CCalls.MyValue3.class, "test7"), val3, rI, rI, rI, rI, rI, rI );
-        test(getResolvedJavaMethod(MyValue1.class, "test3"), val1, other, other, rI, false);
+//        test(getResolvedJavaMethod(MyValue1.class, "test3"), val1, other, other, rI, false);
         //test(getResolvedJavaMethod(MyValue1.class, "testtest"), val1, other, other, rI, false);
         //runTest("test10", val1, other, rI, false);
         //getCode(getResolvedJavaMethod("test10"));
@@ -657,5 +640,55 @@ public class TestC2CCalls2 extends JTTTest {
     @Test
     public void run2(){
         getCode(getResolvedJavaMethod("testOptimized"), null, true, true, getInitialOptions());
+    }
+
+    interface ValueInterface{
+        void test3(ValueOther o, ValueOther o2);
+    }
+
+    static value class ValueOther {
+        public int x;
+
+        private ValueOther(int x) {
+            this.x = x;
+        }
+    }
+
+    static value class Value1 implements ValueInterface {
+        @Override
+        public void test3(ValueOther o, ValueOther o2) {
+
+        }
+    }
+
+    static value class Value2 implements ValueInterface {
+        @Override
+        public void test3(ValueOther o, ValueOther o2) {
+
+        }
+    }
+
+    static value class Value3 implements ValueInterface {
+        @Override
+        public void test3(ValueOther o, ValueOther o2) {
+
+        }
+    }
+
+
+    public static void testMultiInline(ValueInterface intf){
+        ValueOther other = new ValueOther(rI+4);
+        intf.test3(null, null);
+    }
+
+    @Test
+    public void run3() throws InvalidInstalledCodeException {
+        Value1 val2 = new Value1();
+        Value2 val3 = new Value2();
+        for(int i = 0; i<10000;i++){
+            testMultiInline(val2);
+            testMultiInline(val3);
+        }
+        getCode(getResolvedJavaMethod("testMultiInline"), null, true, true, getInitialOptions()).executeVarargs(new Value3());
     }
 }

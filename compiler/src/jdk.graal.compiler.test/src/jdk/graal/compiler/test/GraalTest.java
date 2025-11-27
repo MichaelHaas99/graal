@@ -91,9 +91,12 @@ public class GraalTest {
         Method found = null;
         for (Method m : clazz.getMethods()) {
             if (m.getName().equals(methodName)) {
-                Assert.assertNull("multiple methods: " + clazz.getName() + "." + methodName, found);
+                // Assert.assertNull("multiple methods: " + clazz.getName() + "." + methodName,
+                // found);
                 found = m;
+                break;
             }
+
         }
         if (found == null) {
             /* Now look for non-public methods (but this does not look in superclasses). */

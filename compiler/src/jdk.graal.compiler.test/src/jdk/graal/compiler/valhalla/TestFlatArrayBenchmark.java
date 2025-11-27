@@ -178,6 +178,12 @@ public class TestFlatArrayBenchmark extends JTTTest {
             this.x = x;
             this.y = y;
         }
+
+        @Override
+        public Object clone() throws CloneNotSupportedException {
+            // Returning a clone of the current object
+            return super.clone();
+        }
     }
 
     static final int N = 100;
@@ -199,6 +205,58 @@ public class TestFlatArrayBenchmark extends JTTTest {
     @Test
     public void run6() throws InvalidInstalledCodeException {
         InstalledCode code = getCode(getResolvedJavaMethod("findDuplicates"), null, true, true, getInitialOptions());
+    }
+
+    public static boolean equality(Line a, Line b) {
+        return a == b;
+    }
+
+    static value class OneInstance{
+        int a=3;
+    }
+
+    public static boolean equality2(OneInstance a, OneInstance b) {
+        boolean result= false;
+        for(int i = 0;i<1000;i++){
+            result =  a == b;
+            result &= a == b;
+        }
+        return result;
+    }
+
+    public static int hash(Point p) {
+        return System.identityHashCode(p);
+    }
+
+    public static Object clone(Point p) throws CloneNotSupportedException {
+        return p.clone();
+    }
+
+    @Test
+    public void run7() throws InvalidInstalledCodeException {
+        Object result = getCode(getResolvedJavaMethod("hash"), null, true, true, getInitialOptions());
+        hash(new Point(3,4));
+        int a = 3;
+    }
+
+    @Test
+    public void run8() throws InvalidInstalledCodeException {
+        Object result = getCode(getResolvedJavaMethod("equality"), null, true, true, getInitialOptions());
+        boolean equal = equality(new Line(new Point(3,4), new Point(3,5)), new Line(new Point(3,4), new Point(3,5)));
+        System.out.println(equal);
+        int a = 3;
+    }
+
+    @Test
+    public void run10() throws InvalidInstalledCodeException {
+        Object result = getCode(getResolvedJavaMethod("equality2"), null, true, true, getInitialOptions());
+        //equality(new Point(3,4), new Point(3,4));
+        int a = 3;
+    }
+
+    @Test
+    public void run9() throws InvalidInstalledCodeException {
+        getCode(getResolvedJavaMethod("clone"), null, true, true, getInitialOptions());
     }
 
 

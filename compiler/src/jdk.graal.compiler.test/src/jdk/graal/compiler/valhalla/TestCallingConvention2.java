@@ -131,6 +131,7 @@ public class TestCallingConvention2 extends JTTTest {
         float f5=13.0f;
         double f6=15.0f;
 
+        @BytecodeParserNeverInline
         @DontInline
         MyValue3 test(){
             //return this;
@@ -175,6 +176,7 @@ public class TestCallingConvention2 extends JTTTest {
         } catch (Exception e) {
         }
         }
+        resetCodeCache();
         runTest(DEMO_OPTIONS_WITHOUT_INLINING, "testVirtual", new MyValue3());
     }
 

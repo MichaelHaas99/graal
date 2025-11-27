@@ -319,7 +319,7 @@ public class TestLWorld extends JTTTest {
     public boolean test6(Object arg) throws IllegalAccessException {
         Object vt = MyValue1.createWithFieldsInline(rI, rL);
         if (vt == arg || vt == (Object) valueField1 || vt == objectField1 || vt == null ||
-                        arg == vt || (Object) valueField1 == vt || objectField1 == vt || null == vt) {
+                arg == vt || (Object) valueField1 == vt || objectField1 == vt || null == vt) {
             return true;
         }
         return false;
@@ -1294,7 +1294,7 @@ public class TestLWorld extends JTTTest {
     public void run45() throws  Throwable{
         resetCache();
         testRawStore();
-       // System.out.println();
+        // System.out.println();
         //System.out.println();
         // 1111111111011001
         getCode(getResolvedJavaMethod( "testRawStore"), null, true, true, WITHOUT_PEA).executeVarargs();
@@ -1345,7 +1345,454 @@ public class TestLWorld extends JTTTest {
         getCode(getResolvedJavaMethod( "test142"), null, true, true, getInitialOptions());
     }
 
+    public static boolean test111() {
+        MyValue1[] src = (MyValue1[])ValueClass.newNullRestrictedArray(MyValue1.class, 1);
+        src[0] = testValue1;
+        MyValue1[] dst = Arrays.copyOf(src, src.length, MyValue1[].class);
+        //Assert.assertEquals(src[0], dst[0]);
+        return src[0]== dst[0];
+    }
+
+    @Test
+    public void run48() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test111"), null, true, true, getInitialOptions()).executeVarargs();
+    }
+
+    MyValue1 refField;
+
+    public MyValue1 test45(boolean b1, boolean b2) {
+        MyValue1 val = MyValue1.createWithFieldsInline(rI, rL);
+        if (b1) {
+            val = refField;
+        }
+        if (b2) {
+            // Uncommon trap
+            GraalDirectives.deoptimize();
+        }
+        return val;
+    }
+
+    @Test
+    public void run49() throws  Throwable{
+        resetCache();
+        refField = MyValue1.createWithFieldsInline(rI+1, rL+1);
+        getCode(getResolvedJavaMethod( "test45"), null, true, true, getInitialOptions());
+    }
+
+    static final MyValue1[] refArray = new MyValue1[2];
+
+    public long test113(boolean b) {
+        MyValue1 val = MyValue1.createWithFieldsInline(rI, rL);
+        if (b) {
+            val = refArray[0];
+        }
+        return val.hash();
+    }
+
+    @Test
+    public void run50() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test113"), null, true, true, getInitialOptions());
+    }
+
+    @Test
+    public void run51() throws  Throwable{
+        resetCache();
+        Class<?> valueClass = Class.forName("ValueObjectMethods");
+        int a = 3;
+        //getCode(getResolvedJavaMethod( "test113"), null, true, true, getInitialOptions());
+    }
+
+    static class PClass{}
+    static PClass pfield1;
+    static PClass pfield2;
+
+    public void testPEAFanOut(boolean a){
+        PClass virtual = new PClass();
+        if(a){
+            pfield1 = virtual;
+        }else{
+            pfield2 = virtual;
+        }
+    }
+
+    @Test
+    public void run52() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testPEAFanOut"), null, true, true, getInitialOptions());
+    }
+
+    public int getConstant3(int[] a, boolean b) {
+        if (b) {
+            return a[0];
+        } else {
+            return a[0];
+        }
+
+    }
+
+    @Test
+    public void run53() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "getConstant3"), null, true, true, getInitialOptions());
+    }
+
+    static OneField staticAlwaysVirtual;
 
 
+    @ImplicitlyConstructible
+    static value class OneField{
+        private int c;
+        public OneField(int c) {
+            this.c = c;
+        }
 
+
+        public OneField oneFieldInnerMethod(OneField o){
+            return o;
+        }
+    }
+
+    public int testPEAAlwaysVirtual(boolean a) {
+        OneField val = new OneField(1);
+        OneField val2 = new OneField(2);
+        if (a) {
+            staticAlwaysVirtual = val;
+        }else{
+            val = val2;
+            GraalDirectives.blackhole(val2);
+        }
+        return val.c;
+    }
+
+    @Test
+    public void run54() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testPEAAlwaysVirtual"), null, true, true, getInitialOptions());
+    }
+
+    public int testPEANullCache(boolean a) {
+        OneField val = new OneField(1);
+        OneField val2 = new OneField(2);
+        if (a) {
+            val =  null;
+            val2 =  null;
+        }
+        return val.c + val2.c;
+    }
+
+    @Test
+    public void run55() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testPEANullCache"), null, true, true, getInitialOptions());
+    }
+
+    public void testMonitorEnter(boolean a) {
+        Object val = new OneField(1);
+        if (a) {
+            val =  null;
+        }
+        synchronized (val){};
+    }
+
+    @Test
+    public void run56() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testMonitorEnter"), null, true, true, getInitialOptions());
+    }
+
+    static value class TwoField{
+        private int c;
+        private int d;
+        public TwoField(int c, int d) {
+            this.c = c;
+            this.d = d;
+        }
+    }
+
+    public int testPEANullCheck(boolean a) {
+        TwoField val = new TwoField(1, 2);
+        if (a) {
+            val =  null;
+        }
+        return val.c + val.d;
+    }
+
+    @Test
+    public void run57() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testPEANullCheck"), null, true, true, getInitialOptions());
+    }
+
+    static value class MyNumber {
+        private long d0;
+        @BytecodeParserForceInline
+        private MyNumber(long d0) { this.d0 = d0; }
+        @BytecodeParserForceInline
+        public MyNumber add(long v) { return new MyNumber(d0 + v); }
+
+    }
+
+    private static void loop(Object number) {
+        MyNumber dec = (MyNumber) number;
+        for (int i = 0; i < 1_000_000_000; ++i) {
+            dec = dec.add(i);
+        }
+    }
+
+    @Test
+    public void run58() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "loop"), null, true, true, getInitialOptions());
+    }
+
+    private static long loop2(Object number) {
+        MyNumber dec = new MyNumber(1);
+        for (int i = 0; i < 1_000_000_000; ++i) {
+            dec = (MyNumber) number;
+        }
+        return dec.d0;
+    }
+
+    @Test
+    public void run59() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "loop2"), null, true, true, getInitialOptions());
+    }
+
+    public OneField testScalarization(OneField o) {
+        return o;
+    }
+
+    @Test
+    public void run60() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testScalarization"), null, true, true, getInitialOptions());
+    }
+
+    public int testLoadFieldCanonicalization(OneField o) {
+        return o.c;
+    }
+
+    @Test
+    public void run61() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testLoadFieldCanonicalization"), null, true, true, getInitialOptions());
+    }
+
+    @BytecodeParserNeverInline
+    public static OneField scalarizedCall(OneField o){
+        return o;
+    }
+
+    public static OneField testScalarizedArgument(OneField o) {
+        return scalarizedCall(o);
+    }
+
+    @Test
+    public void run62() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testScalarizedArgument"), null, true, true, getInitialOptions()).executeVarargs(new OneField(1));
+    }
+
+    static class FlatFieldHolder{
+        @NullRestricted OneField o;
+        FlatFieldHolder(OneField o) { this.o = o; }
+    }
+
+    public static int testFlatField(FlatFieldHolder o, OneField f) {
+        o.o = f;
+        o.o = new OneField(2);
+        return f.c;
+    }
+
+    @Test
+    public void run63() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testFlatField"), null, true, true, getInitialOptions());
+    }
+
+    @Test
+    public void run64() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod(OneField.class, "oneFieldInnerMethod"), null, true, true, getInitialOptions()).executeVarargs(new OneField(1), new OneField(2));
+    }
+
+    private static long loop3(Object number, boolean a) {
+        MyNumber dec = new MyNumber(1);
+        for (int i = 0; i < 1_000_000_000; ++i) {
+            if(a){
+                dec = (MyNumber) number;
+            }else{
+                dec =null;
+            }
+        }
+        return dec.d0;
+    }
+
+    @Test
+    public void run65() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "loop3"), null, true, true, getInitialOptions());
+    }
+
+    public void test73(Object[] oa, MyValue1 v, Object o) {
+        // TestLWorld.test38 use a C1 Phi node for the array. This test
+        // adds the case where the stored value is a C1 Phi node.
+        Object o2 = (o == null) ? v : o;
+        oa[0] = v;  // The stored value is known to be flattenable
+        oa[1] = o;  // The stored value may be flattenable
+        oa[2] = o2; // The stored value may be flattenable (a C1 Phi node)
+        oa[0] = oa; // The stored value is known to be not flattenable (an Object[])
+    }
+
+    @Test
+    public void run66() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test73"), null, true, true, getInitialOptions());
+    }
+
+    static value class MyValueContainer {
+        private final Object value;
+
+        private MyValueContainer(Object value) {
+            this.value = value;
+        }
+    }
+    static value class MyValue161 {
+        int x = 0;
+    }
+
+    public MyValueContainer test166(boolean b) {
+        MyValueContainer res = b ? new MyValueContainer(42) : new MyValueContainer(new MyValue161());
+        // Cast to verify that merged values are of correct type
+        Object obj = b ? (Integer)res.value : (MyValue161)res.value;
+        return res;
+    }
+
+    //  mx unittest -XX:CompileCommand='dontinline,java.lang.Object::*' jdk.graal.compiler.valhalla.TestLWorld#run67
+    @Test
+    public void run67() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test166"), null, true, true, getInitialOptions());
+    }
+
+    @ImplicitlyConstructible
+    @LooselyConsistentValue
+    static value class CircularValue1 {
+        CircularValue1 val;
+        int x;
+
+        @ForceInline
+        public CircularValue1(CircularValue1 val) {
+            this.val = val;
+            this.x = rI;
+        }
+    }
+
+    public CircularValue1 test102(boolean b) {
+        CircularValue1 val = new CircularValue1(new CircularValue1(null));
+        if (b) {
+            val = null;
+        }
+        return val;
+    }
+
+    @Test
+    public void run68() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test102"), null, true, true, getInitialOptions());
+    }
+
+    static value class MyLocalClass{
+        Object[] a = new Object[3];
+    }
+
+    static Object[] globalObjectArray;
+    public static boolean test103(){
+        MyLocalClass m = new MyLocalClass();
+        GraalDirectives.blackhole(m);
+        globalObjectArray = m.a;
+        return m.a == globalObjectArray;
+    }
+
+    @Test
+    public void run69() throws  Throwable{
+        resetCache();
+        assert (boolean) getCode(getResolvedJavaMethod( "test103"), null, true, true, getInitialOptions()).executeVarargs();
+    }
+
+    static class IdentityClass{
+        MyValue161 myValue161;
+        IdentityClass(MyValue161 myValue161){
+            this.myValue161 = myValue161;
+        }
+    }
+
+    public static void testCache(Object o, boolean a, MyValue161 my){
+        IdentityClass i1 = new IdentityClass(my);
+        IdentityClass i2 = new IdentityClass(my);
+
+        if(a){
+            i1 = new IdentityClass(new MyValue161());
+            i2 = new IdentityClass(new MyValue161());
+        }
+        GraalDirectives.blackhole(i1);
+        GraalDirectives.blackhole(i2);
+    }
+
+    @Test
+    public void run70() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testCache"), null, true, true, getInitialOptions());
+    }
+
+
+    public MyValueContainer testUniqueVirtual(boolean b) {
+        Object m = new MyValue161();
+        MyValueContainer res = b ? new MyValueContainer(m) : new MyValueContainer(m);
+        return res;
+    }
+
+    @Test
+    public void run71() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "testUniqueVirtual"), null, true, true, getInitialOptions());
+    }
+
+    public void test131() {
+        Object obj = testValue1;
+        synchronized (obj) {
+            throw new RuntimeException("test131 failed: synchronization on inline type should not succeed");
+        }
+    }
+
+    @Test
+    public void run72() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "test131"), null, true, true, getInitialOptions());
+    }
+
+    static class ValueData {
+        final int x;
+        ValueData(int x) {
+            this.x = x;
+        }
+    }
+
+    public static int demo(boolean a) {
+        ValueData v = new ValueData(3);
+        if (a) {
+            GraalDirectives.blackhole(3);
+            GraalDirectives.blackhole(v);
+        }
+        return v.x;
+    }
+
+    @Test
+    public void run73() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "demo"), null, true, true, getInitialOptions());
+    }
 }

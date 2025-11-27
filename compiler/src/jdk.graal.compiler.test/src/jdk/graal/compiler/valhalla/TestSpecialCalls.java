@@ -1,5 +1,6 @@
 package jdk.graal.compiler.valhalla;
 
+import jdk.graal.compiler.api.directives.GraalDirectives;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.test.AddExports;
 import jdk.internal.vm.annotation.ImplicitlyConstructible;
@@ -433,6 +434,7 @@ public class TestSpecialCalls extends JTTTest {
     public static int testEA9(boolean condition, H f) {
         H localH;
         if(condition) {
+            GraalDirectives.blackhole(3);
             localH = new H();
             globalH = localH;
         }else{
