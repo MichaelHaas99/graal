@@ -1799,7 +1799,7 @@ public class TestLWorld extends JTTTest {
     static value class ValueContainer1 {
         ValueContainer2 container;
 
-        //@BytecodeParserNeverInline
+        @BytecodeParserNeverInline
         ValueContainer1(ValueContainer2 c) {
             container = c;
         }

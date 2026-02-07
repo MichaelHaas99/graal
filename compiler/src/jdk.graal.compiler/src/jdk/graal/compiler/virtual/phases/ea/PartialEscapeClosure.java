@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.function.IntUnaryOperator;
 
 import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.collections.EconomicMap;
@@ -240,18 +242,25 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             processNodeInternal(((Invoke) node).callTarget(), state, effects, lastFixedNode);
         }
         if (node instanceof LoadFieldNode loadFieldNode) {
-            scalarize(loadFieldNode.object(), state, effects, loadFieldNode);
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            effects.addFixedNodeBefore(anchor, loadFieldNode);
+            scalarize(loadFieldNode.object(), state, effects, loadFieldNode, anchor);
         } else if (node instanceof StoreFieldNode storeFieldNode) {
-            scalarize(storeFieldNode.value(), state, effects, storeFieldNode);
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            effects.addFixedNodeBefore(anchor, storeFieldNode);
+            scalarize(storeFieldNode.value(), state, effects, storeFieldNode, anchor);
         } else if (node instanceof IsNullNode isNullNode) {
-            scalarize(isNullNode.getValue(), state, effects, lastFixedNode.next());
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            FixedNode insertBefore = lastFixedNode.next();
+            effects.addFixedNodeBefore(anchor, insertBefore);
+            scalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), anchor);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
 
-    protected void scalarize(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position){
+    protected void scalarize(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position, GuardingNode guard){
         tool.reset(state, node, position, effects);
-        VirtualInstanceNode newNode = scalarizeValueObject(node,  state, true);
+        VirtualInstanceNode newNode = scalarizeValueObject(node,  state, true, guard);
         this.addVirtualAlias(newNode, node);
     }
 
@@ -2228,7 +2237,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (scalarizationNode != null) {
-                bEffects.addFixedNodeBefore(scalarizationNode, block.getEndNode());
+                bEffects.addFloatingNode(scalarizationNode, "");
             }
 
             bEffects.addFloatingNode(multiValues.nonNull(), "virtualNonNullValue");
@@ -2357,15 +2366,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
 
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
-                                                       boolean recursive) {
+                                                       boolean recursive, GuardingNode guard) {
         if (!StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
             return null;
         }
         List<JavaType> visited = new ArrayList<>();
-        return scalarizeValueObject(node, state, recursive, visited);
+        return scalarizeValueObject(node, state, recursive, visited, guard);
     }
 
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean recursive, List<JavaType> visited) {
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean recursive, List<JavaType> visited, GuardingNode guard) {
 
         assert !(node instanceof VirtualObjectNode) : "should not be virtual";
 
@@ -2376,7 +2385,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         visited.add(instanceClass);
         VirtualObjectNode
             newVirtualObjectNode;
-        ValueNode nodeToScalarize = node;
         boolean updateExistingState = false;
         if (getAlias(node) instanceof VirtualInstanceNode existingAlias){
             if(state.getObjectState(existingAlias.getObjectId()).isVirtual()){
@@ -2385,11 +2393,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
             newVirtualObjectNode = existingAlias;
             updateExistingState = true;
-            nodeToScalarize = getAliasAndResolve(state, node);
-        }else {
+        } else {
             newVirtualObjectNode = new VirtualInstanceNode(instanceClass,
                     false, StampTool.isPointerNonNull(node));
         }
+        ValueNode nodeToScalarize = getAliasAndResolve(state, node);
 
         // try to get cached values e.g. by read elimination
         List<ResolvedJavaField> fieldsWithoutValue = new ArrayList<>();
@@ -2411,7 +2419,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         int loadedFieldValuesIndex = 0;
 
         int entryStateIndex = 0;
-        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(nodeToScalarize, instanceClass, tool.getAssumptions());
+        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(nodeToScalarize, instanceClass, tool.getAssumptions(), guard);
         ScalarizationNode scalarizationNode = pair.getLeft();
         ReadMultiValueNode.MultiValues multiValues = pair.getRight();
         if (scalarizationNode != null) {
@@ -2459,7 +2467,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 int oldLength = visited.size();
                 ValueNode entry = entryState[i];
                 if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, true, visited);
+                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, true, visited, guard);
                     if(newNode != null) {
                         entryState[i] = newNode;
                     }

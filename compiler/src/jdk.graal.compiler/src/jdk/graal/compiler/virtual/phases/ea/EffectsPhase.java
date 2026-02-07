@@ -28,7 +28,6 @@ import static jdk.graal.compiler.phases.common.DeadCodeEliminationPhase.Optional
 
 import java.util.Optional;
 
-import jdk.graal.compiler.phases.common.ScalarizationExpansionPhase;
 import org.graalvm.collections.EconomicSet;
 
 import jdk.graal.compiler.core.common.util.CompilationAlarm;
@@ -144,7 +143,6 @@ public abstract class EffectsPhase<CoreProvidersT extends CoreProviders> extends
                 }
             }
         }
-        new ScalarizationExpansionPhase().apply(graph, context);
         return changed;
     }
 

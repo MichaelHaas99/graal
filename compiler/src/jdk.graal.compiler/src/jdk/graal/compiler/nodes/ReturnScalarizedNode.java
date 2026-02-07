@@ -3,6 +3,7 @@ package jdk.graal.compiler.nodes;
 import java.util.ArrayList;
 import java.util.List;
 
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.collections.Pair;
 
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -66,12 +67,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
     }
 
     public static ReturnScalarizedNode create(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
-                    List<FixedWithNextNode> fixedNodesToAdd) {
-        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, fixedNodesToAdd, null);
+                    List<ValueNode> nodesToAdd) {
+        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, nodesToAdd, null);
     }
 
     private static ReturnScalarizedNode simplified(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
-                    List<FixedWithNextNode> fixedNodesToAdd, SimplifierTool tool) {
+                    List<ValueNode> nodesToAdd, SimplifierTool tool) {
         // only simplify in case the result does not already point to the proxy node
         if (InlineTypeUtil.unproxify(result, tool) instanceof InlineTypeNode inlineTypeNode && result != inlineTypeNode.getOop()) {
             List<ValueNode> list = inlineTypeNode.getEntries();
@@ -84,18 +85,18 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
                     nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
                 }
                 ValueNode returnResultDecider = ReturnResultDeciderNode.create(coreProviders.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOop(), hub);
-                if (returnResultDecider instanceof FixedWithNextNode fixedWithNextNode) {
-                    fixedNodesToAdd.add(fixedWithNextNode);
-                }
+                nodesToAdd.add(returnResultDecider);
                 return new ReturnScalarizedNode(returnResultDecider, list, returnType);
             }
         } else if (returnScalarizedNode == null) {
             ReturnScalarizedNode newReturnNode;
-            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(result, returnType, assumptions);
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(result, returnType, assumptions, anchor);
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (scalarizationNode != null) {
-                fixedNodesToAdd.add(scalarizationNode);
+                nodesToAdd.add(anchor);
+                nodesToAdd.add(scalarizationNode);
             }
             newReturnNode = new ReturnScalarizedNode(multiValues.oop(), List.of(multiValues.fieldValues()), returnType);
             return newReturnNode;
@@ -194,12 +195,14 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         if (GraalOptions.PartialEscapeAnalysis.getValue(getOptions())) {
             return;
         }
-        List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
-        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), fixedNodesToAdd, tool);
+        List<ValueNode> nodesToAdd = new ArrayList<>();
+        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), nodesToAdd, tool);
         if (newReturnNode != this) {
-            fixedNodesToAdd.forEach((FixedWithNextNode fixedWithNextNode) -> {
-                graph().addOrUniqueWithInputs(fixedWithNextNode);
-                graph().addBeforeFixed(this, fixedWithNextNode);
+            nodesToAdd.forEach((ValueNode node) -> {
+                node = graph().addOrUniqueWithInputs(node);
+                if (node instanceof FixedWithNextNode fixedWithNextNode) {
+                    graph().addBeforeFixed(this, fixedWithNextNode);
+                }
             });
             this.setResult(newReturnNode.result);
             this.fieldValues.clear();

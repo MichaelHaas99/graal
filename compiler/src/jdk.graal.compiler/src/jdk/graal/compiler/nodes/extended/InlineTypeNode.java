@@ -288,7 +288,8 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
 
         public ReadMultiValueNode.MultiValues makeReplacement() {
             StructuredGraph graph = graph();
-            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(object, type, graph.getAssumptions());
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(object, type, graph.getAssumptions(), anchor);
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (multiValues.oop() instanceof InlineTypeNode existingInlineTypeNode) {
@@ -297,8 +298,9 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
                 graph.removeFixed(this);
             } else {
                 if (scalarizationNode != null) {
-                    graph.addOrUnique(scalarizationNode);
-                    graph.addBeforeFixed(this, scalarizationNode);
+                    graph.addOrUnique(anchor);
+                    graph.addBeforeFixed(this, anchor);
+                    graph.addWithoutUnique(scalarizationNode);
                 }
                 multiValues = multiValues.add(graph);
                 InlineTypeNode inlineTypeNode = new InlineTypeNode(type, object, multiValues.fieldValues(), multiValues.nonNull(), true);

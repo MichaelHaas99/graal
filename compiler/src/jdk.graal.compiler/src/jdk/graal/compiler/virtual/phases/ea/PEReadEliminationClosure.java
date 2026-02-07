@@ -36,6 +36,7 @@ import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.extended.OSRLocalNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.collections.EconomicMap;
@@ -122,7 +123,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (node instanceof LoadFieldNode loadFieldNode) {
             deleted = processLoadField((LoadFieldNode) node, state, effects);
             if(!deleted && StampTool.isNullableInlineType((ValueNode) node, tool.getValhallaOptionsProvider())) {
-                scalarize(loadFieldNode, state, effects, loadFieldNode.next());
+                ValueAnchorNode anchor = new ValueAnchorNode();
+                FixedNode insertBefore = loadFieldNode.next();
+                effects.addFixedNodeBefore(anchor, insertBefore);
+                scalarize(loadFieldNode, state, effects, insertBefore, anchor);
             }
         } else if (node instanceof StoreFieldNode storeFieldNode) {
             deleted = processStoreField(storeFieldNode, state, effects);
@@ -133,7 +137,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     state.getObjectState(virtual.getObjectId()).setFieldInitialized(fieldIndex);
                 }
                 if(!state.getObjectState(virtual.getObjectId()).isLarval()){
-                    scalarize(object, state, effects, storeFieldNode.next());
+                    ValueAnchorNode anchor = new ValueAnchorNode();
+                    FixedNode insertBefore = storeFieldNode.next();
+                    effects.addFixedNodeBefore(anchor, insertBefore);
+                    scalarize(object, state, effects, insertBefore, anchor);
                 }
 
             }
@@ -166,7 +173,11 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         }
         if (node instanceof Invoke invoke && invoke.callTarget().targetMethod().isConstructor()) {
             ValueNode receiver = invoke.callTarget().arguments().first();
-            scalarize(receiver, state, effects, ((FixedWithNextNode) invoke).next());
+            // TODO: avoid insertion of anchor if no scalarization node will be created
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            FixedNode insertBefore = ((FixedWithNextNode) invoke).next();
+            effects.addFixedNodeBefore(anchor, insertBefore);
+            scalarize(receiver, state, effects, insertBefore, anchor);
         }
 
         if (deleted) {

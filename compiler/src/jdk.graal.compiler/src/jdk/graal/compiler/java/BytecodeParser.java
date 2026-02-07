@@ -3084,9 +3084,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 // see Method::load_signature_classes in compileBroker.cpp
                 JavaType returnType = maybeEagerlyResolve(method.getSignature().getReturnType(method.getDeclaringClass()), method.getDeclaringClass());
                 assert typeIsResolved(returnType) : "expected type to be resolved";
-                List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
-                ReturnScalarizedNode newReturnNode = ReturnScalarizedNode.create(null, realReturnVal, (ResolvedJavaType) returnType, this, getAssumptions(), fixedNodesToAdd);
-                fixedNodesToAdd.forEach(this::add);
+                List<ValueNode> nodesToAdd = new ArrayList<>();
+                ReturnScalarizedNode newReturnNode = ReturnScalarizedNode.create(null, realReturnVal, (ResolvedJavaType) returnType, this, getAssumptions(), nodesToAdd);
+                nodesToAdd.forEach(this::add);
                 append(newReturnNode);
             } else {
                 append(new ReturnNode(realReturnVal));

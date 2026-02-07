@@ -445,7 +445,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public VirtualInstanceNode scalarize(ValueNode node) {
-        return closure.scalarizeValueObject(node,  state, true);
+        return closure.scalarizeValueObject(node,  state, true, null);
     }
 
     @Override

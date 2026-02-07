@@ -3,8 +3,13 @@ package jdk.graal.compiler.nodes.extended;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
+import java.util.ArrayList;
 import java.util.List;
 
+import jdk.graal.compiler.nodes.FloatingGuardedNode;
+import jdk.graal.compiler.nodes.ValuePhiNode;
+import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.LoweringTool;
 import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
@@ -38,7 +43,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * deleting this node.
  */
 @NodeInfo(cycles = CYCLES_UNKNOWN, cyclesRationale = "We don't know statically how many, and which, objects we are gonna scalarize.", size = SIZE_UNKNOWN, sizeRationale = "We don't know statically how much code for which scalarization has to be generated.")
-public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess, Virtualizable, MultiValue, IterableNodeType, Simplifiable {
+public class ScalarizationNode extends FloatingGuardedNode implements Virtualizable, MultiValue, IterableNodeType, Simplifiable, Lowerable {
 
     public static final NodeClass<ScalarizationNode> TYPE = NodeClass.create(ScalarizationNode.class);
     @Input ValueNode object;
@@ -52,22 +57,26 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
         return type;
     }
 
-    private ScalarizationNode(NodeClass<? extends FixedWithNextNode> c, ValueNode object, ResolvedJavaType type) {
-        super(c, StampFactory.object());
+    private ScalarizationNode(NodeClass<? extends FloatingGuardedNode> c, ValueNode object, ResolvedJavaType type, GuardingNode guard) {
+        super(c, StampFactory.object(), guard);
         this.object = object;
         this.type = type;
     }
 
-    protected ScalarizationNode(ValueNode object, ResolvedJavaType type) {
-        this(TYPE, object, type);
+    protected ScalarizationNode(ValueNode object, ResolvedJavaType type, GuardingNode guard) {
+        this(TYPE, object, type, guard);
     }
 
     public static Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> create(ValueNode object, ResolvedJavaType type, Assumptions assumptions) {
-        return simplified(null, object, type, assumptions, null);
+        return simplified(null, object, type, assumptions, null, null);
+    }
+
+    public static Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> create(ValueNode object, ResolvedJavaType type, Assumptions assumptions, GuardingNode guard) {
+        return simplified(null, object, type, assumptions, null, guard);
     }
 
     public static Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> simplified(ScalarizationNode scalarizationNode, ValueNode object, ResolvedJavaType type, Assumptions assumptions,
-                    SimplifierTool tool) {
+                    SimplifierTool tool, GuardingNode guard) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
         if (StampTool.isPointerAlwaysNull(object)) {
             ValueNode oop = object;
@@ -90,17 +99,12 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
             return Pair.create(null, new ReadMultiValueNode.MultiValues(oop, fieldValues, nonNull));
         }
         if (scalarizationNode == null) {
-            ScalarizationNode newScalarizationNode = new ScalarizationNode(object, type);
+            ScalarizationNode newScalarizationNode = new ScalarizationNode(object, type, guard);
             ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(newScalarizationNode, assumptions);
             return Pair.create(newScalarizationNode, multiValues);
         } else {
             return Pair.create(scalarizationNode, null);
         }
-    }
-
-    @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
     }
 
     @Override
@@ -113,21 +117,12 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (usages().count() == 0) {
-            List<Node> inputSnapshot = inputs().snapshot();
-            graph().removeFixed(this);
-            for (Node input : inputSnapshot) {
-                tool.removeIfUnused(input);
-            }
-            return;
-        }
-
         if (GraalOptions.PartialEscapeAnalysis.getValue(getOptions())) {
             return;
         }
 
         List<Node> objectUsages = object.usages().snapshot();
-        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = simplified(this, object, type, tool.getAssumptions(), tool);
+        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = simplified(this, object, type, tool.getAssumptions(), tool, null);
         ScalarizationNode newScalarizationNode = pair.getLeft();
         if (newScalarizationNode != this) {
             StructuredGraph graph = graph();
@@ -147,6 +142,47 @@ public class ScalarizationNode extends FixedWithNextNode implements MemoryAccess
             tool.addToWorkList(objectUsages);
             // add to worklist again in case it has no usages now
             tool.addToWorkList(this);
+        }
+    }
+
+    public void lower(LoweringTool loweringTool) {
+        if (loweringTool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER){
+            return;
+        }
+        List<ReadMultiValueNode> fieldValues = getFieldValues();
+        ArrayList<ResolvedJavaField> fields = new ArrayList<>(fieldValues.size());
+        ResolvedJavaField[] instanceFields = this.getType().getInstanceFields(true);
+        for (ReadMultiValueNode fieldValue : fieldValues) {
+            fields.add(instanceFields[fieldValue.getIndex() - 1]);
+        }
+        ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(loweringTool.lastFixedNode().next(), this.object(), fields, false, true);
+        ReadMultiValueNode nonNull = this.getNonNull();
+        if (nonNull != null) {
+            nonNull.replaceAndDelete(scalarizedValues[0]);
+        }
+        ReadMultiValueNode oop = this.getOop();
+        if (oop != null) {
+            oop.replaceAndDelete(this.object());
+        }
+        List<ReadMultiValueNode> entries = this.getFieldValues();
+        for (int i = 0; i < entries.size(); i++) {
+            // The lowest index for a field value is 1. As the field values in
+            // scalarizedValues also start at index 1, no index correction is necessary.
+            entries.get(i).replaceAndDelete(scalarizedValues[i + 1]);
+        }
+
+        for (int i = 0; i < scalarizedValues.length; i++) {
+            ValueNode entry = scalarizedValues[i];
+            if (entry instanceof Lowerable lowerable) {
+                lowerable.lower(loweringTool);
+            }
+            if (entry instanceof ValuePhiNode phiNode) {
+                for (ValueNode input : phiNode.values()) {
+                    if (input instanceof Lowerable lowerable) {
+                        lowerable.lower(loweringTool);
+                    }
+                }
+            }
         }
     }
 }
