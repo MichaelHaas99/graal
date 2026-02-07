@@ -27,10 +27,16 @@ package jdk.graal.compiler.virtual.phases.ea;
 import static jdk.graal.compiler.core.common.GraalOptions.ReadEliminationMaxLoopVisits;
 import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
 
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
 
+import jdk.graal.compiler.nodes.ConstantNode;
+import jdk.graal.compiler.nodes.Invoke;
+import jdk.graal.compiler.nodes.extended.OSRLocalNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -112,10 +118,24 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         }
 
         boolean deleted = false;
-        if (node instanceof LoadFieldNode) {
+        if (node instanceof LoadFieldNode loadFieldNode) {
             deleted = processLoadField((LoadFieldNode) node, state, effects);
-        } else if (node instanceof StoreFieldNode) {
-            deleted = processStoreField((StoreFieldNode) node, state, effects);
+            if(!deleted && StampTool.isNullableInlineType((ValueNode) node, tool.getValhallaOptionsProvider())) {
+                scalarize(loadFieldNode, state, effects, loadFieldNode.next());
+            }
+        } else if (node instanceof StoreFieldNode storeFieldNode) {
+            deleted = processStoreField(storeFieldNode, state, effects);
+            ValueNode object = storeFieldNode.object();
+            if (!deleted && getAlias(storeFieldNode.object()) instanceof VirtualInstanceNode virtual && !state.getObjectState(virtual.getObjectId()).isVirtual()) {
+                int fieldIndex = virtual.fieldIndex(storeFieldNode.field());
+                if(fieldIndex != -1){
+                    state.getObjectState(virtual.getObjectId()).setFieldInitialized(fieldIndex);
+                }
+                if(!state.getObjectState(virtual.getObjectId()).isLarval()){
+                    scalarize(object, state, effects, storeFieldNode.next());
+                }
+
+            }
         } else if (node instanceof LoadIndexedNode) {
             deleted = processLoadIndexed((LoadIndexedNode) node, state, effects);
         } else if (node instanceof StoreIndexedNode) {
@@ -137,6 +157,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
+        } else if (node instanceof OSRLocalNode osrLocalNode) {
+            associateAlias(osrLocalNode, state, effects, lastFixedNode.next());
+        }
+        if (node instanceof Invoke invoke && invoke.callTarget().targetMethod().isConstructor()) {
+            ValueNode receiver = invoke.callTarget().arguments().first();
+            scalarize(receiver, state, effects, ((FixedWithNextNode) invoke).next());
         }
 
         if (deleted) {
@@ -144,6 +170,26 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                             optimizationLog -> optimizationLog.withProperty("deletedNodeClass", node.getNodeClass().shortName()).report(getClass(), "ReadElimination", node));
         }
         return deleted;
+    }
+
+
+    private void associateAlias(ValueNode node, PEReadEliminationBlockState state, GraphEffectList effects, FixedNode position) {
+        tool.reset(state, node, position, effects);
+        ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+        VirtualInstanceNode
+                virtualObject = new VirtualInstanceNode(instanceClass,
+                false, StampTool.isPointerNonNull(node));
+        ResolvedJavaField[] fields = virtualObject.getFields();
+        ValueNode[] entryState = new ValueNode[fields.length];
+        boolean[] unsetFields = new boolean[fields.length];
+        for (int i = 0; i < entryState.length; i++) {
+            entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
+            unsetFields[i] = true;
+        }
+        tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false);
+        tool.setUnsetFields(virtualObject, unsetFields);
+        this.addVirtualAlias(virtualObject, node);
+        getObjectState(state, node).escape(node);
     }
 
     private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, JavaKind accessKind, boolean overflowAccess, ValueNode value,

@@ -32,6 +32,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
+import jdk.graal.compiler.nodes.calc.IsNullNode;
+import jdk.graal.compiler.nodes.java.LoadFieldNode;
+import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -134,6 +137,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     private final boolean virtualizeFromInlineObject;
 
+    public final ArrayList<ResolvedJavaType> circularValueClasses = new ArrayList<>();
+
     @Override
     public boolean needsApplyEffects() {
         if (hasChanged()) {
@@ -234,7 +239,20 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         } else if (node instanceof Invoke) {
             processNodeInternal(((Invoke) node).callTarget(), state, effects, lastFixedNode);
         }
+        if (node instanceof LoadFieldNode loadFieldNode) {
+            scalarize(loadFieldNode.object(), state, effects, loadFieldNode);
+        } else if (node instanceof StoreFieldNode storeFieldNode) {
+            scalarize(storeFieldNode.value(), state, effects, storeFieldNode);
+        } else if (node instanceof IsNullNode isNullNode) {
+            scalarize(isNullNode.getValue(), state, effects, lastFixedNode.next());
+        }
         return processNodeInternal(node, state, effects, lastFixedNode);
+    }
+
+    protected void scalarize(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position){
+        tool.reset(state, node, position, effects);
+        VirtualInstanceNode newNode = scalarizeValueObject(node,  state, true);
+        this.addVirtualAlias(newNode, node);
     }
 
     @Override
@@ -2335,5 +2353,120 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     @SuppressWarnings("unused")
     public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {
         return null;
+    }
+
+
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
+                                                       boolean recursive) {
+        if (!StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
+            return null;
+        }
+        List<JavaType> visited = new ArrayList<>();
+        return scalarizeValueObject(node, state, recursive, visited);
+    }
+
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean recursive, List<JavaType> visited) {
+
+        assert !(node instanceof VirtualObjectNode) : "should not be virtual";
+
+        ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+        if (visited.contains(instanceClass)) {
+            return null;
+        }
+        visited.add(instanceClass);
+        VirtualObjectNode
+            newVirtualObjectNode;
+        ValueNode nodeToScalarize = node;
+        boolean updateExistingState = false;
+        if (getAlias(node) instanceof VirtualInstanceNode existingAlias){
+            if(state.getObjectState(existingAlias.getObjectId()).isVirtual()){
+                // TODO: continue instead and adjust scalarization depth
+                return existingAlias;
+            }
+            newVirtualObjectNode = existingAlias;
+            updateExistingState = true;
+            nodeToScalarize = getAliasAndResolve(state, node);
+        }else {
+            newVirtualObjectNode = new VirtualInstanceNode(instanceClass,
+                    false, StampTool.isPointerNonNull(node));
+        }
+
+        // try to get cached values e.g. by read elimination
+        List<ResolvedJavaField> fieldsWithoutValue = new ArrayList<>();
+        List<Integer> fieldsWithoutValueIndexes = null;
+        ValueNode[] entryState;
+        if (StampTool.isPointerAlwaysNull(nodeToScalarize)) {
+            ResolvedJavaField[] fields = instanceClass.getInstanceFields(true);
+            fieldsWithoutValue = List.of(fields);
+            entryState = new ValueNode[fields.length];
+        } else {
+            fieldsWithoutValueIndexes = new ArrayList<>();
+            entryState = getScalarValues(nodeToScalarize, state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes);
+        }
+        ValueNode nonNull;
+
+        ResolvedJavaField[] fieldsToLoad = fieldsWithoutValue.toArray(new ResolvedJavaField[fieldsWithoutValue.size()]);
+
+        ValueNode[] loadedFieldValues = new ValueNode[fieldsToLoad.length];
+        int loadedFieldValuesIndex = 0;
+
+        int entryStateIndex = 0;
+        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(nodeToScalarize, instanceClass, tool.getAssumptions());
+        ScalarizationNode scalarizationNode = pair.getLeft();
+        ReadMultiValueNode.MultiValues multiValues = pair.getRight();
+        if (scalarizationNode != null) {
+            tool.addNode(scalarizationNode);
+        }
+
+        tool.addNode(multiValues.nonNull());
+        nonNull = multiValues.nonNull();
+        for (int j = 0; j < fieldsToLoad.length; j++) {
+            int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
+            ValueNode value = multiValues.fieldValues()[index];
+            tool.addNode(value);
+            loadedFieldValues[loadedFieldValuesIndex++] = value;
+        }
+
+        // save the loaded values in the entry state of the new virtual object
+        loadedFieldValuesIndex = 0;
+        for (int i = 0; i < fieldsToLoad.length; i++) {
+            while (entryStateIndex < entryState.length && entryState[entryStateIndex] != null) {
+                // the entry already contains a value continue
+                entryStateIndex++;
+            }
+            if (entryStateIndex == entryState.length) {
+                throw new GraalError("unexpected end of inline object");
+            }
+            // entry has no value yet, extract the loaded value and set it as value of the entry
+            entryState[entryStateIndex] = loadedFieldValues[loadedFieldValuesIndex++];
+        }
+        if (updateExistingState) {
+            int objectId = newVirtualObjectNode.getObjectId();
+            state.setEntries(objectId, entryState);
+            state.setNonNull(objectId, nonNull);
+            updateStatesForScalarized(state, newVirtualObjectNode, node);
+        }else{
+            tool.createVirtualObject(newVirtualObjectNode, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
+        }
+
+        if(recursive) {
+            for (int i =0; i < entryState.length; i++) {
+                int oldLength = visited.size();
+                ValueNode entry = entryState[i];
+                if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
+                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, true, visited);
+                    if(newNode != null) {
+                        entryState[i] = newNode;
+                    }
+                    while (visited.size() > oldLength) {
+                        visited.removeLast();
+                    }
+                }
+
+            }
+        }
+
+
+        return (VirtualInstanceNode) newVirtualObjectNode;
     }
 }

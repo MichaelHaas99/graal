@@ -110,7 +110,7 @@ public class InlineTypePlugin implements NodePlugin {
 
         }
 
-        if (InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
+        if (!GraalOptions.PartialEscapeAnalysis.getValue(b.getOptions()) && InlineTypeUtil.unproxify(object) instanceof InlineTypeNode inlineTypeNode) {
             b.nullCheckedValue(object, InvalidateReprofile);
             b.push(field.getJavaKind(), inlineTypeNode.getEntry(field));
             return true;

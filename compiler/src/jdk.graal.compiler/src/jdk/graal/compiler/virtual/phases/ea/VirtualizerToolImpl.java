@@ -444,6 +444,11 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public VirtualInstanceNode scalarize(ValueNode node) {
+        return closure.scalarizeValueObject(node,  state, true);
+    }
+
+    @Override
     public int getMaximumEntryCount() {
         return MaximumEscapeAnalysisArrayLength.getValue(current.getOptions());
     }

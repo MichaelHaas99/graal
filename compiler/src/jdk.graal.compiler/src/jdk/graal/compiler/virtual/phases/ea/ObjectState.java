@@ -340,7 +340,6 @@ public class ObjectState {
     }
 
     public void setFieldInitialized(int index) {
-        assert isVirtual();
         if (unsetFields.length != 0) {
             unsetFields[index] = false;
         }
