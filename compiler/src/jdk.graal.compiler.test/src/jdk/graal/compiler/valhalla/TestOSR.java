@@ -303,4 +303,26 @@ public class TestOSR extends GraalOSRTestBase{
          return ret;
      }
 
+    public static ReturnValue testOSRArg() {
+        ReturnValue ret = ReturnValue.FAILURE;
+        MyValue2 vt = MyValue2.createDefaultInline();
+        GraalDirectives.blackhole(vt);
+        for (int i = 0; i < 10_000; ++i) {
+            GraalDirectives.blackhole(i);
+            if (GraalDirectives.inCompiledCode()) {
+                ret =  ReturnValue.SUCCESS;
+            }
+        }
+        GraalDirectives.blackhole(vt.x + vt.y);
+
+        GraalDirectives.controlFlowAnchor();
+        return ret;
+    }
+
+    @Test
+    public void testOSR02() {
+        testOSR(getInitialOptions(), "testOSRArg",null);
+    }
+
+
 }

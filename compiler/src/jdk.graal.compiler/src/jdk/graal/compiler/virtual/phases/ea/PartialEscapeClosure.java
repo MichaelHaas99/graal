@@ -2444,6 +2444,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             int objectId = newVirtualObjectNode.getObjectId();
             state.setEntries(objectId, entryState);
             state.setNonNull(objectId, nonNull);
+            if (state.getObjectState(objectId).isLarval()) {
+                for (int i = 0; i < entryState.length; i++) {
+                    state.setFieldInitialized(objectId, i);
+                }
+            }
             updateStatesForScalarized(state, newVirtualObjectNode, node);
         }else{
             tool.createVirtualObject(newVirtualObjectNode, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);

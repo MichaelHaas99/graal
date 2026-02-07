@@ -34,6 +34,7 @@ import java.util.List;
 
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.Invoke;
+import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.extended.OSRLocalNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
@@ -157,8 +158,11 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
-        } else if (node instanceof OSRLocalNode osrLocalNode) {
-            associateAlias(osrLocalNode, state, effects, lastFixedNode.next());
+        } else if(node instanceof PiNode piNode){
+            // an OSR node will be casted speculatively, as its stamp is always object
+            if (StampTool.isNullableInlineType(piNode, tool.getValhallaOptionsProvider())) {
+                associateAlias(piNode, state, effects, lastFixedNode.next());
+            }
         }
         if (node instanceof Invoke invoke && invoke.callTarget().targetMethod().isConstructor()) {
             ValueNode receiver = invoke.callTarget().arguments().first();
@@ -174,6 +178,9 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
 
 
     private void associateAlias(ValueNode node, PEReadEliminationBlockState state, GraphEffectList effects, FixedNode position) {
+        if(!node.stamp(NodeView.DEFAULT).isObjectStamp()) {
+            return;
+        }
         tool.reset(state, node, position, effects);
         ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
         VirtualInstanceNode
