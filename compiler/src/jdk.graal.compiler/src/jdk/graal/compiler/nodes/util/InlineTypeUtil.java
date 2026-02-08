@@ -242,6 +242,7 @@ public class InlineTypeUtil {
                         if (type == null) {
                             type = (ResolvedJavaType) newMethod.getSignature().getParameterType(index, newMethod.getDeclaringClass());
                         }
+                        // TODO: placeholder are not necessary anymore
                         InlineTypeNode.Placeholder placeholder = new InlineTypeNode.Placeholder(originalArgument, type, GraalValhallaServices.isParameterNullFree(newMethod, i, true));
                         placeholder = graph.addOrUniqueWithInputs(placeholder);
                         graph.addBeforeFixed(callTargetNode.invoke().asFixedNode(), placeholder);
