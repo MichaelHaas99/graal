@@ -58,7 +58,6 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
 
 /**
  * Forwards calls from {@link VirtualizerTool} to the actual {@link PartialEscapeBlockState}.
@@ -114,7 +113,13 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
-        return state.getObjectState(virtualObject).getEntry(index);
+        ValueNode entry = state.getObjectState(virtualObject).getEntry(index);
+        if (!virtualObject.hasIdentity() && StampTool.isNullableInlineType(entry, getValhallaOptionsProvider())) {
+            VirtualInstanceNode newEntry = closure.scalarizeValueObject(entry, state, true, null, false);
+            GraalError.guarantee(newEntry != null, "scalarized value object should not be null");
+            return newEntry;
+        }
+        return entry;
     }
 
     @Override
@@ -442,14 +447,6 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             assert virtualObject.getNodeSourcePosition() == null || virtualObject.getNodeSourcePosition() == sourcePosition : "unexpected source pos!";
             virtualObject.setNodeSourcePosition(sourcePosition);
         }
-    }
-
-    @Override
-    public VirtualInstanceNode tryScalarize(ValueNode node, JavaType startType) {
-        if (!StampTool.isNullableInlineType(node, getValhallaOptionsProvider())) {
-            return null;
-        }
-        return closure.scalarizeValueObject(node, state, true, null, startType);
     }
 
     @Override

@@ -16,6 +16,13 @@ public interface MultiValue extends ValueNodeInterface {
         node.assertTrue(node.usages().stream().allMatch(usage -> usage instanceof ReadMultiValueNode), "Illegal usage of %s", node);
     }
 
+    /**
+     * {@link Invoke} is not a multi value nodes if the method has no scalarized return.
+     */
+    default boolean isMultiValue() {
+        return asNode().usages().stream().allMatch(usage -> usage instanceof ReadMultiValueNode);
+    }
+
     default ReadMultiValueNode getOop() {
         return getUsage(asNode(), r -> ((ReadMultiValueNode) r).isOop());
     }

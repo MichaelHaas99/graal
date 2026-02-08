@@ -50,6 +50,7 @@ import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
+import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.ParameterNode;
@@ -187,6 +188,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 tryScalarize(receiver, state, effects, insertBefore, anchor);
             } else if (!GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
                 tryScalarize(invoke.asNode(), state, effects, insertBefore, null);
+            }
+        }
+        if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+            FixedNode insertBefore = lastFixedNode.next();
+            for (ValueNode value : multiValue.getFieldValues()) {
+                tryScalarize(value, state, effects, insertBefore, null);
             }
         }
 

@@ -33,11 +33,9 @@ import jdk.graal.compiler.graph.NodeSourcePosition;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
 
 /**
  * This tool can be used to query the current state (normal/virtualized/re-materialized) of values
@@ -74,8 +72,6 @@ public interface VirtualizerTool extends CoreProviders {
      */
     void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, NodeSourcePosition sourcePosition, boolean ensureVirtualized, ValueNode oop,
                     ValueNode nonNull, boolean isAllocatedOrNull);
-
-    VirtualInstanceNode tryScalarize(ValueNode node, JavaType startType);
 
     /**
      * Returns a VirtualObjectNode if the given value is aliased with a virtual object that is still
