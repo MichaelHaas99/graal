@@ -2368,13 +2368,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                         GraalValhallaServices.hasScalarizedParameters(targetMethod) &&
                         !fromMethodHandle) {
             InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
-            List<ValueNode> arguments = callTarget.arguments();
-            for (int i = 0; i < parameterLength; i++) {
-                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder && !placeholder.object().isNullConstant()) {
-                    // propagate the scalarized value object in the framestate
-                    replaceValueInFrameState(invokeArgs[i], placeholder);
-                }
-            }
         }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
@@ -4016,12 +4009,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     /* Also a hook for subclasses. */
     protected boolean forceLoopPhis() {
-        /*
-         * In order to replace locals with their scalarized version during loop parsing in Valhalla,
-         * we need a phi at the beginning. We replace a local with its scalarized version if it is
-         * passed as a method argument and the method signature says it is a scalarized parameter.
-         */
-        return graph.isOSR() || (getValhallaOptionsProvider().valhallaEnabled() && !parsingIntrinsic());
+        return graph.isOSR();
     }
 
     /* Hook for subclasses. */
@@ -4480,11 +4468,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         boolean wasEnabled = frameState.disableStateVerification();
         setStateAfter(sideEffect);
         frameState.setStateVerification(wasEnabled);
-    }
-
-    @Override
-    public void replaceValueInFrameState(ValueNode oldValue, ValueNode newValue) {
-        this.frameState.replaceValue(oldValue, newValue);
     }
 
     protected NodeSourcePosition createBytecodePosition() {

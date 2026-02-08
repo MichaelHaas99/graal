@@ -220,10 +220,6 @@ public interface GraphBuilderContext extends GraphBuilderTool {
         setStateAfter(sideEffect);
     }
 
-    default void replaceValueInFrameState(ValueNode oldValue, ValueNode newValue) {
-        throw new UnsupportedOperationException("replacing a value in the framestate is not implemented");
-    }
-
     /**
      * Gets the parsing context for the method that inlines the method being parsed by this context.
      */
