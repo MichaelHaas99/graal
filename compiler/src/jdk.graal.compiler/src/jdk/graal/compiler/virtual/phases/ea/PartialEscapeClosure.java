@@ -241,16 +241,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             processNodeInternal(((Invoke) node).callTarget(), state, effects, lastFixedNode);
         }
         if (node instanceof LoadFieldNode loadFieldNode) {
-            scalarize(loadFieldNode.object(), state, effects, loadFieldNode, null);
+            tryScalarize(loadFieldNode.object(), state, effects, loadFieldNode, null);
         } else if (node instanceof StoreFieldNode storeFieldNode) {
-            scalarize(storeFieldNode.value(), state, effects, storeFieldNode, null);
+            tryScalarize(storeFieldNode.value(), state, effects, storeFieldNode, null);
         } else if (node instanceof IsNullNode isNullNode) {
-            scalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), null);
+            tryScalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), null);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
 
-    protected void scalarize(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position, GuardingNode guard){
+    protected void tryScalarize(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
+        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
+            return;
+        }
         tool.reset(state, node, position, effects);
         VirtualInstanceNode newNode = scalarizeValueObject(node,  state, true, guard);
         this.addVirtualAlias(newNode, node);
@@ -2356,13 +2359,17 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return null;
     }
 
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
+                    boolean recursive, GuardingNode guard) {
+        return scalarizeValueObject(node, state, recursive, guard, null);
+    }
 
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
-                                                       boolean recursive, GuardingNode guard) {
-        if (!StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
-            return null;
-        }
+                    boolean recursive, GuardingNode guard, JavaType startType) {
         List<JavaType> visited = new ArrayList<>();
+        if (startType != null) {
+            visited.add(startType);
+        }
         return scalarizeValueObject(node, state, recursive, visited, guard);
     }
 
@@ -2378,7 +2385,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         boolean updateExistingState = false;
         if (getAlias(node) instanceof VirtualInstanceNode existingAlias){
             if(state.getObjectState(existingAlias.getObjectId()).isVirtual()){
-                // TODO: continue instead and adjust scalarization depth
                 return existingAlias;
             }
             newVirtualObjectNode = existingAlias;

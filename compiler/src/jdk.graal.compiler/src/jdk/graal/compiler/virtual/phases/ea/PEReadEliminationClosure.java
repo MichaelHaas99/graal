@@ -79,10 +79,12 @@ import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
@@ -126,7 +128,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 ValueAnchorNode anchor = new ValueAnchorNode();
                 FixedNode insertBefore = loadFieldNode.next();
                 effects.addFixedNodeBefore(anchor, insertBefore);
-                scalarize(loadFieldNode, state, effects, insertBefore, anchor);
+                tryScalarize(loadFieldNode, state, effects, insertBefore, anchor);
             }
         } else if (node instanceof StoreFieldNode storeFieldNode) {
             deleted = processStoreField(storeFieldNode, state, effects);
@@ -140,7 +142,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     ValueAnchorNode anchor = new ValueAnchorNode();
                     FixedNode insertBefore = storeFieldNode.next();
                     effects.addFixedNodeBefore(anchor, insertBefore);
-                    scalarize(object, state, effects, insertBefore, anchor);
+                    tryScalarize(object, state, effects, insertBefore, anchor);
                 }
 
             }
@@ -177,16 +179,21 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
              * processed and therefore do this in the InlineType node.
              */
             if (StampTool.isNullableInlineType(param, tool.getValhallaOptionsProvider()) && param.usages().stream().allMatch(n -> !(n instanceof VirtualObjectState))) {
-                scalarize(param, state, effects, lastFixedNode.next(), null);
+                tryScalarize(param, state, effects, lastFixedNode.next(), null);
             }
         }
-        if (node instanceof Invoke invoke && invoke.callTarget().targetMethod().isConstructor()) {
-            ValueNode receiver = invoke.callTarget().arguments().first();
-            // TODO: avoid insertion of anchor if no scalarization node will be created
-            ValueAnchorNode anchor = new ValueAnchorNode();
+        if (node instanceof Invoke invoke) {
+            ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
             FixedNode insertBefore = ((FixedWithNextNode) invoke).next();
-            effects.addFixedNodeBefore(anchor, insertBefore);
-            scalarize(receiver, state, effects, insertBefore, anchor);
+            if (targetMethod.isConstructor()) {
+                ValueNode receiver = invoke.callTarget().arguments().first();
+                // TODO: avoid insertion of anchor if no scalarization node will be created
+                ValueAnchorNode anchor = new ValueAnchorNode();
+                effects.addFixedNodeBefore(anchor, insertBefore);
+                tryScalarize(receiver, state, effects, insertBefore, anchor);
+            } else if (!GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
+                tryScalarize(invoke.asNode(), state, effects, insertBefore, null);
+            }
         }
 
         if (deleted) {

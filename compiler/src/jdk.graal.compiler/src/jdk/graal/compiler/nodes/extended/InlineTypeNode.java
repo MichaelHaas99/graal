@@ -239,7 +239,7 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false, this.oop, this.nonNull, isAllocatedOrNull);
             for (int i = 0; i < state.length; i++) {
                 ValueNode entry = tool.getEntry(virtualObject, i);
-                ValueNode newEntry =  tool.scalarize(entry);
+                ValueNode newEntry = tool.tryScalarize(entry, getType());
                 if (newEntry != null) {
                     tool.setVirtualEntry(virtualObject, i, newEntry);
                 }

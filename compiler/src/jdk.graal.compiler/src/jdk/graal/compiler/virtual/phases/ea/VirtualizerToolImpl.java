@@ -58,6 +58,7 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 
 /**
  * Forwards calls from {@link VirtualizerTool} to the actual {@link PartialEscapeBlockState}.
@@ -444,8 +445,11 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
-    public VirtualInstanceNode scalarize(ValueNode node) {
-        return closure.scalarizeValueObject(node,  state, true, null);
+    public VirtualInstanceNode tryScalarize(ValueNode node, JavaType startType) {
+        if (!StampTool.isNullableInlineType(node, getValhallaOptionsProvider())) {
+            return null;
+        }
+        return closure.scalarizeValueObject(node, state, true, null, startType);
     }
 
     @Override

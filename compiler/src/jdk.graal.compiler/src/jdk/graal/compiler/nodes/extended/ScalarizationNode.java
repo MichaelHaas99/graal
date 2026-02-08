@@ -6,12 +6,7 @@ import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.graal.compiler.nodes.FloatingGuardedNode;
-import jdk.graal.compiler.nodes.ValuePhiNode;
-import jdk.graal.compiler.nodes.spi.Lowerable;
-import jdk.graal.compiler.nodes.spi.LoweringTool;
 import org.graalvm.collections.Pair;
-import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.type.StampFactory;
@@ -20,12 +15,14 @@ import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.FixedWithNextNode;
+import jdk.graal.compiler.nodes.FloatingGuardedNode;
 import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.memory.MemoryAccess;
+import jdk.graal.compiler.nodes.ValuePhiNode;
+import jdk.graal.compiler.nodes.spi.Lowerable;
+import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
 import jdk.graal.compiler.nodes.spi.SimplifierTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
@@ -152,9 +149,13 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
         List<ReadMultiValueNode> fieldValues = getFieldValues();
         ArrayList<ResolvedJavaField> fields = new ArrayList<>(fieldValues.size());
         ResolvedJavaField[] instanceFields = this.getType().getInstanceFields(true);
-        for (ReadMultiValueNode fieldValue : fieldValues) {
-            fields.add(instanceFields[fieldValue.getIndex() - 1]);
+        for (int i = 0; i < instanceFields.length; i++) {
+            ValueNode value = getFieldValue(i + 1);
+            if (value != null) {
+                fields.add(instanceFields[i]);
+            }
         }
+
         ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(loweringTool.lastFixedNode().next(), this.object(), fields, false, true);
         ReadMultiValueNode nonNull = this.getNonNull();
         if (nonNull != null) {
@@ -164,11 +165,13 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
         if (oop != null) {
             oop.replaceAndDelete(this.object());
         }
-        List<ReadMultiValueNode> entries = this.getFieldValues();
-        for (int i = 0; i < entries.size(); i++) {
-            // The lowest index for a field value is 1. As the field values in
-            // scalarizedValues also start at index 1, no index correction is necessary.
-            entries.get(i).replaceAndDelete(scalarizedValues[i + 1]);
+
+        int index = 1;
+        for (int i = 0; i < instanceFields.length; i++) {
+            ValueNode value = getFieldValue(i + 1);
+            if (value != null) {
+                value.replaceAndDelete(scalarizedValues[index++]);
+            }
         }
 
         for (int i = 0; i < scalarizedValues.length; i++) {
