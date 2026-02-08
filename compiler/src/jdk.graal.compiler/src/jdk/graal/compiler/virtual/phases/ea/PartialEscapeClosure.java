@@ -242,18 +242,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             processNodeInternal(((Invoke) node).callTarget(), state, effects, lastFixedNode);
         }
         if (node instanceof LoadFieldNode loadFieldNode) {
-            ValueAnchorNode anchor = new ValueAnchorNode();
-            effects.addFixedNodeBefore(anchor, loadFieldNode);
-            scalarize(loadFieldNode.object(), state, effects, loadFieldNode, anchor);
+            scalarize(loadFieldNode.object(), state, effects, loadFieldNode, null);
         } else if (node instanceof StoreFieldNode storeFieldNode) {
-            ValueAnchorNode anchor = new ValueAnchorNode();
-            effects.addFixedNodeBefore(anchor, storeFieldNode);
-            scalarize(storeFieldNode.value(), state, effects, storeFieldNode, anchor);
+            scalarize(storeFieldNode.value(), state, effects, storeFieldNode, null);
         } else if (node instanceof IsNullNode isNullNode) {
-            ValueAnchorNode anchor = new ValueAnchorNode();
-            FixedNode insertBefore = lastFixedNode.next();
-            effects.addFixedNodeBefore(anchor, insertBefore);
-            scalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), anchor);
+            scalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), null);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
