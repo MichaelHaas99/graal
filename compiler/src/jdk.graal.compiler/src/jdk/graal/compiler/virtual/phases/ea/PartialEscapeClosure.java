@@ -2361,15 +2361,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
                     boolean recursive, GuardingNode guard) {
-        return scalarizeValueObject(node, state, recursive, guard, null);
-    }
-
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
-                    boolean recursive, GuardingNode guard, JavaType startType) {
         List<JavaType> visited = new ArrayList<>();
-        if (startType != null) {
-            visited.add(startType);
-        }
         return scalarizeValueObject(node, state, recursive, visited, guard);
     }
 

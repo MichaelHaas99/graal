@@ -77,7 +77,6 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
@@ -173,12 +172,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 associateAlias(piNode, state, effects, lastFixedNode.next());
             }
         } else if (node instanceof ParameterNode param) {
-            /*
-             * Making parameter nodes which are part of virtual states inserted during parsing
-             * virtual can cause errors. We should only scalarize this node after the state was
-             * processed and therefore do this in the InlineType node.
-             */
-            if (StampTool.isNullableInlineType(param, tool.getValhallaOptionsProvider()) && param.usages().stream().allMatch(n -> !(n instanceof VirtualObjectState))) {
+            if (StampTool.isNullableInlineType(param, tool.getValhallaOptionsProvider())) {
                 tryScalarize(param, state, effects, lastFixedNode.next(), null);
             }
         }
