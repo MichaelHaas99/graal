@@ -32,13 +32,6 @@ import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
 
-import jdk.graal.compiler.nodes.ConstantNode;
-import jdk.graal.compiler.nodes.Invoke;
-import jdk.graal.compiler.nodes.PiNode;
-import jdk.graal.compiler.nodes.extended.OSRLocalNode;
-import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -49,15 +42,19 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
+import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
+import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PhiNode;
+import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -66,6 +63,7 @@ import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
@@ -78,6 +76,8 @@ import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 import jdk.vm.ci.meta.JavaConstant;
@@ -165,10 +165,19 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
-        } else if(node instanceof PiNode piNode){
+        } else if (node instanceof PiNode piNode) {
             // an OSR node will be casted speculatively, as its stamp is always object
             if (StampTool.isNullableInlineType(piNode, tool.getValhallaOptionsProvider())) {
                 associateAlias(piNode, state, effects, lastFixedNode.next());
+            }
+        } else if (node instanceof ParameterNode param) {
+            /*
+             * Making parameter nodes which are part of virtual states inserted during parsing
+             * virtual can cause errors. We should only scalarize this node after the state was
+             * processed and therefore do this in the InlineType node.
+             */
+            if (StampTool.isNullableInlineType(param, tool.getValhallaOptionsProvider()) && param.usages().stream().allMatch(n -> !(n instanceof VirtualObjectState))) {
+                scalarize(param, state, effects, lastFixedNode.next(), null);
             }
         }
         if (node instanceof Invoke invoke && invoke.callTarget().targetMethod().isConstructor()) {

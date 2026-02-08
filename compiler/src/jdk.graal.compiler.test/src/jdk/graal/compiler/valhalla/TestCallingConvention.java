@@ -353,4 +353,17 @@ public class TestCallingConvention extends JTTTest {
     private static String ArrayToString(Object[] array){
         return Arrays.toString(array);
     }
+
+    public static MyValue demonstrateScalarizeOnce() {
+        MyValue m = scalarizedValueObjectReturn();
+        scalarizedValueObjectArgument(m);
+        scalarizedValueObjectArgument(m);
+        return m;
+    }
+
+    @Test
+    public void runDemo35() throws Throwable {
+        resetCache();
+        runTest(DEMO_OPTIONS_WITHOUT_INLINING,"demonstrateScalarizeOnce");
+    }
 }
