@@ -24,21 +24,6 @@
  */
 package jdk.graal.compiler.virtual.phases.ea;
 
-import static jdk.graal.compiler.core.common.GraalOptions.ReadEliminationMaxLoopVisits;
-import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
-
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.Iterator;
-import java.util.List;
-
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.MapCursor;
-import org.graalvm.collections.Pair;
-import org.graalvm.word.LocationIdentity;
-
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
@@ -86,6 +71,20 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Equivalence;
+import org.graalvm.collections.MapCursor;
+import org.graalvm.collections.Pair;
+import org.graalvm.word.LocationIdentity;
+
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.List;
+
+import static jdk.graal.compiler.core.common.GraalOptions.ReadEliminationMaxLoopVisits;
+import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
 
@@ -172,10 +171,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             if (StampTool.isNullableInlineType(piNode, tool.getValhallaOptionsProvider())) {
                 associateAlias(piNode, state, effects, lastFixedNode.next());
             }
-        } else if (node instanceof ParameterNode param) {
-            if (StampTool.isNullableInlineType(param, tool.getValhallaOptionsProvider())) {
-                tryScalarize(param, state, effects, lastFixedNode.next(), null);
-            }
+        } else if (node instanceof ParameterNode param && !(cfg.graph.method().isConstructor() && param.index() == 0)) {
+            tryScalarize(param, state, effects, lastFixedNode.next(), null);
         }
         if (node instanceof Invoke invoke) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
