@@ -1238,13 +1238,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @return true if materialization happened during the merge, false otherwise
          */
         private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
-            List<JavaType> visited = new ArrayList<>();
-            visited.add(virtualObjects.get(resultObject).type());
-            return mergeObjectStates(resultObject, sourceObjects, states, 0, visited);
+            return mergeObjectStates(resultObject, sourceObjects, states, 0);
         }
 
-        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int currentScalarizationDepth,
-                        List<JavaType> visited) {
+        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states, int currentScalarizationDepth) {
             boolean compatible = true;
             boolean ensureVirtual = true;
             IntUnaryOperator getObject = index -> sourceObjects == null ? resultObject : sourceObjects[index];
@@ -1462,11 +1459,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 if (types[entryIndex] == null) {
                                     // remember the type for null constants to scalarize them
                                     ResolvedJavaType entryType = entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
-                                    if (visited.contains(entryType)) {
-                                        virtualize = false;
-                                        uniqueVirtualEntry = false;
-                                        break;
-                                    }
                                     types[entryIndex] = entryType;
                                 } else if (!entry.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()).equals(types[entryIndex])) {
                                     // the entries have different types
@@ -1560,12 +1552,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                         newState.addObject(representativeObjectOfEntry, tempState);
                         mergedVirtualEntries[entryIndex] = virtualObjects.get(representativeObjectOfEntry);
-                        int oldLength = visited.size();
-                        visited.add(types[entryIndex]);
-                        mergeObjectStates(representativeObjectOfEntry, entrySourceObjects, states, currentScalarizationDepth + 1, visited);
-                        while (visited.size() > oldLength) {
-                            visited.removeLast();
-                        }
+                        mergeObjectStates(representativeObjectOfEntry, entrySourceObjects, states, currentScalarizationDepth + 1);
                         values[entryIndex] = mergedVirtualEntries[entryIndex];
                     }
                 }
