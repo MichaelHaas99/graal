@@ -396,7 +396,6 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.HasIdentityNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -2363,12 +2362,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // ForeignCallNode foreign = append(new ForeignCallNode(LOG_OBJECT, invoke.asNode(),
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
-
-        if (getValhallaOptionsProvider().callingConventionEnabled() && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod) &&
-                        GraalValhallaServices.hasScalarizedParameters(targetMethod) &&
-                        !fromMethodHandle) {
-            InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
-        }
 
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);
