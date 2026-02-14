@@ -259,6 +259,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         this.addVirtualAlias(newNode, node);
     }
 
+    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position) {
+        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
+            return;
+        }
+        tool.reset(state, node, position, effects);
+        createAliasForValueObject(node, state);
+    }
+
     @Override
     protected void processStateBeforeLoopOnOverflow(BlockT initialState, FixedNode materializeBefore, GraphEffectList effects) {
         for (int i = 0; i < initialState.getStateCount(); i++) {
@@ -651,7 +659,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
      *     }
      * }
      * </pre>
-     *
+     * <p>
      * PEA may emit:
      *
      * <pre>
@@ -663,14 +671,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
      * monitorexit otherObj
      * monitorexit obj
      * </pre>
-     *
+     * <p>
      * On HotSpot, unstructured locking is acceptable for stack locking (LM_LEGACY) and heavy
      * monitor (LM_MONITOR). This is because locks under these locking modes are referenced by
      * pointers stored in the object mark word, and are not necessary contiguous in memory. There is
      * no way to observe a lock disorder from outside, as long as PEA guarantee that a virtual lock
      * is materialized and held before it escapes or before the runtime deoptimizes and transfers to
      * interpreter.
-     *
+     * <p>
      * Lightweight locking (LM_LIGHTWEIGHT), however, maintains locks in a thread-local lock stack.
      * The more inner lock occupies the closer slot to the lock stack top. Unstructured locking code
      * will disrupt the lock stack and result in an inconsistent state. For instance, the lock stack
@@ -683,7 +691,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
      * | otherObj |
      * ------------
      * </pre>
-     *
+     * <p>
      * and is
      *
      * <pre>
@@ -691,12 +699,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
      * | otherObj | <-- stack top
      * ------------
      * </pre>
-     *
+     * <p>
      * after the first {code monitorexit} instruction. At this point, the still-locked object
      * {@code obj} is not maintained in the lock stack, while the lock stack top points to
      * {@code otherObj}, which is with an unlocked mark word. Such inconsistent state can be
      * observed from outside by scanning a thread's lock stack.
-     *
+     * <p>
      * To avoid such scenario, we disallow PEA to emit unstructured locking code when using
      * lightweight locking. We materialize all virtual objects that potentially get materialized in
      * subsequent control flow point and hold locks with lock depth smaller than {@code lockDepth}.
@@ -2372,23 +2380,37 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean recursive, List<JavaType> visited, GuardingNode guard,
                     boolean stopAtVirtual) {
+        VirtualInstanceNode existingAlias = null;
+        boolean isVirtual = false;
+        if (getAlias(node) instanceof VirtualInstanceNode localAlias) {
+            existingAlias = localAlias;
+            ObjectState objectState = state.getObjectState(existingAlias.getObjectId());
+            if (objectState.isVirtual()) {
+                isVirtual = true;
+            }
+        }
 
         ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
         if (visited.contains(instanceClass)) {
-            return null;
+            if (existingAlias == null) {
+                assert StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) : "should be value class type";
+                existingAlias = createAliasForValueObject(node, state);
+            }
+            return existingAlias;
         }
+        if (stopAtVirtual && isVirtual) {
+            return existingAlias;
+        }
+
         visited.add(instanceClass);
         VirtualInstanceNode newVirtualObjectNode;
         boolean updateExistingState = false;
         ValueNode[] entryState = null;
-        if (getAlias(node) instanceof VirtualInstanceNode existingAlias){
+
+        if (existingAlias != null) {
             ObjectState objectState = state.getObjectState(existingAlias.getObjectId());
-            if (objectState.isVirtual()) {
-                if (stopAtVirtual) {
-                    return existingAlias;
-                } else {
-                    entryState = objectState.getEntries();
-                }
+            if (isVirtual) {
+                entryState = objectState.getEntries();
             }
             newVirtualObjectNode = existingAlias;
             updateExistingState = true;
@@ -2479,5 +2501,23 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
         }
         return newVirtualObjectNode;
+    }
+
+    private VirtualInstanceNode createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state) {
+        ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+        VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass,
+                        false, StampTool.isPointerNonNull(node));
+        ResolvedJavaField[] fields = virtualObject.getFields();
+        ValueNode[] entryState = new ValueNode[fields.length];
+        boolean[] unsetFields = new boolean[fields.length];
+        for (int i = 0; i < entryState.length; i++) {
+            entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
+            unsetFields[i] = true;
+        }
+        tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false);
+        tool.setUnsetFields(virtualObject, unsetFields);
+        this.addVirtualAlias(virtualObject, node);
+        getObjectState(state, node).escape(node);
+        return virtualObject;
     }
 }

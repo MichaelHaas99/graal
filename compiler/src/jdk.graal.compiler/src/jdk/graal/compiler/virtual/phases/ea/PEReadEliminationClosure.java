@@ -27,7 +27,6 @@ package jdk.graal.compiler.virtual.phases.ea;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
-import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -78,7 +77,6 @@ import org.graalvm.collections.MapCursor;
 import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
@@ -168,9 +166,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         } else if (node instanceof PiNode piNode) {
             // an OSR node will be casted speculatively, as its stamp is always object
-            if (StampTool.isNullableInlineType(piNode, tool.getValhallaOptionsProvider())) {
-                associateAlias(piNode, state, effects, lastFixedNode.next());
-            }
+            tryAssociateAlias(piNode, state, effects, lastFixedNode.next());
         } else if (node instanceof ParameterNode param && !(cfg.graph.method().isConstructor() && param.index() == 0)) {
             tryScalarize(param, state, effects, lastFixedNode.next(), null);
         }
@@ -199,29 +195,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                             optimizationLog -> optimizationLog.withProperty("deletedNodeClass", node.getNodeClass().shortName()).report(getClass(), "ReadElimination", node));
         }
         return deleted;
-    }
-
-
-    private void associateAlias(ValueNode node, PEReadEliminationBlockState state, GraphEffectList effects, FixedNode position) {
-        if(!node.stamp(NodeView.DEFAULT).isObjectStamp()) {
-            return;
-        }
-        tool.reset(state, node, position, effects);
-        ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
-        VirtualInstanceNode
-                virtualObject = new VirtualInstanceNode(instanceClass,
-                false, StampTool.isPointerNonNull(node));
-        ResolvedJavaField[] fields = virtualObject.getFields();
-        ValueNode[] entryState = new ValueNode[fields.length];
-        boolean[] unsetFields = new boolean[fields.length];
-        for (int i = 0; i < entryState.length; i++) {
-            entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
-            unsetFields[i] = true;
-        }
-        tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false);
-        tool.setUnsetFields(virtualObject, unsetFields);
-        this.addVirtualAlias(virtualObject, node);
-        getObjectState(state, node).escape(node);
     }
 
     private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, JavaKind accessKind, boolean overflowAccess, ValueNode value,
