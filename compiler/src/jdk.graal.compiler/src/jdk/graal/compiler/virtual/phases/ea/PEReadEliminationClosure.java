@@ -58,6 +58,7 @@ import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
+import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
@@ -156,7 +157,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         }
         if (node instanceof Invoke invoke) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
-            FixedNode insertBefore = ((FixedWithNextNode) invoke).next();
+            FixedNode insertBefore;
+            if (invoke instanceof FixedWithNextNode withNextNode) {
+                insertBefore = withNextNode.next();
+            } else {
+                insertBefore = ((WithExceptionNode) invoke).next();
+            }
             if (targetMethod.isConstructor()) {
                 ValueNode receiver = invoke.callTarget().arguments().first();
                 // TODO: avoid insertion of anchor if no scalarization node will be created
