@@ -1073,21 +1073,19 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         ValueNode uniqueNonNullValue = startObj.getNonNull();
                         ResolvedJavaType type = StampTool.typeOrNull(virtualObjects.get(object), tool.getMetaAccess());
                         assert type != null : "expected type to be non-null";
+
+                        // sanity check, if one state is virtual, all states need to be virtual
                         boolean allNonVirtual = true;
-                        boolean virtualize = true;
+                        boolean allVirtual = true;
                         for (int i = 0; i < states.length; i++) {
                             ObjectState objectState = states[i].getObjectState(object);
-                            if (objectState.isVirtual()) {
+                            if (!objectState.isVirtual()) {
+                                allVirtual = false;
+                            } else {
                                 allNonVirtual = false;
-                                if (objectState.isLarval()) {
-                                    // Disallow scalarization of value objects as they are
-                                    // larval and we are not allowed to lose identity.
-                                    virtualize = false;
-                                }
-                                break;
                             }
                         }
-                        virtualize &= !allNonVirtual;
+                        GraalError.guarantee(!(allVirtual == allNonVirtual && !virtualObjects.get(object).hasIdentity()), "state of value objects must be consistent");
 
                         for (int i = 0; i < states.length; i++) {
                             ObjectState obj = states[i].getObjectState(object);
@@ -1110,12 +1108,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 }
                             }
 
-                            if (!obj.isVirtual()) {
-                                if (virtualize && virtualizeFromInlineObject &&
-                                                StampTool.isNullableInlineType(obj.getMaterializedValue(), tool.getValhallaOptionsProvider())) {
-                                    virtualizeFromInlineObject(obj.getMaterializedValue(), states, i, virtualObjects.get(object), true);
-                                }
-                            }
                             if (obj.isVirtual()) {
                                 virtualCount++;
                                 uniqueMaterializedValue = null;

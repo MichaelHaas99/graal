@@ -10,7 +10,6 @@ import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -57,7 +56,6 @@ import jdk.graal.compiler.nodes.java.StoreFlatFieldNode;
 import jdk.graal.compiler.nodes.java.StoreIndexedNode;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
-import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -73,12 +71,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * https://github.com/openjdk/valhalla/pull/1397
  */
 public class InlineTypePlugin implements NodePlugin {
-
-    boolean virtualizeFromInlineObject;
-
-    public InlineTypePlugin(OptionValues options) {
-        virtualizeFromInlineObject = GraalOptions.PartialEscapeAnalysis.getValue(options) && GraalOptions.VirtualizeFromInlineObject.getValue(options);
-    }
 
     @Override
     public boolean handleLoadField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
@@ -193,17 +185,11 @@ public class InlineTypePlugin implements NodePlugin {
         ifNode.setTrueSuccessor(trueBegin);
         EndNode trueEnd = b.add(new EndNode());
         ValueNode defaultValue = b.add(ConstantNode.forConstant(GraalValhallaServices.getDefaultInlineTypeInstance(fieldType), b.getMetaAccess(), b.getGraph()));
-        if (virtualizeFromInlineObject) {
-            defaultValue = virtualizeFromInlineObject(b, defaultValue, fieldType, trueEnd);
-        }
 
         // false branch - field is non-null
         EndNode falseEnd = b.add(new EndNode());
         falseBegin.setNext(falseEnd);
         ValueNode virtualizedFieldValue = fieldValue;
-        if (virtualizeFromInlineObject) {
-            virtualizedFieldValue = virtualizeFromInlineObject(b, fieldValue, fieldType, falseEnd);
-        }
 
         // return the default instance if the field was null otherwise the value
         ValuePhiNode phiNode = b.add(new ValuePhiNode(StampFactory.forDeclaredType(b.getAssumptions(), field.getType(), true).getTrustedStamp(), null,
@@ -384,13 +370,6 @@ public class InlineTypePlugin implements NodePlugin {
                 falseBegin.setNext(fixedNode);
             } else {
                 falseBegin.setNext(falseEnd);
-            }
-
-            if (isInlineTypeArray && virtualizeFromInlineObject) {
-                // avoid allocation due to merge
-
-                ResolvedJavaType type = resultStamp.javaType(b.getMetaAccess());
-                instanceNonFlatArray = virtualizeFromInlineObject(b, instanceNonFlatArray, type, falseEnd);
             }
 
             ValuePhiNode phiNode = b.add(new ValuePhiNode(resultStamp, null,
@@ -645,14 +624,6 @@ public class InlineTypePlugin implements NodePlugin {
 
     public static boolean hasNoNext(BeginNode begin) {
         return begin != null && begin.next() == null;
-    }
-
-    public ValueNode virtualizeFromInlineObject(GraphBuilderContext b, ValueNode object, ResolvedJavaType type, FixedNode addBefore) {
-        StructuredGraph graph = b.getGraph();
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(addBefore, object, List.of(type.getInstanceFields(true)), false, true);
-        InlineTypeNode inlineTypeNode = graph.add(new InlineTypeNode(type, object, Arrays.copyOfRange(phis, 1, phis.length), phis[0], true));
-        graph.addBeforeFixed(addBefore, inlineTypeNode);
-        return inlineTypeNode;
     }
 
     public static final HotSpotForeignCallDescriptor LOAD_UNKNOWN_INLINE = new HotSpotForeignCallDescriptor(SAFEPOINT, NO_SIDE_EFFECT, NO_LOCATION, "loadUnknownInline", Object.class,
