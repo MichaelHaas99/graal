@@ -122,11 +122,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         boolean deleted = false;
         if (node instanceof LoadFieldNode loadFieldNode) {
             deleted = processLoadField((LoadFieldNode) node, state, effects);
-            if(!deleted && StampTool.isNullableInlineType((ValueNode) node, tool.getValhallaOptionsProvider())) {
-                ValueAnchorNode anchor = new ValueAnchorNode();
-                FixedNode insertBefore = loadFieldNode.next();
-                effects.addFixedNodeBefore(anchor, insertBefore);
-                tryScalarize(loadFieldNode, state, effects, insertBefore, anchor);
+            if (!deleted) {
+                tryScalarize(loadFieldNode, state, effects, loadFieldNode.next(), null);
             }
         } else if (node instanceof StoreFieldNode storeFieldNode) {
             deleted = processStoreField(storeFieldNode, state, effects);
