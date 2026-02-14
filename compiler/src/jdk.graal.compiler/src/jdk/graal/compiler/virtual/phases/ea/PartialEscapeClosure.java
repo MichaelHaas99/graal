@@ -1475,12 +1475,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     if (entryOfFirstObject != entry) {
                                         uniqueVirtualEntry = false;
                                     }
-                                    if (objectState.isLarval()) {
-                                        // Disallow scalarization of value objects as they are
-                                        // larval and we are not allowed to lose identity.
-                                        virtualize = false;
-                                        break;
-                                    }
                                 } else {
                                     uniqueVirtualEntry = false;
                                 }
@@ -1511,7 +1505,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             VirtualInstanceNode tempVirtual = tryScalarizeForMerge(entry, states[i], blockEffects.get(i),
                                             StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])).type(),
                                             null);
-                            updateStates(tempVirtual, i, states, newState);
+                            updateStates(tempVirtual, i, states, newState, needsCaching);
 
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
                                 // choose a nullable virtual object as the representative for all
@@ -1707,14 +1701,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     ObjectState startState = states[0].getObjectState(getObject.applyAsInt(0));
                     newState.addObject(resultObject, new ObjectState(values, startState.getLocks(), ensureVirtual, false, oop, nonNull, isAllocatedOrNull));
                 } else {
-                    boolean isLarval = true;
-                    for (int j = 0; j < states.length; j++) {
-                        ObjectState state = states[j].getObjectState(getObject.applyAsInt(j));
-                        isLarval &= state.isLarval();
-                    }
                     ObjectState objectState = states[0].getObjectState(getObject.applyAsInt(0));
                     newState.addObject(resultObject,
-                                    new ObjectState(values, objectState.getLocks(), ensureVirtual, isLarval, objectState.getOop(), objectState.getNonNull(), false));
+                                    new ObjectState(values, objectState.getLocks(), ensureVirtual, false, objectState.getOop(), objectState.getNonNull(), false));
                 }
                 return materialized;
             } else {
@@ -1813,11 +1802,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     if (objectState != null) {
                         if (objectState.isVirtual()) {
                             allNonVirtual = false;
-                            if (objectState.isLarval()) {
-                                // Disallow scalarization of value objects being input to this phi,
-                                // as they are larval and we are not allowed to lose identity.
-                                virtualize = false;
-                            }
                         }
                     }
                 }
@@ -1833,7 +1817,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                     if (virtualize) {
                         VirtualObjectNode tempVirtual = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), null, null);
-                        updateStates(tempVirtual, i, states, newState);
+                        updateStates(tempVirtual, i, states, newState, needsCaching);
                         virtual = tempVirtual == null ? virtual : tempVirtual;
                     }
                     objectState = states[i].getObjectStateOptional(virtual);
@@ -1857,7 +1841,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     selfReference = true;
                 } else if (virtualize) {
                     VirtualInstanceNode virtualObject = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), phi.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()), null);
-                    updateStates(virtualObject, i, states, newState);
+                    updateStates(virtualObject, i, states, newState, needsCaching);
                     if (virtualObject != null) {
                         virtualObjs[i] = virtualObject;
                         previousVirtualObjs[i] = null;
@@ -2354,16 +2338,18 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return virtualObject;
     }
 
-    private void updateStates(VirtualObjectNode virtual, int current, PartialEscapeBlockState<?>[] states, PartialEscapeBlockState<?> mergeState) {
+    private void updateStates(VirtualObjectNode virtual, int current, PartialEscapeBlockState<?>[] states, PartialEscapeBlockState<?> mergeState, boolean needsCaching) {
         if (virtual == null) {
             return;
         }
         int id = virtual.getObjectId();
         ObjectState state = states[current].getObjectState(id);
-        for (PartialEscapeBlockState<?> partialEscapeBlockState : states) {
-            updateState(id, state, partialEscapeBlockState);
+        if (!needsCaching || current == 0) {
+            for (PartialEscapeBlockState<?> partialEscapeBlockState : states) {
+                updateState(id, state, partialEscapeBlockState);
+            }
+            updateState(id, state, mergeState);
         }
-        updateState(id, state, mergeState);
     }
 
     private void updateState(int objectId, ObjectState from, PartialEscapeBlockState<?> to) {
