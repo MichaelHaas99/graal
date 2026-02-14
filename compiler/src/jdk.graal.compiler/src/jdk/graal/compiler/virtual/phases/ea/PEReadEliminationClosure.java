@@ -41,6 +41,7 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
+import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
@@ -140,6 +141,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             deleted = processUnsafeLoad((RawLoadNode) node, state, effects);
         } else if (node instanceof RawStoreNode) {
             deleted = processUnsafeStore((RawStoreNode) node, state, effects);
+        } else if (node instanceof ConstantNode constantNode) {
+            tryScalarize(constantNode, state, effects, lastFixedNode.next(), null);
         } else if (MemoryKill.isSingleMemoryKill(node)) {
             COUNTER_MEMORYCHECKPOINT.increment(node.getDebug());
             LocationIdentity identity = ((SingleMemoryKill) node).getKilledLocationIdentity();

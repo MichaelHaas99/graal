@@ -115,7 +115,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
         ValueNode entry = state.getObjectState(virtualObject).getEntry(index);
         if (!virtualObject.hasIdentity() && StampTool.isNullableInlineType(entry, getValhallaOptionsProvider())) {
-            VirtualInstanceNode newEntry = closure.scalarizeValueObject(entry, state, true, null, false);
+            VirtualInstanceNode newEntry = closure.scalarizeValueObject(entry, state, null, true, null, false);
             GraalError.guarantee(newEntry != null, "scalarized value object should not be null");
             return newEntry;
         }
@@ -422,7 +422,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
         // don't hold virtual objects as oop, this is necessary when virtualizing the InlineType
         // node
-        ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, getMetaAccess(), current.graph());
+        ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, getMetaAccess(), closure.cfg.graph);
         ValueNode newOop = closure.getAliasAndResolve(state, oop);
         boolean newIsAllocatedOrNull = isAllocatedOrNull;
         if (newOop instanceof VirtualObjectNode virtualOop) {

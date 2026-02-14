@@ -222,7 +222,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         this.hasVirtualInputs = graph.createNodeBitMap();
         this.tool = new VirtualizerToolImpl(providers, this, graph.getAssumptions(), graph.getOptions(), debug);
         this.requiresStrictLockOrder = providers.getPlatformConfigurationProvider().requiresStrictLockOrder();
-        virtualizeFromInlineObject = GraalOptions.VirtualizeFromInlineObject.getValue(graph.getOptions());
+        virtualizeFromInlineObject = GraalOptions.ScalarizeValueObject.getValue(graph.getOptions());
     }
 
     /**
@@ -255,7 +255,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return;
         }
         tool.reset(state, node, position, effects);
-        VirtualInstanceNode newNode = scalarizeValueObject(node,  state, true, guard);
+        VirtualInstanceNode newNode = scalarizeValueObjectStopAtVirtual(node, state, true, guard);
         this.addVirtualAlias(newNode, node);
     }
 
@@ -927,7 +927,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         private final boolean needsCaching;
         protected EconomicMap<PhiNode, VirtualObjectNode> phiResultCache;
         protected EconomicMap<EntryMergeCacheKey, VirtualObjectNode> entryMergeCache;
-        protected List<EconomicMap<ValueNode, VirtualInstanceNode>> scalarizationCache;
 
         public MergeProcessor(HIRBlock mergeBlock) {
             super(mergeBlock);
@@ -1010,8 +1009,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          */
         @Override
         protected void merge(List<BlockT> statesList) {
-
-            initScalarizationCache(statesList.size());
 
             PartialEscapeBlockState<?>[] states = new PartialEscapeBlockState<?>[statesList.size()];
             for (int i = 0; i < statesList.size(); i++) {
@@ -1100,7 +1097,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                     if (merge.isPhiAtMerge(value)) {
                                         value = ((ValuePhiNode) value).valueAt(i);
                                     }
-                                    ValueNode alias = getAlias(value, i);
+                                    ValueNode alias = getAlias(value);
                                     if (alias instanceof VirtualObjectNode && ((VirtualObjectNode) alias).getObjectId() == object) {
                                         uniqueMaterializedValue = null;
                                         continue;
@@ -1444,7 +1441,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         // we don't want to merge one entry of all states, although they have the
                         // same virtual object
                         boolean uniqueVirtualEntry = true;
-                        ValueNode entryOfFirstObject = getAlias(values[entryIndex], 0);
+                        ValueNode entryOfFirstObject = getAlias(values[entryIndex]);
                         // iterate over the states
                         for (int i = 0; i < states.length; i++) {
                             // we are allowed to virtualize if the entry is null or an inline type
@@ -1455,7 +1452,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             }
 
                             ValueNode entry = states[i].getObjectState(object).getEntry(entryIndex);
-                            entry = getAlias(entry, i);
+                            entry = getAlias(entry);
                             if (!StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider()) && !StampTool.isPointerAlwaysNull(entry)) {
                                 // node is not a value object or not a constant null pointer
                                 virtualize = false;
@@ -1518,25 +1515,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         for (int i = 0; i < states.length; i++) {
                             int object = getObject.applyAsInt(i);
                             ValueNode entry = states[i].getObjectState(object).getEntry(entryIndex);
-                            entry = getAlias(entry, i);
-                            VirtualInstanceNode tempVirtual;
-                            if (entry instanceof VirtualInstanceNode virtualInstanceNode && states[i].getObjectState(virtualInstanceNode.getObjectId()).isVirtual()) {
-                                tempVirtual = virtualInstanceNode;
-                            } else if (!virtualizeFromInlineObject) {
-                                continue outer;
-                            } else if (entry instanceof VirtualInstanceNode virtualInstanceNode) {
-                                ObjectState state = states[i].getObjectState(virtualInstanceNode.getObjectId());
-                                tempVirtual = virtualizeFromInlineObject(state.getMaterializedValue(), states, i,
-                                                virtualInstanceNode, true, StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])));
+                            entry = getAlias(entry);
+                            VirtualInstanceNode tempVirtual = tryScalarizeForMerge(entry, states[i], blockEffects.get(i),
+                                            StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])).type(),
+                                            null);
+                            updateStates(tempVirtual, i, states, newState);
 
-                            } else {
-                                tempVirtual = virtualizeFromInlineObject(entry, states, i,
-                                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), entryIndex, i, currentScalarizationDepth, merge, null), false,
-                                                StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])));
-                                // cache the new virtual object
-                                getEntryMergeObject(resultObject, getObject.applyAsInt(i), entryIndex, i, currentScalarizationDepth, merge, tempVirtual);
-
-                            }
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
                                 // choose a nullable virtual object as the representative for all
                                 // states
@@ -1829,7 +1813,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             boolean virtualize = true;
             boolean allNonVirtual = true;
             for (int i = 0; i < states.length; i++) {
-                ValueNode alias = getAlias(getPhiValueAt(phi, i), i);
+                ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
                     if (!StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider())) {
                         virtualize = false;
@@ -1853,16 +1837,17 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
             virtualize &= !allNonVirtual;
             for (int i = 0; i < states.length; i++) {
-                ValueNode alias = getAlias(getPhiValueAt(phi, i), i);
+                ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
 
                     previousVirtualObjs[i] = virtual;
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
 
-                    if (virtualizeFromInlineObject && virtualize && StampTool.isNullableInlineType(alias, tool.getValhallaOptionsProvider()) && objectState != null &&
-                                    !objectState.isVirtual()) {
-                        virtual = virtualizeFromInlineObject(objectState.getMaterializedValue(), states, i, virtual, true);
+                    if (virtualize) {
+                        VirtualObjectNode tempVirtual = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), null, null);
+                        updateStates(tempVirtual, i, states, newState);
+                        virtual = tempVirtual == null ? virtual : tempVirtual;
                     }
                     objectState = states[i].getObjectStateOptional(virtual);
                     virtualObjs[i] = virtual;
@@ -1883,13 +1868,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     assert i > 0 : i;
                     virtualInputs++;
                     selfReference = true;
-                } else if (virtualizeFromInlineObject && virtualize && StampTool.isNullableInlineType(phi, tool.getValhallaOptionsProvider())) {
-                    VirtualInstanceNode virtualObject = virtualizeFromInlineObject(alias, states, i, null, false, phi.stamp(NodeView.DEFAULT));
-
-                    virtualObjs[i] = virtualObject;
-                    previousVirtualObjs[i] = null;
-                    virtualInputs++;
-                    uniqueVirtualObject = false;
+                } else if (virtualize) {
+                    VirtualInstanceNode virtualObject = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), phi.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()), null);
+                    updateStates(virtualObject, i, states, newState);
+                    if (virtualObject != null) {
+                        virtualObjs[i] = virtualObject;
+                        previousVirtualObjs[i] = null;
+                        virtualInputs++;
+                        uniqueVirtualObject = false;
+                    }
                 }
             }
             if (virtualInputs == states.length) {
@@ -2122,164 +2109,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
             return result;
         }
-
-        /**
-         * Gets the alias for a node in the dominator block of a loop. This is useful in case we
-         * scalarize this node (which is a value object) during merge processing of a loop. As the
-         * dominator block of a loop was already processed we can alias the node with its scalarized
-         * version for the next iteration. During the next iteration of the loop, when reaching this
-         * node we can directly use its scalarized version. Otherwise, we would again scalarize the
-         * value object, which may creates another diamond in the dominator block. The old diamond
-         * would then be dead and needs to be deleted by DeadCodeElimination.
-         */
-        private ValueNode getAlias(ValueNode value, int blockId) {
-                if (value != null && !(value instanceof VirtualObjectNode)) {
-                    if (value.isAlive()) {
-                        ValueNode result = scalarizationCache.get(blockId).get(value);
-                        if (result != null) {
-                            return result;
-                        }
-                    }
-                }
-            return PartialEscapeClosure.this.getAlias(value);
-        }
-
-        private ValueNode getAlias(ValueNode value) {
-            return PartialEscapeClosure.this.getAlias(value);
-        }
-
-        private void initScalarizationCache(int size) {
-            List<EconomicMap<ValueNode, VirtualInstanceNode>> oldScalarizationCache = scalarizationCache;
-            scalarizationCache = new ArrayList<>(size);
-            int i = 0;
-            if (oldScalarizationCache != null && needsCaching && getStateIndex(0) == 0) {
-                // second iteration, keep the cache for the dominator block of the loop
-                scalarizationCache.add(oldScalarizationCache.get(0));
-                i = 1;
-            }
-            for (; i < size; i++) {
-                scalarizationCache.add(EconomicMap.create(Equivalence.IDENTITY));
-            }
-        }
-
-        private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int predecessorIndex, VirtualObjectNode virtualObjectNode,
-                        boolean updateExistingState) {
-            return virtualizeFromInlineObject(node, states, predecessorIndex, virtualObjectNode, updateExistingState, null);
-        }
-
-        /**
-         * Used to virtualize materialized inline objects. This is possible because they don't have
-         * identity. The oop is saved and used if the newly created virtual object materializes
-         * again. The field values are either retrieved from the cache of ReadElimination or a
-         * scalarization diamond is inserted. This can avoid materializations in merges, if not all
-         * states are virtual and allows further optimizations. The virtual object is only used for
-         * merging so it is not used as an alias.
-         *
-         * @param node the inline object that should be virtualized
-         * @param states the predecessor block states of the merge
-         * @param stateIndex the index of the state the inline object origins from
-         * @param virtualObjectNode the virtual node the newly created object state should be
-         *            associated with if it exists
-         * @param updateExistingState indicates if there is an object state which belongs to
-         *            {@code virtualObjectNode} and it should be updated
-         * @param phiStamp in case an inline object is merged with null, the type of the inline
-         *            object which is contained in the phi stamp is needed to scalarize the null
-         *            value
-         * @return the virtual object which represents the scalarized value object
-         */
-        private VirtualInstanceNode virtualizeFromInlineObject(ValueNode node, PartialEscapeBlockState<?>[] states, int stateIndex, VirtualObjectNode virtualObjectNode,
-                        boolean updateExistingState, Stamp phiStamp) {
-            // TODO maybe we should not call this function when we scalarize in a loop block as this
-            // scalarization will happen at every loop iteration at runtime
-
-            assert !(node instanceof VirtualObjectNode) : "should not be virtual";
-
-            HIRBlock predecessor = getPredecessor(stateIndex);
-            GraphEffectList bEffects = blockEffects.get(predecessor);
-
-            ResolvedJavaType instanceClass;
-            if (phiStamp != null) {
-                instanceClass = phiStamp.javaType(tool.getMetaAccess());
-            } else {
-                instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
-            }
-            VirtualObjectNode newVirtualObjectNode = virtualObjectNode;
-            if (newVirtualObjectNode == null) {
-                newVirtualObjectNode = new VirtualInstanceNode(instanceClass,
-                                false, StampTool.isPointerNonNull(node));
-            }
-            PartialEscapeBlockState<?> state = states[stateIndex];
-
-            // try to get cached values e.g. by read elimination
-            List<ResolvedJavaField> fieldsWithoutValue = new ArrayList<>();
-            List<Integer> fieldsWithoutValueIndexes = null;
-            ValueNode[] entryState;
-            if (StampTool.isPointerAlwaysNull(node)) {
-                ResolvedJavaField[] fields = instanceClass.getInstanceFields(true);
-                fieldsWithoutValue = List.of(fields);
-                entryState = new ValueNode[fields.length];
-            } else {
-                fieldsWithoutValueIndexes = new ArrayList<>();
-                entryState = getScalarValues(node, state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes);
-            }
-            ValueNode nonNull;
-
-            HIRBlock block = getPredecessor(stateIndex);
-            ResolvedJavaField[] fieldsToLoad = fieldsWithoutValue.toArray(new ResolvedJavaField[fieldsWithoutValue.size()]);
-
-            ValueNode[] loadedFieldValues = new ValueNode[fieldsToLoad.length];
-            int loadedFieldValuesIndex = 0;
-
-            FixedNode addBeforeFixed = block.getEndNode();
-            int entryStateIndex = 0;
-            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(node, instanceClass, tool.getAssumptions());
-            ScalarizationNode scalarizationNode = pair.getLeft();
-            ReadMultiValueNode.MultiValues multiValues = pair.getRight();
-            if (scalarizationNode != null) {
-                bEffects.addFloatingNode(scalarizationNode, "");
-            }
-
-            bEffects.addFloatingNode(multiValues.nonNull(), "virtualNonNullValue");
-            nonNull = multiValues.nonNull();
-            for (int j = 0; j < fieldsToLoad.length; j++) {
-                int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
-                ValueNode value = multiValues.fieldValues()[index];
-                bEffects.addFloatingNode(value, "virtualValues");
-                loadedFieldValues[loadedFieldValuesIndex++] = value;
-            }
-
-            // save the loaded values in the entry state of the new virtual object
-            loadedFieldValuesIndex = 0;
-            for (int i = 0; i < fieldsToLoad.length; i++) {
-                while (entryStateIndex < entryState.length && entryState[entryStateIndex] != null) {
-                    // the entry already contains a value continue
-                    entryStateIndex++;
-                }
-                if (entryStateIndex == entryState.length) {
-                    throw new GraalError("unexpected end of inline object");
-                }
-                // entry has no value yet, extract the loaded value and set it as value of the entry
-                entryState[entryStateIndex] = loadedFieldValues[loadedFieldValuesIndex++];
-            }
-            if (updateExistingState) {
-                int objectId = newVirtualObjectNode.getObjectId();
-                state.setEntries(objectId, entryState);
-                state.setNonNull(objectId, nonNull);
-                updateStatesForScalarized(state, newVirtualObjectNode, node);
-                return (VirtualInstanceNode) newVirtualObjectNode;
-            }
-
-            // create the new virtual object
-            FixedNode position = getPredecessor(stateIndex).getEndNode();
-            tool.reset(state, position, position, bEffects);
-            tool.createVirtualObject(newVirtualObjectNode, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
-            if (!StampTool.isPointerAlwaysNull(node)) {
-                scalarizationCache.get(stateIndex).put(node, (VirtualInstanceNode) newVirtualObjectNode);
-
-            }
-            return (VirtualInstanceNode) newVirtualObjectNode;
-        }
-
     }
 
     public ObjectState getObjectState(PartialEscapeBlockState<?> state, ValueNode value) {
@@ -2290,6 +2119,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             ValueNode object = aliases.get(value);
             return object instanceof VirtualObjectNode ? state.getObjectStateOptional((VirtualObjectNode) object) : null;
         } else {
+            ValueNode scalarized = scalarizationAliases.get(value);
+            value = scalarized != null ? scalarized : value;
             if (value instanceof VirtualObjectNode) {
                 return state.getObjectStateOptional((VirtualObjectNode) value);
             }
@@ -2301,6 +2132,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         if (value != null && !(value instanceof VirtualObjectNode)) {
             if (value.isAlive() && !aliases.isNew(value)) {
                 ValueNode result = aliases.get(value);
+                if (result != null) {
+                    return result;
+                }
+            } else {
+                ValueNode result = scalarizationAliases.get(value);
                 if (result != null) {
                     return result;
                 }
@@ -2330,6 +2166,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             for (Node usage : node.usages()) {
                 markVirtualUsages(usage);
             }
+        } else {
+            scalarizationAliases.put(node, virtual);
         }
     }
 
@@ -2363,18 +2201,26 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return null;
     }
 
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state,
+    protected VirtualInstanceNode scalarizeValueObjectStopAtVirtual(ValueNode node, PartialEscapeBlockState<?> state,
                     boolean recursive, GuardingNode guard) {
-        return scalarizeValueObject(node, state, recursive, guard, true);
+        return scalarizeValueObject(node, state, null, recursive, guard, true);
     }
 
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean recursive, GuardingNode guard,
+    protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, GuardingNode guard) {
+        if (!(StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) || type != null && !type.isIdentity())) {
+            return null;
+        }
+        tool.reset(state, node, null, effects);
+        return scalarizeValueObject(node, state, type, true, guard, true);
+    }
+
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, boolean recursive, GuardingNode guard,
                     boolean stopAtVirtual) {
         List<JavaType> visited = new ArrayList<>();
-        return scalarizeValueObject(node, state, recursive, visited, guard, stopAtVirtual);
+        return scalarizeValueObject(node, state, type, recursive, visited, guard, stopAtVirtual);
     }
 
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean recursive, List<JavaType> visited, GuardingNode guard,
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, boolean recursive, List<JavaType> visited, GuardingNode guard,
                     boolean stopAtVirtual) {
         VirtualInstanceNode existingAlias = null;
         boolean isVirtual = false;
@@ -2386,7 +2232,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
         }
 
-        ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+        ResolvedJavaType instanceClass = type;
+        if (instanceClass == null) {
+            instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
+        }
+        assert !instanceClass.isIdentity() : "should be value object";
+
         if (visited.contains(instanceClass)) {
             if (existingAlias == null) {
                 assert StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) : "should be value class type";
@@ -2396,6 +2247,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
         if (stopAtVirtual && isVirtual) {
             return existingAlias;
+        }
+
+        if (!virtualizeFromInlineObject) {
+            return null;
         }
 
         visited.add(instanceClass);
@@ -2476,12 +2331,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
         }
 
-        if(recursive) {
+        if (recursive && !StampTool.isPointerAlwaysNull(node)) {
             for (int i =0; i < entryState.length; i++) {
                 int oldLength = visited.size();
                 ValueNode entry = entryState[i];
                 if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, true, visited, guard, stopAtVirtual);
+                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, null, true, visited, guard, stopAtVirtual);
                     if(newNode != null) {
                         entryState[i] = newNode;
                     }
@@ -2510,5 +2365,26 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         this.addVirtualAlias(virtualObject, node);
         getObjectState(state, node).escape(node);
         return virtualObject;
+    }
+
+    private void updateStates(VirtualObjectNode virtual, int current, PartialEscapeBlockState<?>[] states, PartialEscapeBlockState<?> mergeState) {
+        if (virtual == null) {
+            return;
+        }
+        int id = virtual.getObjectId();
+        ObjectState state = states[current].getObjectState(id);
+        for (PartialEscapeBlockState<?> partialEscapeBlockState : states) {
+            updateState(id, state, partialEscapeBlockState);
+        }
+        updateState(id, state, mergeState);
+    }
+
+    private void updateState(int objectId, ObjectState from, PartialEscapeBlockState<?> to) {
+        ObjectState toObjectState = to.getObjectStateOptional(objectId);
+        if (from != null && toObjectState != null && !toObjectState.isVirtual()) {
+            to.setEntries(objectId, from.getEntries());
+            to.setNonNull(objectId, from.getNonNull());
+            to.setIsLarval(objectId, false);
+        }
     }
 }
