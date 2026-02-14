@@ -24,6 +24,20 @@
  */
 package jdk.graal.compiler.virtual.phases.ea;
 
+import static jdk.graal.compiler.core.common.GraalOptions.ReadEliminationMaxLoopVisits;
+import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
+
+import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.List;
+
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Equivalence;
+import org.graalvm.collections.MapCursor;
+import org.graalvm.collections.Pair;
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
@@ -50,6 +64,7 @@ import jdk.graal.compiler.nodes.extended.RawStoreNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
+import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
@@ -61,7 +76,6 @@ import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
-import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
@@ -70,19 +84,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.MapCursor;
-import org.graalvm.collections.Pair;
-import org.graalvm.word.LocationIdentity;
-
-import java.util.EnumMap;
-import java.util.Iterator;
-import java.util.List;
-
-import static jdk.graal.compiler.core.common.GraalOptions.ReadEliminationMaxLoopVisits;
-import static jdk.graal.compiler.nodes.NamedLocationIdentity.ARRAY_LENGTH_LOCATION;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
 
@@ -129,20 +130,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         } else if (node instanceof StoreFieldNode storeFieldNode) {
             deleted = processStoreField(storeFieldNode, state, effects);
-            ValueNode object = storeFieldNode.object();
-            if (!deleted && getAlias(storeFieldNode.object()) instanceof VirtualInstanceNode virtual && !state.getObjectState(virtual.getObjectId()).isVirtual()) {
-                int fieldIndex = virtual.fieldIndex(storeFieldNode.field());
-                if(fieldIndex != -1){
-                    state.getObjectState(virtual.getObjectId()).setFieldInitialized(fieldIndex);
-                }
-                if(!state.getObjectState(virtual.getObjectId()).isLarval()){
-                    ValueAnchorNode anchor = new ValueAnchorNode();
-                    FixedNode insertBefore = storeFieldNode.next();
-                    effects.addFixedNodeBefore(anchor, insertBefore);
-                    tryScalarize(object, state, effects, insertBefore, anchor);
-                }
-
-            }
         } else if (node instanceof LoadIndexedNode) {
             deleted = processLoadIndexed((LoadIndexedNode) node, state, effects);
         } else if (node instanceof StoreIndexedNode) {
@@ -188,6 +175,13 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (ValueNode value : multiValue.getFieldValues()) {
                 tryScalarize(value, state, effects, insertBefore, null);
             }
+        }
+
+        if (node instanceof FinalFieldBarrierNode finalFieldBarrierNode) {
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            FixedNode insertBefore = finalFieldBarrierNode.next();
+            effects.addFixedNodeBefore(anchor, insertBefore);
+            tryScalarize(finalFieldBarrierNode.getValue(), state, effects, insertBefore, anchor);
         }
 
         if (deleted) {

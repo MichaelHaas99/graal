@@ -250,7 +250,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
 
-    protected void tryScalarize(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
+    protected void tryScalarize(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
         if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
             return;
         }
@@ -259,7 +259,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         this.addVirtualAlias(newNode, node);
     }
 
-    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState state, GraphEffectList effects, FixedNode position) {
+    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position) {
         if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
             return;
         }
@@ -1742,12 +1742,16 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         isAllocatedOrNull &= state.isMaterialized();
                     }
                     ObjectState startState = states[0].getObjectState(getObject.applyAsInt(0));
-                    newState.addObject(resultObject, new ObjectState(values, startState.getLocks(), ensureVirtual, startState.getUnsetFields(), oop, nonNull, isAllocatedOrNull));
+                    newState.addObject(resultObject, new ObjectState(values, startState.getLocks(), ensureVirtual, false, oop, nonNull, isAllocatedOrNull));
                 } else {
-                    // virtual objects can be larval also pass the unset fields information
+                    boolean isLarval = true;
+                    for (int j = 0; j < states.length; j++) {
+                        ObjectState state = states[j].getObjectState(getObject.applyAsInt(j));
+                        isLarval &= state.isLarval();
+                    }
                     ObjectState objectState = states[0].getObjectState(getObject.applyAsInt(0));
                     newState.addObject(resultObject,
-                                    new ObjectState(values, objectState.getLocks(), ensureVirtual, objectState.getUnsetFields(), objectState.getOop(), objectState.getNonNull(), false));
+                                    new ObjectState(values, objectState.getLocks(), ensureVirtual, isLarval, objectState.getOop(), objectState.getNonNull(), false));
                 }
                 return materialized;
             } else {
@@ -2473,11 +2477,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 int objectId = newVirtualObjectNode.getObjectId();
                 state.setEntries(objectId, entryState);
                 state.setNonNull(objectId, nonNull);
-                if (state.getObjectState(objectId).isLarval()) {
-                    for (int i = 0; i < entryState.length; i++) {
-                        state.setFieldInitialized(objectId, i);
-                    }
-                }
+                state.setIsLarval(objectId, false);
                 updateStatesForScalarized(state, newVirtualObjectNode, node);
             } else {
                 tool.createVirtualObject(newVirtualObjectNode, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
@@ -2509,13 +2509,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         false, StampTool.isPointerNonNull(node));
         ResolvedJavaField[] fields = virtualObject.getFields();
         ValueNode[] entryState = new ValueNode[fields.length];
-        boolean[] unsetFields = new boolean[fields.length];
         for (int i = 0; i < entryState.length; i++) {
             entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
-            unsetFields[i] = true;
         }
         tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false);
-        tool.setUnsetFields(virtualObject, unsetFields);
+        // conservatively set it to true
+        tool.setIsLarval(virtualObject, true);
         this.addVirtualAlias(virtualObject, node);
         getObjectState(state, node).escape(node);
         return virtualObject;

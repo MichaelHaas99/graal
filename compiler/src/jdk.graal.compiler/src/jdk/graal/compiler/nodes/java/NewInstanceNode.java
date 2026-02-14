@@ -90,10 +90,9 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
             boolean[] unsetFields = new boolean[fields.length];
             for (int i = 0; i < state.length; i++) {
                 state[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), graph());
-                unsetFields[i] = true;
             }
             tool.createVirtualObject(virtualObject, state, Collections.emptyList(), getNodeSourcePosition(), false);
-            tool.setUnsetFields(virtualObject, unsetFields);
+            tool.setIsLarval(virtualObject, !virtualObject.hasIdentity());
             tool.replaceWithVirtual(virtualObject);
         }
     }

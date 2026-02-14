@@ -64,7 +64,7 @@ public class ObjectState {
      */
     private ValueNode oop;
     private ValueNode nonNull;
-    private boolean[] unsetFields = new boolean[0];
+    private boolean isLarval;
 
     private EscapeObjectState cachedState;
 
@@ -92,23 +92,23 @@ public class ObjectState {
     }
 
     private ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized) {
-        this(entries, locks, ensureVirtualized, new boolean[0]);
+        this(entries, locks, ensureVirtualized, false);
     }
 
-    private ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean[] unsetFields) {
+    private ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean isLarval) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
-        this.unsetFields = unsetFields.clone();
+        this.isLarval = isLarval;
     }
 
-    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean[] unsetFields, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
+    public ObjectState(ValueNode[] entries, LockState locks, boolean ensureVirtualized, boolean isLarval, ValueNode oop, ValueNode nonNull, boolean isAllocatedOrNull) {
         assert checkIllegalValues(entries);
         this.entries = entries;
         this.locks = locks;
         this.ensureVirtualized = ensureVirtualized;
-        this.unsetFields = unsetFields;
+        this.isLarval = isLarval;
         if (isAllocatedOrNull) {
             this.materializedValue = oop;
         } else {
@@ -133,7 +133,7 @@ public class ObjectState {
         ensureVirtualized = other.ensureVirtualized;
         oop = other.oop;
         nonNull = other.nonNull;
-        unsetFields = other.unsetFields.clone();
+        isLarval = other.isLarval;
     }
 
     public ObjectState cloneState() {
@@ -247,12 +247,11 @@ public class ObjectState {
         assert isVirtual();
         cachedState = null;
         entries[index] = value;
-        setFieldInitialized(index);
     }
 
     public void setEntries(ValueNode[] entries) {
         this.entries = entries;
-        this.unsetFields = new boolean[0];
+        this.isLarval = false;
     }
 
     public void escape(ValueNode materialized) {
@@ -310,39 +309,17 @@ public class ObjectState {
         this.oop = oop;
     }
 
-    public boolean[] getUnsetFields() {
-        return unsetFields.clone();
-    }
-
     /**
      * Checks if every field was initialized.
      * 
      * @return true if all fields were initialized, false otherwise.
      */
     public boolean isLarval() {
-        if (unsetFields.length == 0) {
-            return false;
-        }
-        for (int i = 0; i < unsetFields.length; i++) {
-            if (unsetFields[i]) {
-                return true;
-            }
-        }
-        return false;
+        return isLarval;
     }
 
-    public void setUnsetFields(boolean[] unsetFields) {
-        this.unsetFields = unsetFields.clone();
-    }
-
-    public boolean hasUnsetFields() {
-        return unsetFields.length > 0;
-    }
-
-    public void setFieldInitialized(int index) {
-        if (unsetFields.length != 0) {
-            unsetFields[index] = false;
-        }
+    public void setIsLarval(boolean isLarval) {
+        this.isLarval = isLarval;
     }
 
     public void clearCachedState() {
@@ -400,7 +377,7 @@ public class ObjectState {
         result = prime * result + Arrays.hashCode(entries);
         result = prime * result + (locks != null ? locks.monitorId.getLockDepth() : 0);
         result = prime * result + ((materializedValue == null) ? 0 : materializedValue.hashCode());
-        result = prime * result + Arrays.hashCode(unsetFields);
+        result = prime * result + (isLarval ? 0 : 1);
         result = prime * result + (nonNull != null ? nonNull.hashCode() : 0);
         result = prime * result + (oop != null ? oop.hashCode() : 0);
         return result;
@@ -433,7 +410,7 @@ public class ObjectState {
         } else if (!nonNull.equals(other.nonNull)) {
             return false;
         }
-        if (!Arrays.equals(unsetFields, other.unsetFields)) {
+        if (isLarval != other.isLarval) {
             return false;
         }
 

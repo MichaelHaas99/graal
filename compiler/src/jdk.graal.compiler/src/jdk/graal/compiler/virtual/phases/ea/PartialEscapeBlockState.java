@@ -167,8 +167,6 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     public void setEntry(int object, int entryIndex, ValueNode value) {
         if (objectStates[object].getEntry(entryIndex) != value) {
             getObjectStateForModification(object).setEntry(entryIndex, value);
-        } else if (objectStates[object].hasUnsetFields()) {
-            setFieldInitialized(object, entryIndex);
         }
     }
 
@@ -217,12 +215,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         getObjectStateForModification(object).setOop(oop);
     }
 
-    public void setUnsetFields(int object, boolean[] unsetFields) {
-        getObjectStateForModification(object).setUnsetFields(unsetFields);
-    }
-
-    public void setFieldInitialized(int object, int index) {
-        getObjectStateForModification(object).setFieldInitialized(index);
+    public void setIsLarval(int object, boolean isLarval) {
+        getObjectStateForModification(object).setIsLarval(isLarval);
     }
 
     public void setEntries(int object, ValueNode[] entries) {
@@ -244,8 +238,8 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
         List<ValueNode> nonNulls = new ArrayList<>(8);
         List<ValueNode> otherAllocations = new ArrayList<>(2);
         List<Boolean> ensureVirtual = new ArrayList<>(2);
-        List<boolean[]> unsetFields = new ArrayList<>();
-        materializeWithCommit(fixed, virtual, objects, locks, values, oops, nonNulls, unsetFields, ensureVirtual, otherAllocations, materializeEffects);
+        List<Boolean> isLarval = new ArrayList<>();
+        materializeWithCommit(fixed, virtual, objects, locks, values, oops, nonNulls, isLarval, ensureVirtual, otherAllocations, materializeEffects);
         /*
          * because all currently virtualized allocations will be materialized in 1 commit alloc node
          * with barriers, we ignore other allocations as we only process new instance and commit
@@ -309,9 +303,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     for (List<MonitorIdNode> monitorIds : locks) {
                         commit.addLocks(monitorIds);
                     }
-                    for (boolean[] lists : unsetFields) {
-                        commit.addUnsetFields(lists);
-                    }
+                    commit.getIsLarval().addAll(isLarval);
                     if (commit instanceof CommitAllocationOrReuseOopNode) {
                         for (ValueNode oop : oops) {
                             ((CommitAllocationOrReuseOopNode) commit).getOops().add(oop != null ? graph.addOrUniqueWithInputs(oop) : null);
@@ -342,7 +334,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
     }
 
     private void materializeWithCommit(FixedNode fixed, VirtualObjectNode virtual, List<AllocatedObjectNode> objects, List<List<MonitorIdNode>> locks, List<ValueNode> values,
-                    List<ValueNode> oopsOrHubs, List<ValueNode> nonNulls, List<boolean[]> unsetFields,
+                    List<ValueNode> oopsOrHubs, List<ValueNode> nonNulls, List<Boolean> isLarval,
                     List<Boolean> ensureVirtual, List<ValueNode> otherAllocations, GraphEffectList materializeEffects) {
         ObjectState obj = getObjectState(virtual);
 
@@ -360,7 +352,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
             objects.add((AllocatedObjectNode) representation);
             locks.add(LockState.asList(obj.getLocks()));
             oopsOrHubs.add(obj.getOop());
-            unsetFields.add(obj.getUnsetFields());
+            isLarval.add(obj.isLarval());
             nonNulls.add(obj.getNonNull());
             ensureVirtual.add(obj.getEnsureVirtualized());
             int pos = values.size();
@@ -372,7 +364,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     VirtualObjectNode entryVirtual = (VirtualObjectNode) entries[i];
                     ObjectState entryObj = getObjectState(entryVirtual);
                     if (!entryObj.isMaterialized()) {
-                        materializeWithCommit(fixed, entryVirtual, objects, locks, values, oopsOrHubs, nonNulls, unsetFields, ensureVirtual, otherAllocations, materializeEffects);
+                        materializeWithCommit(fixed, entryVirtual, objects, locks, values, oopsOrHubs, nonNulls, isLarval, ensureVirtual, otherAllocations, materializeEffects);
                         entryObj = getObjectState(entryVirtual);
                     }
                     values.set(pos + i, entryObj.getMaterializedValue());
