@@ -1071,6 +1071,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         ResolvedJavaType type = StampTool.typeOrNull(virtualObjects.get(object), tool.getMetaAccess());
                         assert type != null : "expected type to be non-null";
 
+                        boolean virtualize = false;
+                        for (int i = 0; i < states.length; i++) {
+                            ObjectState objectState = states[i].getObjectState(object);
+                            if (objectState.isVirtual()) {
+                                virtualize = true;
+                                break;
+                            }
+                        }
+
                         for (int i = 0; i < states.length; i++) {
                             ObjectState obj = states[i].getObjectState(object);
                             ensureVirtual &= obj.getEnsureVirtualized();
@@ -1090,6 +1099,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                         continue;
                                     }
                                 }
+                            }
+
+                            if (!obj.isVirtual() && virtualize) {
+                                tryScalarizeForMerge(virtualObjects.get(object), states[i], blockEffects.get(i), null, null);
+                                obj = states[i].getObjectState(object);
                             }
 
                             if (obj.isVirtual()) {
