@@ -1071,19 +1071,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                         ResolvedJavaType type = StampTool.typeOrNull(virtualObjects.get(object), tool.getMetaAccess());
                         assert type != null : "expected type to be non-null";
 
-                        // sanity check, if one state is virtual, all states need to be virtual
-                        boolean allNonVirtual = true;
-                        boolean allVirtual = true;
-                        for (int i = 0; i < states.length; i++) {
-                            ObjectState objectState = states[i].getObjectState(object);
-                            if (!objectState.isVirtual()) {
-                                allVirtual = false;
-                            } else {
-                                allNonVirtual = false;
-                            }
-                        }
-                        GraalError.guarantee(!(allVirtual == allNonVirtual && !virtualObjects.get(object).hasIdentity()), "state of value objects must be consistent");
-
                         for (int i = 0; i < states.length; i++) {
                             ObjectState obj = states[i].getObjectState(object);
                             ensureVirtual &= obj.getEnsureVirtualized();
