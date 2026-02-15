@@ -1788,6 +1788,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             VirtualObjectNode[] previousVirtualObjs = new VirtualObjectNode[states.length];
             boolean virtualize = true;
             boolean allNonVirtual = true;
+            boolean oneVirtualNonLarval = false;
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
@@ -1802,11 +1803,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     if (objectState != null) {
                         if (objectState.isVirtual()) {
                             allNonVirtual = false;
+                            oneVirtualNonLarval |= !objectState.isLarval();
                         }
                     }
                 }
             }
-            virtualize &= !allNonVirtual;
+            virtualize &= !allNonVirtual && oneVirtualNonLarval;
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
