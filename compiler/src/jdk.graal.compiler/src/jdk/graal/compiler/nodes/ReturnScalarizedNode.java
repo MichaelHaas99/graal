@@ -3,7 +3,6 @@ package jdk.graal.compiler.nodes;
 import java.util.ArrayList;
 import java.util.List;
 
-import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.collections.Pair;
 
 import jdk.graal.compiler.core.common.GraalOptions;
@@ -15,6 +14,7 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
@@ -28,8 +28,6 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 
@@ -104,29 +102,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             return returnScalarizedNode;
         }
 
-    }
-
-    /**
-     * Replaces an oop return with a scalrized return. Not used at the moment.
-     */
-
-    public static void replaceReturn(ReturnNode oldReturn) {
-        StructuredGraph graph = oldReturn.graph();
-        ValueNode result = oldReturn.result();
-        ResolvedJavaMethod method = graph.method();
-        ResolvedJavaType type = method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass());
-        ResolvedJavaField[] fields = type.getInstanceFields(true);
-
-        // PEA will replace oop with tagged hub if it is virtual
-        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<>(fields.length), type));
-        FixedWithNextNode previous = (FixedWithNextNode) oldReturn.predecessor();
-        previous.setNext(returnNode);
-        oldReturn.replaceAtUsages(returnNode);
-        oldReturn.safeDelete();
-
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, List.of(fields), false, false);
-        returnNode.fieldValues.clear();
-        returnNode.fieldValues.addAll(List.of(phis));
     }
 
     @Override

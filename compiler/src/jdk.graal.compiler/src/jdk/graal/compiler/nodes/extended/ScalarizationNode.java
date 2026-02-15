@@ -143,9 +143,6 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
     }
 
     public void lower(LoweringTool loweringTool) {
-        if (loweringTool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER){
-            return;
-        }
         List<ReadMultiValueNode> fieldValues = getFieldValues();
         ArrayList<ResolvedJavaField> fields = new ArrayList<>(fieldValues.size());
         ResolvedJavaField[] instanceFields = this.getType().getInstanceFields(true);
@@ -156,7 +153,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
             }
         }
 
-        ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(loweringTool.lastFixedNode().next(), this.object(), fields, false, true);
+        ValueNode[] scalarizedValues = InlineTypeUtil.createScalarizationCFG(loweringTool.lastFixedNode().next(), this.object(), fields, false, true, false);
         ReadMultiValueNode nonNull = this.getNonNull();
         if (nonNull != null) {
             nonNull.replaceAndDelete(scalarizedValues[0]);
