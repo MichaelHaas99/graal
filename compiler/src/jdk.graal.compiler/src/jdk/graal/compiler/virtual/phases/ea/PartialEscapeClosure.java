@@ -746,6 +746,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return updateStates(state, virtual, materializedValue, false);
     }
 
+    // TODO: remove this function, should not be necessary anymore as all value objects are aliased
+    // now
     public static boolean updateStatesForScalarized(PartialEscapeBlockState<?> state, VirtualObjectNode virtual, ValueNode materializedValue) {
         // update all existing states with the newly virtual object
         return updateStates(state, virtual, materializedValue, true);
