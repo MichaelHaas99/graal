@@ -2215,10 +2215,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         assert !instanceClass.isIdentity() : "should be value object";
 
         if (visited.contains(instanceClass)) {
-            if (existingAlias == null) {
-                assert StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) : "should be value class type";
-                existingAlias = createAliasForValueObject(node, state);
-            }
+            assert StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) : "should be value class type";
             return existingAlias;
         }
         if (stopAtVirtual && isVirtual) {
@@ -2281,6 +2278,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 ValueNode value = multiValues.fieldValues()[index];
                 tool.addNode(value);
                 loadedFieldValues[loadedFieldValuesIndex++] = value;
+                if (StampTool.isNullableInlineType(value, tool.getValhallaOptionsProvider())) {
+                    createAliasForValueObject(value, state);
+                }
             }
 
             // save the loaded values in the entry state of the new virtual object
