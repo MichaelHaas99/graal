@@ -76,7 +76,6 @@ import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.VirtualState;
 import jdk.graal.compiler.nodes.WithExceptionNode;
-import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
@@ -85,7 +84,6 @@ import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.AccessMonitorNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
-import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.NodeWithState;
@@ -243,10 +241,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
         if (node instanceof LoadFieldNode loadFieldNode) {
             tryScalarize(loadFieldNode.object(), state, effects, loadFieldNode, null);
-        } else if (node instanceof StoreFieldNode storeFieldNode) {
-            tryScalarize(storeFieldNode.value(), state, effects, storeFieldNode, null);
-        } else if (node instanceof IsNullNode isNullNode) {
-            tryScalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), null);
         } else if (node instanceof ScalarizationNode scalarizationNode) {
             tryScalarize(scalarizationNode.object(), state, effects, lastFixedNode.next(), null);
         }
