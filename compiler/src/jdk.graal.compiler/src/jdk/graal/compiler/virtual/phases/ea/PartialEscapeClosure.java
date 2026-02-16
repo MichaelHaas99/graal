@@ -247,6 +247,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             tryScalarize(storeFieldNode.value(), state, effects, storeFieldNode, null);
         } else if (node instanceof IsNullNode isNullNode) {
             tryScalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), null);
+        } else if (node instanceof ScalarizationNode scalarizationNode) {
+            tryScalarize(scalarizationNode.object(), state, effects, lastFixedNode.next(), null);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
@@ -1802,14 +1804,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
 
                     previousVirtualObjs[i] = virtual;
-                    ObjectState objectState = states[i].getObjectStateOptional(virtual);
 
                     if (virtualize) {
-                        VirtualObjectNode tempVirtual = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), null, null);
-                        tryScalarizeInAllStates(tempVirtual, i, states, newState, blockEffects, mergeEffects);
-                        virtual = tempVirtual == null ? virtual : tempVirtual;
+                        tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null, null);
+                        tryScalarizeInAllStates(virtual, i, states, newState, blockEffects, mergeEffects);
                     }
-                    objectState = states[i].getObjectStateOptional(virtual);
+                    ObjectState objectState = states[i].getObjectStateOptional(virtual);
                     virtualObjs[i] = virtual;
 
                     if (objectState == null) {
