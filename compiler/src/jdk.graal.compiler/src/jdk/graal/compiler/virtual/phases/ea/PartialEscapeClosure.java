@@ -40,6 +40,7 @@ import org.graalvm.collections.Pair;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.RetryableBailoutException;
+import jdk.graal.compiler.core.common.cfg.BlockMap;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
@@ -248,23 +249,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             tryScalarize(isNullNode.getValue(), state, effects, lastFixedNode.next(), null);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
-    }
-
-    protected void tryScalarize(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
-        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
-            return;
-        }
-        tool.reset(state, node, position, effects);
-        VirtualInstanceNode newNode = scalarizeValueObjectStopAtVirtual(node, state, true, guard);
-        this.addVirtualAlias(newNode, node);
-    }
-
-    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position) {
-        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
-            return;
-        }
-        tool.reset(state, node, position, effects);
-        createAliasForValueObject(node, state);
     }
 
     @Override
@@ -1508,7 +1492,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             VirtualInstanceNode tempVirtual = tryScalarizeForMerge(entry, states[i], blockEffects.get(i),
                                             StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])).type(),
                                             null);
-                            updateStates(tempVirtual, i, states, newState, needsCaching);
+                            tryScalarizeInAllStates(tempVirtual, i, states, newState, blockEffects, mergeEffects);
 
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
                                 // choose a nullable virtual object as the representative for all
@@ -1822,7 +1806,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
                     if (virtualize) {
                         VirtualObjectNode tempVirtual = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), null, null);
-                        updateStates(tempVirtual, i, states, newState, needsCaching);
+                        tryScalarizeInAllStates(tempVirtual, i, states, newState, blockEffects, mergeEffects);
                         virtual = tempVirtual == null ? virtual : tempVirtual;
                     }
                     objectState = states[i].getObjectStateOptional(virtual);
@@ -1846,7 +1830,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     selfReference = true;
                 } else if (virtualize) {
                     VirtualInstanceNode virtualObject = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), phi.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()), null);
-                    updateStates(virtualObject, i, states, newState, needsCaching);
                     if (virtualObject != null) {
                         virtualObjs[i] = virtualObject;
                         previousVirtualObjs[i] = null;
@@ -2182,14 +2165,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return scalarizeValueObject(node, state, null, recursive, guard, true);
     }
 
-    protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, GuardingNode guard) {
-        if (!(StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) || type != null && !type.isIdentity())) {
-            return null;
-        }
-        tool.reset(state, node, null, effects);
-        return scalarizeValueObject(node, state, type, true, guard, true);
-    }
-
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, boolean recursive, GuardingNode guard,
                     boolean stopAtVirtual) {
         List<JavaType> visited = new ArrayList<>();
@@ -2202,7 +2177,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         boolean isVirtual = false;
         if (getAlias(node) instanceof VirtualInstanceNode localAlias) {
             existingAlias = localAlias;
-            ObjectState objectState = state.getObjectState(existingAlias.getObjectId());
+
+            // in case we try to scalarize in all states, it may occur that it does not exist in one
+            // state
+            ObjectState objectState = state.getObjectStateOptional(existingAlias.getObjectId());
+            if (objectState == null) {
+                return null;
+            }
             if (objectState.isVirtual()) {
                 isVirtual = true;
             }
@@ -2326,7 +2307,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return newVirtualObjectNode;
     }
 
-    private VirtualInstanceNode createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state) {
+    private void createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state) {
         ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
         VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass,
                         false, StampTool.isPointerNonNull(node));
@@ -2340,29 +2321,44 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         tool.setIsLarval(virtualObject, true);
         this.addVirtualAlias(virtualObject, node);
         getObjectState(state, node).escape(node);
-        return virtualObject;
     }
 
-    private void updateStates(VirtualObjectNode virtual, int current, PartialEscapeBlockState<?>[] states, PartialEscapeBlockState<?> mergeState, boolean needsCaching) {
+    protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, GuardingNode guard) {
+        if (!(StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) || type != null && !type.isIdentity())) {
+            return null;
+        }
+        tool.reset(state, node, null, effects);
+        return scalarizeValueObject(node, state, type, false, guard, true);
+    }
+
+    // TODO: replace this function with a second iteration of merge function
+    protected void tryScalarizeInAllStates(VirtualObjectNode virtual, int current, PartialEscapeBlockState<?>[] states, PartialEscapeBlockState<?> mergeState,
+                    BlockMap<GraphEffectList> blockEffects, GraphEffectList mergeEffects) {
         if (virtual == null) {
             return;
         }
-        int id = virtual.getObjectId();
-        ObjectState state = states[current].getObjectState(id);
-        if (!needsCaching || current == 0) {
-            for (PartialEscapeBlockState<?> partialEscapeBlockState : states) {
-                updateState(id, state, partialEscapeBlockState);
+        for (int i = 0; i < states.length; i++) {
+            if (i != current) {
+                tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null, null);
             }
-            updateState(id, state, mergeState);
         }
+        tryScalarizeForMerge(virtual, mergeState, mergeEffects, null, null);
     }
 
-    private void updateState(int objectId, ObjectState from, PartialEscapeBlockState<?> to) {
-        ObjectState toObjectState = to.getObjectStateOptional(objectId);
-        if (from != null && toObjectState != null && !toObjectState.isVirtual()) {
-            to.setEntries(objectId, from.getEntries());
-            to.setNonNull(objectId, from.getNonNull());
-            to.setIsLarval(objectId, false);
+    protected void tryScalarize(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
+        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
+            return;
         }
+        tool.reset(state, node, position, effects);
+        VirtualInstanceNode newNode = scalarizeValueObjectStopAtVirtual(node, state, false, guard);
+        this.addVirtualAlias(newNode, node);
+    }
+
+    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position) {
+        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
+            return;
+        }
+        tool.reset(state, node, position, effects);
+        createAliasForValueObject(node, state);
     }
 }
