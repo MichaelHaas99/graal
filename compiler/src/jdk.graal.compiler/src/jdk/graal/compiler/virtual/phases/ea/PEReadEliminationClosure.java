@@ -125,7 +125,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (node instanceof LoadFieldNode loadFieldNode) {
             deleted = processLoadField((LoadFieldNode) node, state, effects);
             if (!deleted) {
-                tryScalarize(loadFieldNode, state, effects, loadFieldNode.next(), null);
+                tryAssociateAlias(loadFieldNode, state, effects, loadFieldNode.next(), false);
             }
         } else if (node instanceof StoreFieldNode storeFieldNode) {
             deleted = processStoreField(storeFieldNode, state, effects);
@@ -142,7 +142,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         } else if (node instanceof RawStoreNode) {
             deleted = processUnsafeStore((RawStoreNode) node, state, effects);
         } else if (node instanceof ConstantNode constantNode) {
-            tryScalarize(constantNode, state, effects, lastFixedNode.next(), null);
+            tryAssociateAlias(constantNode, state, effects, lastFixedNode.next(), false);
         } else if (MemoryKill.isSingleMemoryKill(node)) {
             COUNTER_MEMORYCHECKPOINT.increment(node.getDebug());
             LocationIdentity identity = ((SingleMemoryKill) node).getKilledLocationIdentity();
@@ -154,9 +154,9 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         } else if (node instanceof PiNode piNode) {
             // an OSR node will be casted speculatively, as its stamp is always object
-            tryAssociateAlias(piNode, state, effects, lastFixedNode.next());
+            tryAssociateAlias(piNode, state, effects, lastFixedNode.next(), true);
         } else if (node instanceof ParameterNode param && !(cfg.graph.method().isConstructor() && param.index() == 0)) {
-            tryScalarize(param, state, effects, lastFixedNode.next(), null);
+            tryAssociateAlias(param, state, effects, lastFixedNode.next(), false);
         }
         if (node instanceof Invoke invoke) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
@@ -173,13 +173,13 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 effects.addFixedNodeBefore(anchor, insertBefore);
                 tryScalarize(receiver, state, effects, insertBefore, anchor);
             } else if (!GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                tryScalarize(invoke.asNode(), state, effects, insertBefore, null);
+                tryAssociateAlias(invoke.asNode(), state, effects, insertBefore, false);
             }
         }
         if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
             FixedNode insertBefore = lastFixedNode.next();
             for (ValueNode value : multiValue.getFieldValues()) {
-                tryScalarize(value, state, effects, insertBefore, null);
+                tryAssociateAlias(value, state, effects, insertBefore, false);
             }
         }
 

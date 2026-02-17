@@ -2176,8 +2176,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         if (getAlias(node) instanceof VirtualInstanceNode localAlias) {
             existingAlias = localAlias;
 
-            // in case we try to scalarize in all states, it may occur that it does not exist in one
-            // state
             ObjectState objectState = state.getObjectStateOptional(existingAlias.getObjectId());
             if (objectState == null) {
                 return null;
@@ -2258,7 +2256,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 tool.addNode(value);
                 loadedFieldValues[loadedFieldValuesIndex++] = value;
                 if (StampTool.isNullableInlineType(value, tool.getValhallaOptionsProvider())) {
-                    createAliasForValueObject(value, state);
+                    createAliasForValueObject(value, state, false);
                 }
             }
 
@@ -2305,7 +2303,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return newVirtualObjectNode;
     }
 
-    private void createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state) {
+    private void createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean isLarval) {
         ResolvedJavaType instanceClass = node.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess());
         VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass,
                         false, StampTool.isPointerNonNull(node));
@@ -2315,8 +2313,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
         }
         tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false);
-        // conservatively set it to true
-        tool.setIsLarval(virtualObject, true);
+        tool.setIsLarval(virtualObject, isLarval);
         this.addVirtualAlias(virtualObject, node);
         getObjectState(state, node).escape(node);
     }
@@ -2338,11 +2335,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         this.addVirtualAlias(newNode, node);
     }
 
-    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position) {
+    protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, boolean isLarval) {
         if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
             return;
         }
         tool.reset(state, node, position, effects);
-        createAliasForValueObject(node, state);
+        createAliasForValueObject(node, state, isLarval);
     }
 }
