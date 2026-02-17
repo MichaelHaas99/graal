@@ -40,7 +40,6 @@ import org.graalvm.collections.Pair;
 
 import jdk.graal.compiler.core.common.GraalOptions;
 import jdk.graal.compiler.core.common.RetryableBailoutException;
-import jdk.graal.compiler.core.common.cfg.BlockMap;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
@@ -1405,10 +1404,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 }
 
                 VirtualObjectNode[] mergedVirtualEntries = new VirtualObjectNode[values.length];
-                // don't scalarize if we may land in a circle
                 ValueNode firstVirtual = virtualObjects.get(getObject.applyAsInt(0));
                 ResolvedJavaType type = StampTool.typeOrNull(firstVirtual, tool.getMetaAccess());
                 assert type != null : "expected type to be non-null";
+                boolean scalarized = false;
                 if (currentScalarizationDepth < GraalOptions.ScalarizationDepth.getValue(tool.getOptions())) {
                     // try to keep virtual entries virtual by making entries with materialized
                     // inline objects virtual again, merge each virtual entry recursively.
@@ -1485,10 +1484,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             int object = getObject.applyAsInt(i);
                             ValueNode entry = states[i].getObjectState(object).getEntry(entryIndex);
                             entry = getAlias(entry);
+                            if (entry instanceof VirtualObjectNode virtualEntry) {
+                                ObjectState entryObj = states[i].getObjectState(virtualEntry.getObjectId());
+                                scalarized = !entryObj.isVirtual();
+                            }
                             VirtualInstanceNode tempVirtual = tryScalarizeForMerge(entry, states[i], blockEffects.get(i),
                                             StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])).type(),
                                             null);
-                            tryScalarizeInAllStates(tempVirtual, i, states, newState, blockEffects, mergeEffects);
 
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
                                 // choose a nullable virtual object as the representative for all
@@ -1688,7 +1690,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     newState.addObject(resultObject,
                                     new ObjectState(values, objectState.getLocks(), ensureVirtual, false, objectState.getOop(), objectState.getNonNull(), false));
                 }
-                return materialized;
+                return materialized || scalarized;
             } else {
                 // not compatible: materialize in all predecessors
                 PhiNode materializedValuePhi = getPhi(resultObject, StampFactory.forKind(JavaKind.Object));
@@ -1772,6 +1774,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             boolean virtualize = true;
             boolean allNonVirtual = true;
             boolean oneVirtualNonLarval = false;
+            boolean scalarized = false;
             for (int i = 0; i < states.length; i++) {
                 ValueNode alias = getAlias(getPhiValueAt(phi, i));
                 if (alias instanceof VirtualObjectNode) {
@@ -1798,12 +1801,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     VirtualObjectNode virtual = (VirtualObjectNode) alias;
 
                     previousVirtualObjs[i] = virtual;
-
-                    if (virtualize) {
-                        tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null, null);
-                        tryScalarizeInAllStates(virtual, i, states, newState, blockEffects, mergeEffects);
-                    }
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
+                    if (virtualize) {
+                        scalarized = objectState != null && !objectState.isVirtual();
+                        tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null, null);
+                    }
+
+                    objectState = states[i].getObjectStateOptional(virtual);
                     virtualObjs[i] = virtual;
 
                     if (objectState == null) {
@@ -1933,7 +1937,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             boolean materialized = mergeObjectStates(virtual.getObjectId(), virtualObjectIds, states);
                             addVirtualAlias(virtual, virtual);
                             addVirtualAlias(virtual, phi);
-                            return materialized;
+                            return materialized || scalarized;
                         }
                     }
                 }
@@ -2323,20 +2327,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
         tool.reset(state, node, null, effects);
         return scalarizeValueObject(node, state, type, false, guard, true);
-    }
-
-    // TODO: replace this function with a second iteration of merge function
-    protected void tryScalarizeInAllStates(VirtualObjectNode virtual, int current, PartialEscapeBlockState<?>[] states, PartialEscapeBlockState<?> mergeState,
-                    BlockMap<GraphEffectList> blockEffects, GraphEffectList mergeEffects) {
-        if (virtual == null) {
-            return;
-        }
-        for (int i = 0; i < states.length; i++) {
-            if (i != current) {
-                tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null, null);
-            }
-        }
-        tryScalarizeForMerge(virtual, mergeState, mergeEffects, null, null);
     }
 
     protected void tryScalarize(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
