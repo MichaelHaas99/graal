@@ -116,15 +116,9 @@ public class ReturnResultDeciderNode extends FixedWithNextNode implements Lowera
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (true) {
-            // TODO: the current logic where we replace a virtual oop is wrong as it may not match
-            // the non null info
-            return;
-        }
         ValueNode alias = tool.getAlias(oop);
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
-            ValueNode newNode = virtualizeReturnResultDecider(tool, virtualObjectNode, hub, false);
-            tool.replaceWith(newNode);
+            tool.replaceFirstInput(getOop(), tool.getOop(virtualObjectNode));
         }
     }
 }
