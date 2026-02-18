@@ -123,6 +123,11 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public void tryScalarize(ValueNode node) {
+        closure.tryScalarize(node, state, effects, position, null);
+    }
+
+    @Override
     public boolean hasNullOop(VirtualObjectNode virtualObject) {
         ValueNode oop = getOop(virtualObject);
         return oop == null || oop.isNullConstant();

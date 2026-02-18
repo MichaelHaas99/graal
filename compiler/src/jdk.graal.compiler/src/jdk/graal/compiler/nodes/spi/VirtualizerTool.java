@@ -103,6 +103,8 @@ public interface VirtualizerTool extends CoreProviders {
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
+    void tryScalarize(ValueNode node);
+
     /**
      * Checks if the oop stored in the state of the virtual object is a constant null pointer.
      */
