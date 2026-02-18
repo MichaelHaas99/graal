@@ -87,7 +87,6 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
                             GraalValhallaServices.isIdentity(instanceClass));
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
-            boolean[] unsetFields = new boolean[fields.length];
             for (int i = 0; i < state.length; i++) {
                 state[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), graph());
             }
