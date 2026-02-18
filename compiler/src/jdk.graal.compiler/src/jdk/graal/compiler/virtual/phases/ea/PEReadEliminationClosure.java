@@ -171,7 +171,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 // TODO: avoid insertion of anchor if no scalarization node will be created
                 ValueAnchorNode anchor = new ValueAnchorNode();
                 effects.addFixedNodeBefore(anchor, insertBefore);
-                tryScalarize(receiver, state, effects, insertBefore, anchor);
+                tryScalarizeWithAlias(receiver, state, effects, null, insertBefore, anchor, false, true);
             } else if (!GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
                 tryAssociateAlias(invoke.asNode(), state, effects, insertBefore, false);
             }
@@ -187,7 +187,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             ValueAnchorNode anchor = new ValueAnchorNode();
             FixedNode insertBefore = finalFieldBarrierNode.next();
             effects.addFixedNodeBefore(anchor, insertBefore);
-            tryScalarize(finalFieldBarrierNode.getValue(), state, effects, insertBefore, anchor);
+            tryScalarizeWithAlias(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, anchor, false, true);
         }
 
         if (deleted) {

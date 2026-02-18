@@ -115,7 +115,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
         ValueNode entry = state.getObjectState(virtualObject).getEntry(index);
         if (!virtualObject.hasIdentity() && StampTool.isNullableInlineType(entry, getValhallaOptionsProvider())) {
-            VirtualInstanceNode newEntry = closure.scalarizeValueObject(entry, state, null, true, null, false);
+            VirtualInstanceNode newEntry = closure.tryScalarizeWithoutReset(entry, state, null, null, false, true);
             GraalError.guarantee(newEntry != null, "scalarized value object should not be null");
             return newEntry;
         }
@@ -124,7 +124,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void tryScalarize(ValueNode node) {
-        closure.tryScalarize(node, state, effects, position, null);
+        closure.tryScalarizeWithoutReset(node, state, null, null, false, true);
     }
 
     @Override

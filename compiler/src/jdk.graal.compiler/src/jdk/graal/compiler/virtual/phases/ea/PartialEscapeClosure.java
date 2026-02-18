@@ -241,9 +241,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             processNodeInternal(((Invoke) node).callTarget(), state, effects, lastFixedNode);
         }
         if (node instanceof LoadFieldNode loadFieldNode) {
-            tryScalarize(loadFieldNode.object(), state, effects, loadFieldNode, null);
+            tryScalarizeWithReset(loadFieldNode.object(), state, effects, null, loadFieldNode, null, false, true);
         } else if (node instanceof ScalarizationNode scalarizationNode) {
-            tryScalarize(scalarizationNode.object(), state, effects, lastFixedNode.next(), null);
+            tryScalarizeWithReset(scalarizationNode.object(), state, effects, null, lastFixedNode.next(), null, false, true);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
@@ -1085,7 +1085,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                             }
 
                             if (!obj.isVirtual() && virtualize) {
-                                tryScalarizeForMerge(virtualObjects.get(object), states[i], blockEffects.get(i), null, null);
+                                tryScalarizeForMerge(virtualObjects.get(object), states[i], blockEffects.get(i), null);
                                 obj = states[i].getObjectState(object);
                             }
 
@@ -1491,8 +1491,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                                 scalarized = !entryObj.isVirtual();
                             }
                             VirtualInstanceNode tempVirtual = tryScalarizeForMerge(entry, states[i], blockEffects.get(i),
-                                            StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])).type(),
-                                            null);
+                                            StampFactory.object(TypeReference.create(tool.getAssumptions(), types[entryIndex])).type());
 
                             if (!StampTool.isPointerNonNull(tempVirtual)) {
                                 // choose a nullable virtual object as the representative for all
@@ -1806,7 +1805,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     ObjectState objectState = states[i].getObjectStateOptional(virtual);
                     if (virtualize) {
                         scalarized = objectState != null && !objectState.isVirtual();
-                        tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null, null);
+                        tryScalarizeForMerge(virtual, states[i], blockEffects.get(i), null);
                     }
 
                     objectState = states[i].getObjectStateOptional(virtual);
@@ -1829,7 +1828,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     virtualInputs++;
                     selfReference = true;
                 } else if (virtualize) {
-                    VirtualInstanceNode virtualObject = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), phi.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()), null);
+                    VirtualInstanceNode virtualObject = tryScalarizeForMerge(alias, states[i], blockEffects.get(i), phi.stamp(NodeView.DEFAULT).javaType(tool.getMetaAccess()));
                     if (virtualObject != null) {
                         virtualObjs[i] = virtualObject;
                         previousVirtualObjs[i] = null;
@@ -2160,18 +2159,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         return null;
     }
 
-    protected VirtualInstanceNode scalarizeValueObjectStopAtVirtual(ValueNode node, PartialEscapeBlockState<?> state,
-                    boolean recursive, GuardingNode guard) {
-        return scalarizeValueObject(node, state, null, recursive, guard, true);
-    }
-
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, boolean recursive, GuardingNode guard,
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, GuardingNode guard, boolean recursive,
                     boolean stopAtVirtual) {
         List<JavaType> visited = new ArrayList<>();
-        return scalarizeValueObject(node, state, type, recursive, visited, guard, stopAtVirtual);
+        return scalarizeValueObject(node, state, type, visited, guard, recursive, stopAtVirtual);
     }
 
-    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, boolean recursive, List<JavaType> visited, GuardingNode guard,
+    protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, List<JavaType> visited, GuardingNode guard, boolean recursive,
                     boolean stopAtVirtual) {
         VirtualInstanceNode existingAlias = null;
         boolean isVirtual = false;
@@ -2291,7 +2285,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 int oldLength = visited.size();
                 ValueNode entry = entryState[i];
                 if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, null, true, visited, guard, stopAtVirtual);
+                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, null, visited, guard, true, stopAtVirtual);
                     if(newNode != null) {
                         entryState[i] = newNode;
                     }
@@ -2325,21 +2319,30 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         state.getObjectState(virtualObject).setNonNull(nonNull);
     }
 
-    protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, GuardingNode guard) {
-        if (!(StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) || type != null && !type.isIdentity())) {
-            return null;
-        }
-        tool.reset(state, node, null, effects);
-        return scalarizeValueObject(node, state, type, false, guard, true);
+    protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type) {
+        return tryScalarizeWithReset(node, state, effects, type, null, null, false, true);
     }
 
-    protected void tryScalarize(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, GuardingNode guard) {
-        if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
-            return;
+    protected VirtualInstanceNode tryScalarizeWithAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, FixedNode position, GuardingNode guard,
+                    boolean recursive, boolean stopAtVirtual) {
+        VirtualInstanceNode virtualInstanceNode = tryScalarizeWithReset(node, state, effects, type, position, guard, recursive, stopAtVirtual);
+        if (virtualInstanceNode != null) {
+            this.addVirtualAlias(virtualInstanceNode, node);
         }
+        return virtualInstanceNode;
+    }
+
+    protected VirtualInstanceNode tryScalarizeWithReset(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, FixedNode position, GuardingNode guard,
+                    boolean recursive, boolean stopAtVirtual) {
         tool.reset(state, node, position, effects);
-        VirtualInstanceNode newNode = scalarizeValueObjectStopAtVirtual(node, state, false, guard);
-        this.addVirtualAlias(newNode, node);
+        return tryScalarizeWithoutReset(node, state, type, guard, recursive, stopAtVirtual);
+    }
+
+    protected VirtualInstanceNode tryScalarizeWithoutReset(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, GuardingNode guard, boolean recursive, boolean stopAtVitual) {
+        if (node == null || (!StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider()) && (type == null || type.isIdentity()))) {
+            return null;
+        }
+        return scalarizeValueObject(node, state, type, guard, recursive, stopAtVitual);
     }
 
     protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, boolean isLarval) {
