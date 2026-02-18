@@ -75,6 +75,8 @@ import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.VirtualState;
 import jdk.graal.compiler.nodes.WithExceptionNode;
+import jdk.graal.compiler.nodes.calc.ConditionalNode;
+import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
@@ -2313,9 +2315,14 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
         }
         tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false);
-        tool.setIsLarval(virtualObject, isLarval);
+        // set to larval to loose entries, TODO: directly create escaped state
+        tool.setIsLarval(virtualObject, true);
         this.addVirtualAlias(virtualObject, node);
         getObjectState(state, node).escape(node);
+        tool.setIsLarval(virtualObject, isLarval);
+        ValueNode nonNull = ConditionalNode.create(IsNullNode.create(node), ConstantNode.forInt(0), ConstantNode.forInt(1), NodeView.DEFAULT);
+        tool.addNode(nonNull);
+        state.getObjectState(virtualObject).setNonNull(nonNull);
     }
 
     protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type, GuardingNode guard) {
@@ -2337,6 +2344,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     protected void tryAssociateAlias(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, FixedNode position, boolean isLarval) {
         if (node == null || !StampTool.isNullableInlineType(node, tool.getValhallaOptionsProvider())) {
+            return;
+        }
+        if (getAlias(node) instanceof VirtualInstanceNode) {
             return;
         }
         tool.reset(state, node, position, effects);
