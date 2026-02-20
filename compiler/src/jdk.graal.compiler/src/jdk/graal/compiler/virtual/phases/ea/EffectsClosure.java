@@ -280,6 +280,9 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 }
                 HIRBlock exceptionEdgeToKill = node instanceof WithExceptionNode ? cfg.blockFor(((WithExceptionNode) node).exceptionEdge()) : null;
                 boolean lastNodeChanged = processNode(node, state, effects, lastFixedNode) && isSignificantNode(node);
+                if (!lastNodeChanged) {
+                    handleScalarization(node, state, effects, lastFixedNode);
+                }
                 changed |= lastNodeChanged;
                 if (lastNodeChanged && exceptionEdgeToKill != null) {
                     /*
@@ -343,6 +346,9 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
      * @return {@code true} if the effects include removing the node, {@code false} otherwise.
      */
     protected abstract boolean processNode(Node node, BlockT state, GraphEffectList effects, FixedWithNextNode lastFixedNode);
+
+    protected void handleScalarization(Node node, BlockT state, GraphEffectList effects, FixedWithNextNode lastFixedNode) {
+    }
 
     @Override
     protected BlockT merge(HIRBlock merge, List<BlockT> states) {

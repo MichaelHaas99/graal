@@ -41,20 +41,15 @@ import org.graalvm.word.LocationIdentity;
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
-import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
-import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
-import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
-import jdk.graal.compiler.nodes.ParameterNode;
 import jdk.graal.compiler.nodes.PhiNode;
-import jdk.graal.compiler.nodes.PiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -63,9 +58,7 @@ import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
-import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.ArrayLengthNode;
-import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.LoadIndexedNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
@@ -78,12 +71,10 @@ import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
 import jdk.graal.compiler.options.OptionValues;
-import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
@@ -123,9 +114,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         boolean deleted = false;
         if (node instanceof LoadFieldNode loadFieldNode) {
             deleted = processLoadField((LoadFieldNode) node, state, effects);
-            if (!deleted) {
-                tryAssociateAlias(loadFieldNode, state, effects, loadFieldNode.next(), false);
-            }
         } else if (node instanceof StoreFieldNode storeFieldNode) {
             deleted = processStoreField(storeFieldNode, state, effects);
         } else if (node instanceof LoadIndexedNode) {
@@ -140,8 +128,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             deleted = processUnsafeLoad((RawLoadNode) node, state, effects);
         } else if (node instanceof RawStoreNode) {
             deleted = processUnsafeStore((RawStoreNode) node, state, effects);
-        } else if (node instanceof ConstantNode constantNode) {
-            tryAssociateAlias(constantNode, state, effects, lastFixedNode.next(), false);
         } else if (MemoryKill.isSingleMemoryKill(node)) {
             COUNTER_MEMORYCHECKPOINT.increment(node.getDebug());
             LocationIdentity identity = ((SingleMemoryKill) node).getKilledLocationIdentity();
@@ -151,42 +137,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
-        } else if (node instanceof PiNode piNode) {
-            // an OSR node will be casted speculatively, as its stamp is always object
-            tryAssociateAlias(piNode, state, effects, lastFixedNode.next(), true);
-        } else if (node instanceof ParameterNode param) {
-            ResolvedJavaMethod method = cfg.graph.method();
-            if (!cfg.graph.isSubstitution() && method != null) {
-                tryAssociateAlias(param, state, effects, lastFixedNode.next(), method.isConstructor() && param.index() == 0);
-            }
-
-        }
-        if (node instanceof Invoke invoke) {
-            ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
-            if (targetMethod != null && targetMethod.isConstructor() && invoke instanceof FixedWithNextNode fixedWithNextNode) {
-                // TODO: how can we insert this node after a WithException node?
-                FixedNode insertBefore = fixedWithNextNode.next();
-                ValueNode receiver = invoke.callTarget().arguments().first();
-                // TODO: avoid insertion of anchor if no scalarization node will be created
-                ValueAnchorNode anchor = new ValueAnchorNode();
-                effects.addFixedNodeBefore(anchor, insertBefore);
-                tryScalarizeWithReset(receiver, state, effects, null, insertBefore, anchor, false, true);
-            } else if (targetMethod != null && !GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                tryAssociateAlias(invoke.asNode(), state, effects, null, false);
-            }
-        }
-        if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
-            FixedNode insertBefore = lastFixedNode.next();
-            for (ValueNode value : multiValue.getFieldValues()) {
-                tryAssociateAlias(value, state, effects, insertBefore, false);
-            }
-        }
-
-        if (node instanceof FinalFieldBarrierNode finalFieldBarrierNode) {
-            ValueAnchorNode anchor = new ValueAnchorNode();
-            FixedNode insertBefore = finalFieldBarrierNode.next();
-            effects.addFixedNodeBefore(anchor, insertBefore);
-            tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, anchor, false, true);
         }
 
         if (deleted) {
