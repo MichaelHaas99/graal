@@ -274,18 +274,13 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 // TODO: how can we insert this node after a WithException node?
                 FixedNode insertBefore = fixedWithNextNode.next();
                 ValueNode receiver = invoke.callTarget().arguments().first();
-                // TODO: avoid insertion of anchor if no scalarization node will be created
-                ValueAnchorNode anchor = new ValueAnchorNode();
-                effects.addFixedNodeBefore(anchor, insertBefore);
-                tryScalarizeWithReset(receiver, state, effects, null, insertBefore, anchor, false, true);
+                tryScalarizeWithReset(receiver, state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
             } else if (targetMethod != null && !GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
                 tryAssociateAlias(invoke.asNode(), state, effects, null, false);
             }
         } else if (node instanceof FinalFieldBarrierNode finalFieldBarrierNode) {
-            ValueAnchorNode anchor = new ValueAnchorNode();
             FixedNode insertBefore = finalFieldBarrierNode.next();
-            effects.addFixedNodeBefore(anchor, insertBefore);
-            tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, anchor, false, true);
+            tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
         } else if (node instanceof ConstantNode constantNode) {
             tryAssociateAlias(constantNode, state, effects, lastFixedNode.next(), false);
         }
@@ -2290,6 +2285,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (scalarizationNode != null) {
+                if (guard != null) {
+                    tool.ensureAdded(guard.asNode());
+                }
                 // TODO: sth wrong with effects, as this node is inserted before this effect
                 // sometimes
                 tool.ensureAdded(scalarizationNode);
