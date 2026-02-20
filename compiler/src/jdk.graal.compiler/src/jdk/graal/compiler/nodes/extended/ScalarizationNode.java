@@ -85,7 +85,8 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
             return Pair.create(null, new ReadMultiValueNode.MultiValues(oop, fieldValues, nonNull));
         }
 
-        if (InlineTypeUtil.unproxify(object, tool) instanceof InlineTypeNode inlineTypeNode) {
+        // TODO: make sure this is not executed during PEA
+        if (tool != null && InlineTypeUtil.unproxify(object, tool) instanceof InlineTypeNode inlineTypeNode) {
             boolean equalStamps = object.stamp(NodeView.DEFAULT).equals(inlineTypeNode.stamp(NodeView.DEFAULT));
             ValueNode oop = equalStamps ? inlineTypeNode : object;
             ValueNode nonNull = inlineTypeNode.getNonNull();

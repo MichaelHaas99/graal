@@ -2241,15 +2241,17 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (scalarizationNode != null) {
-                tool.addNode(scalarizationNode);
+                // TODO: sth wrong with effects, as this node is inserted before this effect
+                // sometimes
+                tool.ensureAdded(scalarizationNode);
             }
 
-            tool.addNode(multiValues.nonNull());
+            tool.ensureAdded(multiValues.nonNull());
             nonNull = multiValues.nonNull();
             for (int j = 0; j < fieldsToLoad.length; j++) {
                 int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
                 ValueNode value = multiValues.fieldValues()[index];
-                tool.addNode(value);
+                tool.ensureAdded(value);
                 loadedFieldValues[loadedFieldValuesIndex++] = value;
                 if (StampTool.isNullableInlineType(value, tool.getValhallaOptionsProvider())) {
                     createAliasForValueObject(value, state, false);
@@ -2315,7 +2317,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         getObjectState(state, node).escape(node);
         tool.setIsLarval(virtualObject, isLarval);
         ValueNode nonNull = ConditionalNode.create(IsNullNode.create(node), ConstantNode.forInt(0), ConstantNode.forInt(1), NodeView.DEFAULT);
-        tool.addNode(nonNull);
+        tool.ensureAdded(nonNull);
         state.getObjectState(virtualObject).setNonNull(nonNull);
     }
 
