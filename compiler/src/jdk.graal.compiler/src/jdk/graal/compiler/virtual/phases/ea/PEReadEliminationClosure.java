@@ -154,8 +154,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         } else if (node instanceof PiNode piNode) {
             // an OSR node will be casted speculatively, as its stamp is always object
             tryAssociateAlias(piNode, state, effects, lastFixedNode.next(), true);
-        } else if (node instanceof ParameterNode param && !(!cfg.graph.isSubstitution() && cfg.graph.method().isConstructor() && param.index() == 0)) {
-            tryAssociateAlias(param, state, effects, lastFixedNode.next(), false);
+        } else if (node instanceof ParameterNode param) {
+            ResolvedJavaMethod method = cfg.graph.method();
+            if (!cfg.graph.isSubstitution() && method != null) {
+                tryAssociateAlias(param, state, effects, lastFixedNode.next(), method.isConstructor() && param.index() == 0);
+            }
+
         }
         if (node instanceof Invoke invoke) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
@@ -166,7 +170,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 // TODO: avoid insertion of anchor if no scalarization node will be created
                 ValueAnchorNode anchor = new ValueAnchorNode();
                 effects.addFixedNodeBefore(anchor, insertBefore);
-                tryScalarizeWithAlias(receiver, state, effects, null, insertBefore, anchor, false, true);
+                tryScalarizeWithReset(receiver, state, effects, null, insertBefore, anchor, false, true);
             } else if (targetMethod != null && !GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
                 tryAssociateAlias(invoke.asNode(), state, effects, null, false);
             }
@@ -182,7 +186,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             ValueAnchorNode anchor = new ValueAnchorNode();
             FixedNode insertBefore = finalFieldBarrierNode.next();
             effects.addFixedNodeBefore(anchor, insertBefore);
-            tryScalarizeWithAlias(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, anchor, false, true);
+            tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, anchor, false, true);
         }
 
         if (deleted) {
