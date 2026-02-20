@@ -166,6 +166,7 @@ import jdk.graal.compiler.nodes.java.AtomicReadAndWriteNode;
 import jdk.graal.compiler.nodes.java.ClassIsAssignableFromNode;
 import jdk.graal.compiler.nodes.java.DynamicNewArrayNode;
 import jdk.graal.compiler.nodes.java.DynamicNewArrayWithExceptionNode;
+import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
 import jdk.graal.compiler.nodes.java.InstanceOfDynamicNode;
 import jdk.graal.compiler.nodes.java.InstanceOfNode;
 import jdk.graal.compiler.nodes.java.NewArrayNode;
@@ -1306,6 +1307,10 @@ public class StandardGraphBuilderPlugins {
         r.register(new RequiredInlineOnlyInvocationPlugin("<init>", Receiver.class) {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                // TODO: see https://github.com/openjdk/valhalla/pull/1656
+                if (b.getValhallaOptionsProvider().valhallaEnabled()) {
+                    b.add(new FinalFieldBarrierNode(receiver.get(true)));
+                }
                 /*
                  * Object.<init> is a common instrumentation point so only perform this rewrite if
                  * the current definition is the normal empty method with a single return bytecode.
