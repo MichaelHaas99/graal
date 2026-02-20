@@ -59,7 +59,6 @@ import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
-import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
@@ -155,25 +154,21 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         } else if (node instanceof PiNode piNode) {
             // an OSR node will be casted speculatively, as its stamp is always object
             tryAssociateAlias(piNode, state, effects, lastFixedNode.next(), true);
-        } else if (node instanceof ParameterNode param && !(cfg.graph.method().isConstructor() && param.index() == 0)) {
+        } else if (node instanceof ParameterNode param && !(!cfg.graph.isSubstitution() && cfg.graph.method().isConstructor() && param.index() == 0)) {
             tryAssociateAlias(param, state, effects, lastFixedNode.next(), false);
         }
         if (node instanceof Invoke invoke) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
-            FixedNode insertBefore;
-            if (invoke instanceof FixedWithNextNode withNextNode) {
-                insertBefore = withNextNode.next();
-            } else {
-                insertBefore = ((WithExceptionNode) invoke).next();
-            }
-            if (targetMethod.isConstructor()) {
+            if (targetMethod != null && targetMethod.isConstructor() && invoke instanceof FixedWithNextNode fixedWithNextNode) {
+                // TODO: how can we insert this node after a WithException node?
+                FixedNode insertBefore = fixedWithNextNode.next();
                 ValueNode receiver = invoke.callTarget().arguments().first();
                 // TODO: avoid insertion of anchor if no scalarization node will be created
                 ValueAnchorNode anchor = new ValueAnchorNode();
                 effects.addFixedNodeBefore(anchor, insertBefore);
                 tryScalarizeWithAlias(receiver, state, effects, null, insertBefore, anchor, false, true);
-            } else if (!GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                tryAssociateAlias(invoke.asNode(), state, effects, insertBefore, false);
+            } else if (targetMethod != null && !GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
+                tryAssociateAlias(invoke.asNode(), state, effects, null, false);
             }
         }
         if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
