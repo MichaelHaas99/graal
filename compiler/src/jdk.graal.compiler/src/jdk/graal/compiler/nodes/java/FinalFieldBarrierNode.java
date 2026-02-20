@@ -60,6 +60,10 @@ public class FinalFieldBarrierNode extends FixedWithNextNode implements Virtuali
     @Override
     public void virtualize(VirtualizerTool tool) {
         if (value != null && tool.getAlias(value) instanceof VirtualObjectNode virtualObjectNode) {
+            if (tool.isAllocatedOrNull(virtualObjectNode)) {
+                // TODO: can be removed once the memory model is meet in Object::<init>
+                return;
+            }
             tool.setIsLarval(virtualObjectNode, false);
             tool.delete();
         }
