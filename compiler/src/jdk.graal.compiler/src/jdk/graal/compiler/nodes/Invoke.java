@@ -165,4 +165,10 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
 
         gen.emitInvokeWithScalarizedReturn(this, oop, readMultiValue.toArray(new ReadMultiValueNode[readMultiValue.size()]), nonNull, types);
     }
+
+    @Override
+    default boolean isMultiValue() {
+        ResolvedJavaMethod method = callTarget().targetMethod();
+        return method != null && GraalValhallaServices.hasScalarizedReturn(method) && MultiValue.super.isMultiValue();
+    }
 }

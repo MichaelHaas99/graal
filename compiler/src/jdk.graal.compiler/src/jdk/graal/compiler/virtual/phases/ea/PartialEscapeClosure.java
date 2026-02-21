@@ -104,7 +104,6 @@ import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
-import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -257,38 +256,32 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     @Override
     protected void handleScalarization(Node node, BlockT state, GraphEffectList effects, FixedWithNextNode lastFixedNode) {
-        if (node instanceof LoadFieldNode loadFieldNode) {
-            tryAssociateAlias(loadFieldNode, state, effects, loadFieldNode.next(), false);
-        } else if (node instanceof PiNode piNode) {
+        if (node instanceof PiNode piNode) {
             // an OSR node will be casted speculatively, as its stamp is always object
-            tryAssociateAlias(piNode, state, effects, lastFixedNode.next(), true);
+            tryAssociateAlias(piNode, state, effects, null, true);
         } else if (node instanceof ParameterNode param) {
             ResolvedJavaMethod method = cfg.graph.method();
             if (!cfg.graph.isSubstitution() && method != null) {
-                tryAssociateAlias(param, state, effects, lastFixedNode.next(), method.isConstructor() && param.index() == 0);
+                tryAssociateAlias(param, state, effects, null, method.isConstructor() && param.index() == 0);
             }
 
-        } else if (node instanceof Invoke invoke) {
+        } else if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+            for (ValueNode value : multiValue.getFieldValues()) {
+                tryAssociateAlias(value, state, effects, null, false);
+            }
+        } else if (node instanceof Invoke invoke && !StampTool.isNullableInlineType(invoke.asNode(), tool.getValhallaOptionsProvider())) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
             if (targetMethod != null && targetMethod.isConstructor() && invoke instanceof FixedWithNextNode fixedWithNextNode) {
                 // TODO: how can we insert this node after a WithException node?
                 FixedNode insertBefore = fixedWithNextNode.next();
                 ValueNode receiver = invoke.callTarget().arguments().first();
                 tryScalarizeWithReset(receiver, state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
-            } else if (targetMethod != null && !GraalValhallaServices.hasScalarizedReturn(targetMethod)) {
-                tryAssociateAlias(invoke.asNode(), state, effects, null, false);
             }
         } else if (node instanceof FinalFieldBarrierNode finalFieldBarrierNode) {
             FixedNode insertBefore = finalFieldBarrierNode.next();
             tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
-        } else if (node instanceof ConstantNode constantNode) {
-            tryAssociateAlias(constantNode, state, effects, lastFixedNode.next(), false);
-        }
-        if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
-            FixedNode insertBefore = lastFixedNode.next();
-            for (ValueNode value : multiValue.getFieldValues()) {
-                tryAssociateAlias(value, state, effects, insertBefore, false);
-            }
+        } else if (node instanceof ValueNode valueNode) {
+            tryAssociateAlias(valueNode, state, effects, null, false);
         }
     }
 
