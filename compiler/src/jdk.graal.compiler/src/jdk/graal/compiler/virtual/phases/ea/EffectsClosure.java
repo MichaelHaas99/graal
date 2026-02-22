@@ -274,7 +274,11 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                     LoopExitNode loopExit = (LoopExitNode) node;
                     for (ProxyNode proxy : loopExit.proxies()) {
                         aliases.set(proxy, null);
-                        changed |= processNode(proxy, state, effects, lastFixedNode) && isSignificantNode(node);
+                        boolean lastNodeChanged = processNode(proxy, state, effects, lastFixedNode) && isSignificantNode(node);
+                        if (!lastNodeChanged) {
+                            handleScalarization(proxy, state, effects, lastFixedNode);
+                        }
+                        changed |= lastNodeChanged;
                     }
                     processLoopExit(loopExit, loopEntryStates.get(loopExit.loopBegin()), state, blockEffects.get(block));
                 }
