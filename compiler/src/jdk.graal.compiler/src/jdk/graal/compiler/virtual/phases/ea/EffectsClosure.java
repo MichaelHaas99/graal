@@ -457,7 +457,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             try {
                 BlockT loopEntryState = initialStateRemovedKilledLocations;
                 BlockT lastMergedState = cloneState(initialStateRemovedKilledLocations);
-                processInitialLoopState(loop, lastMergedState);
+                processInitialLoopState(loop, lastMergedState, blockEffects.get(loop.getHeader()));
                 MergeProcessor mergeProcessor = createMergeProcessor(loop.getHeader());
                 /*
                  * Iterative loop processing: we take the predecessor state as the loop's starting
@@ -588,7 +588,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     }
 
     @SuppressWarnings("unused")
-    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, BlockT initialState) {
+    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, BlockT initialState, GraphEffectList effects) {
         // nothing to do
     }
 

@@ -275,9 +275,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             tryAssociateAlias(piNode, state, effects, null, isLarval, null);
         } else if (node instanceof ParameterNode param) {
             ResolvedJavaMethod method = cfg.graph.method();
-            if (!cfg.graph.isSubstitution() && method != null) {
-                tryAssociateAlias(param, state, effects, null, method.isConstructor() && param.index() == 0, null);
-            }
+            boolean isLarval = (method == null || cfg.graph.isSubstitution() || method.isConstructor()) && param.index() == 0;
+            tryAssociateAlias(param, state, effects, null, isLarval, null);
 
         } else if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
             for (ValueNode value : multiValue.getFieldValues()) {
@@ -882,7 +881,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
     }
 
     @Override
-    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, BlockT initialState) {
+    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, BlockT initialState, GraphEffectList effects) {
         for (PhiNode phi : ((LoopBeginNode) loop.getHeader().getBeginNode()).phis()) {
             if (phi.valueAt(0) != null) {
                 ValueNode alias = getAliasAndResolve(initialState, phi.valueAt(0));
@@ -891,6 +890,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                     addVirtualAlias(virtual, phi);
                 } else {
                     aliases.set(phi, null);
+                    tryAssociateAlias(phi, initialState, effects, null, false, null);
                 }
             }
         }

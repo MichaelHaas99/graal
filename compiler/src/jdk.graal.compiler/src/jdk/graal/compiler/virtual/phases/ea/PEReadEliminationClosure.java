@@ -311,8 +311,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
 
     @SuppressWarnings("unchecked")
     @Override
-    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, PEReadEliminationBlockState initialState) {
-        super.processInitialLoopState(loop, initialState);
+    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, PEReadEliminationBlockState initialState, GraphEffectList effects) {
+        super.processInitialLoopState(loop, initialState, effects);
 
         if (!initialState.getReadCache().isEmpty()) {
             EconomicMap<ValueNode, Pair<ValueNode, Object>> firstValueSet = null;
