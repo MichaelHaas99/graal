@@ -2197,9 +2197,15 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             if (value.isAlive() && !aliases.isNew(value)) {
                 ValueNode result = aliases.get(value);
                 if (result != null) {
-                    ValueNode result2 = scalarizationAliases.get(result);
-                    if (result2 != null) {
-                        return result2;
+                    if (result.isAlive() && !aliases.isNew(result)) {
+                        ValueNode temp = aliases.get(result);
+                        if (temp != null) {
+                            result = temp;
+                        }
+                    }
+                    ValueNode temp = scalarizationAliases.get(result);
+                    if (temp != null) {
+                        return temp;
                     }
                     return result;
                 }
