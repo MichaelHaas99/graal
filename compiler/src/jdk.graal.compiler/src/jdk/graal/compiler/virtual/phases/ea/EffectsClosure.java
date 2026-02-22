@@ -53,6 +53,7 @@ import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
+import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -63,6 +64,7 @@ import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.cfg.ControlFlowGraph;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.BoxNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
@@ -269,7 +271,18 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             Iterable<? extends Node> nodes = schedule != null ? schedule.getBlockToNodesMap().get(block) : block.getNodes();
             for (Node node : nodes) {
                 // reset the aliases (may be non-null due to iterative loop processing)
-                aliases.set(node, null);
+                if (!(node instanceof ReadMultiValueNode)) {
+                    aliases.set(node, null);
+                }
+                if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+                    for (ValueNode value : multiValue.getFieldValues()) {
+                        aliases.set(value, null);
+                    }
+                    ValueNode oop = multiValue.getOop();
+                    if (oop != null) {
+                        aliases.set(oop, null);
+                    }
+                }
                 if (node instanceof LoopExitNode) {
                     LoopExitNode loopExit = (LoopExitNode) node;
                     for (ProxyNode proxy : loopExit.proxies()) {
