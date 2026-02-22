@@ -335,4 +335,7 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> CreateValhallaEntryPointWithGraph = new OptionKey<>(true);
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> CheckNullableVirtualInputs = new OptionKey<>(false);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> CheckAliases = new OptionKey<>(false);
 }
