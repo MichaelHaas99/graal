@@ -306,7 +306,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 VirtualObjectNode virtual = virtualObjects.get(i);
                 initialState.materializeBefore(materializeBefore, virtual, effects);
                 ObjectState objectState = initialState.getObjectState(i);
-                tryAssociateAlias(objectState.getMaterializedValue(), initialState, effects, null, objectState.isLarval(), null);
+                scalarizationAliases.put(objectState.getMaterializedValue(), virtual);
             }
         }
     }
@@ -670,7 +670,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             VirtualObjectNode virtual = virtualObjects.get(object);
             state.materializeBefore(materializeBefore, virtual, effects);
             objectState = state.getObjectState(object);
-            tryAssociateAlias(objectState.getMaterializedValue(), state, effects, null, objectState.isLarval(), null);
+            scalarizationAliases.put(objectState.getMaterializedValue(), virtual);
 
             if (requiresStrictLockOrder && materializedAcquiredLocks && objectState.hasLocks()) {
                 materializeVirtualLocksBefore(state, materializeBefore, effects, counter, objectState.getLockDepth());
