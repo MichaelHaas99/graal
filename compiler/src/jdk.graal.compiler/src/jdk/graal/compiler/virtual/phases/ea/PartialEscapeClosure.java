@@ -2357,8 +2357,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 if (guard != null) {
                     tool.addNode(guard.asNode());
                 }
-                // TODO: sth wrong with effects, as this node is inserted before this effect
-                // sometimes
                 tool.addNode(scalarizationNode);
             }
 
@@ -2402,7 +2400,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 int oldLength = visited.size();
                 ValueNode entry = entryState[i];
                 if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, null, visited, guard, true, stopAtVirtual);
+                    VirtualInstanceNode newNode = scalarizeValueObject(entry, state, null, visited, null, true, stopAtVirtual);
                     if(newNode != null) {
                         entryState[i] = newNode;
                     }
