@@ -2396,7 +2396,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
 
         if (recursive && !StampTool.isPointerAlwaysNull(node)) {
-            for (int i =0; i < entryState.length; i++) {
+            for (int i = 0; i < entryState.length; i++) {
                 int oldLength = visited.size();
                 ValueNode entry = entryState[i];
                 if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
@@ -2423,18 +2423,17 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         } else {
             virtualObject = (VirtualInstanceNode) cached;
         }
-
-        ResolvedJavaField[] fields = virtualObject.getFields();
-        ValueNode[] entryState = new ValueNode[fields.length];
-        for (int i = 0; i < entryState.length; i++) {
-            entryState[i] = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(fields[i].getType()), cfg.graph);
+        tool.ensureAdded(virtualObject);
+        int id = virtualObject.getObjectId();
+        if (id == -1) {
+            id = virtualObjects.size();
+            virtualObjects.add(virtualObject);
+            virtualObject.setObjectId(id);
         }
-        tool.createVirtualObject(virtualObject, entryState, Collections.emptyList(), null, false);
-        // set to larval to loose entries, TODO: directly create escaped state
-        tool.setIsLarval(virtualObject, true);
-        this.addVirtualAlias(virtualObject, node);
-        getObjectState(state, node).escape(node);
-        tool.setIsLarval(virtualObject, isLarval);
+        state.addObject(id, new ObjectState(null, Collections.emptyList(), false, node, null, true));
+        addVirtualAlias(virtualObject, node);
+        getObjectState(state, node).setIsLarval(isLarval);
+        GraalError.guarantee(!getObjectState(state, node).isVirtual(), "object state created for alias should not be virtual");
     }
 
     protected VirtualInstanceNode tryScalarizeForMerge(ValueNode node, PartialEscapeBlockState<?> state, GraphEffectList effects, ResolvedJavaType type) {
