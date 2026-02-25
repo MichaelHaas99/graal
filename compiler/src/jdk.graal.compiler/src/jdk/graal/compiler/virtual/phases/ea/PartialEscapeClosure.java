@@ -2366,10 +2366,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
                 ValueNode value = multiValues.fieldValues()[index];
                 tool.addNode(value);
-                loadedFieldValues[loadedFieldValuesIndex++] = value;
                 if (StampTool.isNullableInlineType(value, tool.getValhallaOptionsProvider())) {
                     createAliasForValueObject(value, state, false, null);
                 }
+                loadedFieldValues[loadedFieldValuesIndex++] = getAlias(value);
+                ;
             }
 
             // save the loaded values in the entry state of the new virtual object
