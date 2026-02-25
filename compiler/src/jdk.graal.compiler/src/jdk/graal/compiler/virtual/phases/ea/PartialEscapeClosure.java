@@ -87,6 +87,7 @@ import jdk.graal.compiler.nodes.java.AccessMonitorNode;
 import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
+import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.NodeWithState;
@@ -303,7 +304,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             FixedNode insertBefore = finalFieldBarrierNode.next();
             tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
         } else if (node instanceof ValueNode valueNode && !(node instanceof ReadMultiValueNode)) {
-            tryAssociateAlias(valueNode, state, effects, null, false, null);
+            // in case NewInstance node was not virtualized
+            boolean isLarval = valueNode instanceof NewInstanceNode newInstanceNode && !newInstanceNode.instanceClass().isIdentity();
+            tryAssociateAlias(valueNode, state, effects, null, isLarval, null);
             if (checkAliases) {
                 GraalError.guarantee(
                                 !StampTool.isNullableInlineType(valueNode, tool.getValhallaOptionsProvider()) ||
@@ -803,25 +806,18 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
 
     public static boolean updateStatesForMaterialized(PartialEscapeBlockState<?> state, VirtualObjectNode virtual, ValueNode materializedValue) {
         // update all existing states with the newly materialized object
-        return updateStates(state, virtual, materializedValue, false);
+        return updateStates(state, virtual, materializedValue);
     }
 
-    // TODO: remove this function, should not be necessary anymore as all value objects are aliased
-    // now
-    public static boolean updateStatesForScalarized(PartialEscapeBlockState<?> state, VirtualObjectNode virtual, ValueNode materializedValue) {
-        // update all existing states with the newly virtual object
-        return updateStates(state, virtual, materializedValue, true);
-    }
-
-    public static boolean updateStates(PartialEscapeBlockState<?> state, VirtualObjectNode virtual, ValueNode materializedValue, boolean scalarized) {
+    public static boolean updateStates(PartialEscapeBlockState<?> state, VirtualObjectNode virtual, ValueNode materializedValue) {
         boolean change = false;
         for (int i = 0; i < state.getStateCount(); i++) {
             ObjectState objState = state.getObjectStateOptional(i);
             if (objState != null && objState.isVirtual()) {
                 ValueNode[] entries = objState.getEntries();
                 for (int i2 = 0; i2 < entries.length; i2++) {
-                    if (entries[i2] == (scalarized ? materializedValue : virtual)) {
-                        state.setEntry(i, i2, (scalarized ? virtual : materializedValue));
+                    if (entries[i2] == virtual) {
+                        state.setEntry(i, i2, materializedValue);
                         change = true;
                     }
                 }
@@ -2396,7 +2392,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 state.setEntries(objectId, entryState);
                 state.setNonNull(objectId, nonNull);
                 state.setIsLarval(objectId, false);
-                updateStatesForScalarized(state, newVirtualObjectNode, node);
             } else {
                 tool.createVirtualObject(newVirtualObjectNode, entryState, Collections.emptyList(), node.getNodeSourcePosition(), false, node, nonNull, true);
             }
