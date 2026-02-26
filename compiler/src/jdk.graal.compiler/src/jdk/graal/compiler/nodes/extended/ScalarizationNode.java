@@ -107,6 +107,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        tool.tryScalarize(object);
         if (tool.getAlias(object) instanceof VirtualObjectNode virtualObjectNode) {
             tool.replaceWithVirtual(virtualObjectNode);
         }

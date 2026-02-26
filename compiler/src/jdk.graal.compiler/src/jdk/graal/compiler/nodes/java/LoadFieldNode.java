@@ -225,6 +225,7 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        tool.tryScalarize(object);
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode virtualObjectNode) {
             int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(field());

@@ -85,7 +85,6 @@ import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.AccessMonitorNode;
 import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
-import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MonitorEnterNode;
 import jdk.graal.compiler.nodes.java.NewInstanceNode;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
@@ -247,19 +246,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return false;
         } else if (node instanceof Invoke) {
             processNodeInternal(((Invoke) node).callTarget(), state, effects, lastFixedNode);
-        }
-        if (node instanceof LoadFieldNode loadFieldNode) {
-            ValueNode object = getAlias(loadFieldNode.object());
-            tryScalarizeWithReset(object, state, effects, null, loadFieldNode, null, false, true);
-            ValueNode alias = getAlias(object);
-            if (checkAliases) {
-                GraalError.guarantee(
-                                object == null || !StampTool.isNullableInlineType(object, tool.getValhallaOptionsProvider()) ||
-                                                alias instanceof VirtualObjectNode virtual && state.getObjectState(virtual).isVirtual(),
-                                "missing alias " + object);
-            }
-        } else if (node instanceof ScalarizationNode scalarizationNode) {
-            tryScalarizeWithReset(scalarizationNode.object(), state, effects, null, lastFixedNode.next(), null, false, true);
         }
         return processNodeInternal(node, state, effects, lastFixedNode);
     }
