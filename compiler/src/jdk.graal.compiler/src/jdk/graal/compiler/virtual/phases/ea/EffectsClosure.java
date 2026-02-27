@@ -89,7 +89,6 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
      * loop processing the alias of a node may be changed to another value.
      */
     protected NodeMap<ValueNode> aliases;
-    protected EconomicMap<ValueNode, ValueNode> scalarizationAliases = EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
 
     /**
      * This set allows for a quick check whether a node has inputs that were replaced with "scalar"

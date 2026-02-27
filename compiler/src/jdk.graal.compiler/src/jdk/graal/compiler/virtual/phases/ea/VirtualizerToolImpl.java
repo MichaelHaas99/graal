@@ -118,6 +118,10 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public void tryScalarize(ValueNode node) {
+        ValueNode alias = closure.getAlias(node);
+        if (node == null || !(alias instanceof VirtualInstanceNode) && !alias.isAlive()) {
+            return;
+        }
         closure.tryScalarizeWithoutReset(node, state, null, null, false, true);
     }
 
