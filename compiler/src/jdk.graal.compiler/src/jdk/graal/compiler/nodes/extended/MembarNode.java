@@ -46,7 +46,7 @@ import jdk.vm.ci.code.MemoryBarriers;
  * Creates a memory barrier.
  */
 @NodeInfo(nameTemplate = "Membar#{p#location/s}", allowedUsageTypes = Memory, cycles = CYCLES_2, size = SIZE_2)
-public final class MembarNode extends FixedWithNextNode implements LIRLowerable, SingleMemoryKill {
+public final class MembarNode extends FixedWithNextNode implements LIRLowerable, SingleMemoryKill, GuardingNode {
 
     /**
      * Describes how in the generated code ordering must be constrained. Note compiler optimization

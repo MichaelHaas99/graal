@@ -109,6 +109,7 @@ public class HighTier extends BaseTier<HighTierContext> {
 
         if (GraalOptions.PartialEscapeAnalysis.getValue(options)) {
             appendPhase(new FinalPartialEscapePhase(true, canonicalizer, null, options));
+            ;
         }
 
         if (GraalOptions.OptReadElimination.getValue(options)) {

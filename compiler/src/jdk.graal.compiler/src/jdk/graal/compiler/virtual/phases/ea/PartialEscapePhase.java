@@ -140,6 +140,14 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
             if (readElimination || graph.hasVirtualizableAllocation()) {
                 try (DebugCloseable ignored = graph.getOptimizationLog().enterPartialEscapeAnalysis()) {
                     runAnalysis(graph, context);
+                    /*
+                     * In case there is no read elimination scalarization should already work with
+                     * one iteration. In case there is read elimination we work with scalar aliases
+                     * in the first iteration and scalarize in the second one.
+                     */
+                    if (!readElimination || maxIterations > 1) {
+                        new PartialEscapePhaseVerificationPhase().apply(graph, context);
+                    }
                 }
             }
         }

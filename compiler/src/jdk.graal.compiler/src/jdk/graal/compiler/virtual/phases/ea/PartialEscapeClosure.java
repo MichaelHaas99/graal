@@ -81,7 +81,6 @@ import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
-import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.AbstractNewObjectNode;
 import jdk.graal.compiler.nodes.java.AccessMonitorNode;
 import jdk.graal.compiler.nodes.java.FinalFieldBarrierNode;
@@ -276,11 +275,11 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 // TODO: how can we insert this node after a WithException node?
                 FixedNode insertBefore = fixedWithNextNode.next();
                 ValueNode receiver = invoke.callTarget().arguments().first();
-                tryScalarizeWithReset(receiver, state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
+                tryScalarizeWithReset(receiver, state, effects, null, insertBefore, invoke, false, true);
             }
         } else if (node instanceof FinalFieldBarrierNode finalFieldBarrierNode) {
             FixedNode insertBefore = finalFieldBarrierNode.next();
-            tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, new ValueAnchorNode(), false, true);
+            tryScalarizeWithReset(finalFieldBarrierNode.getValue(), state, effects, null, insertBefore, finalFieldBarrierNode, false, true);
         } else if (node instanceof ValueNode valueNode && !(node instanceof ReadMultiValueNode)) {
             // in case NewInstance node was not virtualized
             boolean isLarval = valueNode instanceof NewInstanceNode newInstanceNode && !newInstanceNode.instanceClass().isIdentity();
@@ -2305,9 +2304,6 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (scalarizationNode != null) {
-                if (guard != null) {
-                    tool.addNode(guard.asNode());
-                }
                 tool.addNode(scalarizationNode);
             }
 
