@@ -136,7 +136,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
             }
             ValueNode[] newFieldValues = newMultiValues.fieldValues();
             for (ReadMultiValueNode fieldValue : getFieldValues()) {
-                fieldValue.replaceAndDelete(graph.addOrUnique(newFieldValues[fieldValue.getIndex() - 1]));
+                fieldValue.replaceAndDelete(graph.addOrUnique(newFieldValues[fieldValue.getFieldIndex()]));
             }
             tool.addToWorkList(objectUsages);
             // add to worklist again in case it has no usages now

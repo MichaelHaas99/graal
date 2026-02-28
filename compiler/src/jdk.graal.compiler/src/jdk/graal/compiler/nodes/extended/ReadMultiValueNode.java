@@ -47,6 +47,11 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return index;
     }
 
+    public int getFieldIndex() {
+        assert !isNonNull && !isOop : "should only be called on field values";
+        return index - 1;
+    }
+
     public MultiValue getMultiValueNode() {
         return multiValueNode;
     }
@@ -125,7 +130,7 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
              * The ReadMultiValue node with index is the oop. Field values start with index 1, so we
              * need to subtract 1. The nonNull info has the highest index.
              */
-            tool.replaceWith(tool.getEntry(virtualMultiValue, getIndex() - 1));
+            tool.replaceWith(tool.getEntry(virtualMultiValue, getFieldIndex()));
         }
 
     }
