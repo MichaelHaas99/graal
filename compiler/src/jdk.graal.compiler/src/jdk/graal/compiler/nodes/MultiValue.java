@@ -40,7 +40,7 @@ public interface MultiValue extends ValueNodeInterface {
 
     default ReadMultiValueNode getFieldValue(int index) {
         for (ReadMultiValueNode fieldValue : getFieldValues()) {
-            if (fieldValue.getIndex() == index + 1) {
+            if (fieldValue.getFieldIndex() == index) {
                 return fieldValue;
             }
         }
