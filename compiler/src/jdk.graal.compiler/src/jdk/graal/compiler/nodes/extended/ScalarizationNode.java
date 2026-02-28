@@ -149,7 +149,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
         ArrayList<ResolvedJavaField> fields = new ArrayList<>(fieldValues.size());
         ResolvedJavaField[] instanceFields = this.getType().getInstanceFields(true);
         for (int i = 0; i < instanceFields.length; i++) {
-            ValueNode value = getFieldValue(i + 1);
+            ValueNode value = getFieldValue(i);
             if (value != null) {
                 fields.add(instanceFields[i]);
             }
@@ -167,7 +167,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
 
         int index = 1;
         for (int i = 0; i < instanceFields.length; i++) {
-            ValueNode value = getFieldValue(i + 1);
+            ValueNode value = getFieldValue(i);
             if (value != null) {
                 value.replaceAndDelete(scalarizedValues[index++]);
             }
