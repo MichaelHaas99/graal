@@ -58,6 +58,7 @@ import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.DebugCloseable;
 import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
+import jdk.graal.compiler.hotspot.HotspotGraalValhallaServices;
 import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodes.CompressionNode.CompressionOp;
 import jdk.graal.compiler.nodes.ComputeObjectAddressNode;
@@ -170,8 +171,10 @@ import jdk.graal.compiler.phases.util.Providers;
 import jdk.graal.compiler.replacements.nodes.BinaryMathIntrinsicNode;
 import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
 import jdk.graal.compiler.replacements.nodes.UnaryMathIntrinsicNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
@@ -485,6 +488,40 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode object = loadField.isStatic() ? staticFieldBase(graph, field) : loadField.object();
         object = createNullCheckedValue(object, loadField, tool);
         Stamp loadStamp = loadStamp(loadField.stamp(NodeView.DEFAULT), getStorageKind(field));
+        if (field.isFlat()) {
+            GraalError.guarantee(loadField.isMultiValue(), "should be multi value");
+            ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
+            int sourceOffset = field.getOffset();
+            ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
+            for (int i = 0; i < innerFields.length; i++) {
+                ValueNode readMultiValue = loadField.getFieldValue(i);
+                if (readMultiValue == null) {
+                    continue;
+                }
+                ResolvedJavaField innerField = innerFields[i];
+                // TODO: make interface non Hotspot specific
+                int innerFieldOffset = innerField.getOffset() - HotspotGraalValhallaServices.payloadOffset((HotSpotResolvedObjectType) fieldType);
+
+                // holder is directly embedded in other object, use the offset without the header
+                LoadFieldNode newLoadField = LoadFieldNode.create(graph.getAssumptions(), object,
+                                GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, sourceOffset + innerFieldOffset), field.getDeclaringClass()),
+                                MemoryOrderMode.getMemoryOrder(field));
+                graph.add(newLoadField);
+                graph.addBeforeFixed(loadField, newLoadField);
+                readMultiValue.replaceAndDelete(newLoadField);
+                newLoadField.lower(tool);
+            }
+            ValueNode oop = loadField.getOop();
+            if (oop != null) {
+                oop.replaceAndDelete(ConstantNode.defaultForKind(JavaKind.Object, graph));
+            }
+            ValueNode nonNull = loadField.getNonNull();
+            if (nonNull != null) {
+                nonNull.replaceAndDelete(ConstantNode.forInt(1, graph));
+            }
+            graph.removeFixed(loadField);
+            return;
+        }
 
         AddressNode address = createFieldAddress(graph, object, field);
 

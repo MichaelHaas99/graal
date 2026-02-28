@@ -86,6 +86,7 @@ import jdk.graal.compiler.nodes.extended.ForeignCall;
 import jdk.graal.compiler.nodes.extended.GuardedNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.java.ExceptionObjectNode;
+import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
 import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.MemoryMapNode;
@@ -456,11 +457,13 @@ public abstract class LoweringPhase extends BasePhase<CoreProviders> {
                                 }
 
                             } else if (wasMemoryAccessBefore) {
-                                if (!access.getLocationIdentity().overlaps(((MemoryAccess) justLoweredNode).getLocationIdentity())) {
-                                    GraalError.shouldNotReachHere(
-                                                    String.format("Node %s was a memory access (%s) but lowered to a memory access %s %s", justLoweredNode,
-                                                                    ((MemoryAccess) justLoweredNode).getLocationIdentity(),
-                                                                    newNodeAfterLowering, access.getLocationIdentity())); // ExcludeFromJacocoGeneratedReport
+                                if (!(justLoweredNode instanceof LoadFieldNode load && load.isMultiValue())) {
+                                    if (!access.getLocationIdentity().overlaps(((MemoryAccess) justLoweredNode).getLocationIdentity())) {
+                                        GraalError.shouldNotReachHere(
+                                                        String.format("Node %s was a memory access (%s) but lowered to a memory access %s %s", justLoweredNode,
+                                                                        ((MemoryAccess) justLoweredNode).getLocationIdentity(),
+                                                                        newNodeAfterLowering, access.getLocationIdentity())); // ExcludeFromJacocoGeneratedReport
+                                    }
                                 }
                             } else {
                                 GraalError.shouldNotReachHere(String.format("Node %s was not a memory access but lowered to a memory access %s", justLoweredNode, newNodeAfterLowering)); // ExcludeFromJacocoGeneratedReport
