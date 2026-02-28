@@ -1,15 +1,12 @@
 package jdk.graal.compiler.nodes.extended;
 
-import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_0;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_8;
-import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_8;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.type.Stamp;
@@ -19,7 +16,6 @@ import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.graph.NodeInputList;
-import jdk.graal.compiler.graph.spi.NodeWithIdentity;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.FixedNode;
@@ -28,7 +24,6 @@ import jdk.graal.compiler.nodes.Invoke;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.WithExceptionNode;
-import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.Simplifiable;
@@ -240,71 +235,4 @@ public class InlineTypeNode extends FixedWithNextNode implements Lowerable, Sing
             tool.replaceWithVirtual(virtualObject);
         }
     }
-
-    /**
-     * A placeholder for the {@link InlineTypeNode}. This is useful in case we don't know during
-     * parsing if we need to scalarize a value object. E.g. a method can be inlined during {@code
-     * InliningPhase} making the scalarization graph for a value object being passed as argument
-     * obsolete. The phase {@code ValhallaCallingConventionPhase} makes sure that this node is
-     * either replaced by an {@code InlineTypeNode} or by its previous value {@link #object}.
-     */
-    @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
-    public static class Placeholder extends FixedWithNextNode implements NodeWithIdentity {
-        public static final NodeClass<Placeholder> TYPE = NodeClass.create(Placeholder.class);
-        @Input ValueNode object;
-        private final ResolvedJavaType type;
-
-        public ValueNode object() {
-            return object;
-        }
-
-        public MethodCallTargetNode callTarget() {
-            for (Node usage : usages()) {
-                if (usage instanceof MethodCallTargetNode methodCallTargetNode && methodCallTargetNode.arguments().contains(this)) {
-                    return methodCallTargetNode;
-                }
-            }
-            throw GraalError.shouldNotReachHere("no call target found");
-        }
-
-        protected Placeholder(NodeClass<? extends Placeholder> c, ValueNode object, ResolvedJavaType type, boolean nonNull) {
-            super(c, StampFactory.forDeclaredType(null, type, nonNull).getTrustedStamp());
-            this.object = object;
-            this.type = type;
-        }
-
-        public Placeholder(ValueNode object, ResolvedJavaType type, boolean nonNull) {
-            this(TYPE, object, type, nonNull);
-
-        }
-
-        public ReadMultiValueNode.MultiValues makeReplacement() {
-            StructuredGraph graph = graph();
-            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(object, type, graph.getAssumptions());
-            ScalarizationNode scalarizationNode = pair.getLeft();
-            ReadMultiValueNode.MultiValues multiValues = pair.getRight();
-            if (multiValues.oop() instanceof InlineTypeNode existingInlineTypeNode) {
-                this.replaceAtAllUsages(existingInlineTypeNode, true);
-                multiValues = multiValues.add(graph);
-                graph.removeFixed(this);
-            } else {
-                if (scalarizationNode != null) {
-                    graph.addOrUnique(scalarizationNode);
-                    graph.addBeforeFixed(this, scalarizationNode);
-                }
-                multiValues = multiValues.add(graph);
-                InlineTypeNode inlineTypeNode = new InlineTypeNode(type, object, multiValues.fieldValues(), multiValues.nonNull(), true);
-                graph.addOrUniqueWithInputs(inlineTypeNode);
-                graph.replaceFixedWithFixed(this, inlineTypeNode);
-            }
-            return multiValues;
-
-        }
-
-        public void undo() {
-            this.replaceAtUsages(object);
-            graph().removeFixed(this);
-        }
-    }
-
 }

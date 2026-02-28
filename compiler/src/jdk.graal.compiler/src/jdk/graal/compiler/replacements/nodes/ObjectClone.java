@@ -99,6 +99,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
     @Override
     default void virtualize(VirtualizerTool tool) {
         ValueNode original = getObject();
+        tool.tryScalarize(original);
         ValueNode originalAlias = tool.getAlias(original);
         NodeSourcePosition sourcePosition = original.getNodeSourcePosition();
         if (originalAlias instanceof VirtualObjectNode originalVirtual) {

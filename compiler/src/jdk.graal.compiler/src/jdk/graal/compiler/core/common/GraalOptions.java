@@ -326,8 +326,8 @@ public final class GraalOptions {
                     + " express it in faster, equivalent, arithmetic.", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptimizeDiv = new OptionKey<>(true);
 
-    @Option(help = "Virtualize from an materialized inline object during PEA", type = OptionType.Debug)
-    public static final OptionKey<Boolean> VirtualizeFromInlineObject = new OptionKey<>(true);
+    @Option(help = "Scalarize a value object during PEA", type = OptionType.Debug)
+    public static final OptionKey<Boolean> ScalarizeValueObject = new OptionKey<>(true);
     @Option(help = "Defines how deep we are allowed scalarize from an materialized inline object during PEA", type = OptionType.Debug)
     public static final OptionKey<Integer> ScalarizationDepth = new OptionKey<>(10);
 

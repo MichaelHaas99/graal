@@ -3,6 +3,8 @@ package jdk.graal.compiler.nodes.extended;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_0;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_0;
 
+import java.util.Map;
+
 import jdk.graal.compiler.core.common.type.Stamp;
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.Node;
@@ -28,10 +30,10 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code ReadMultiValueNode} represents one returned value from a MultiValue. A MultiValue in
- * this context is a node which returns a nullable scalarized inline object. E.g. an
- * {@link InvokeNode} which has a scalarized return can return multiple values in registers.
+ * this context is a node which returns a scalarized value object. E.g. an {@link InvokeNode} which
+ * has a scalarized return can return multiple values in registers.
  */
-@NodeInfo(nameTemplate = "ReadMultiValue#{p#index}", cycles = CYCLES_0, size = SIZE_0)
+@NodeInfo(nameTemplate = "Read#{p#location/s}", cycles = CYCLES_0, size = SIZE_0)
 public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Canonicalizable, Virtualizable {
     public static final NodeClass<ReadMultiValueNode> TYPE = NodeClass.create(ReadMultiValueNode.class);
 
@@ -157,5 +159,12 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
             }
             return new MultiValues(oop, fieldValues, nonNull);
         }
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
+        Map<Object, Object> debugProperties = super.getDebugProperties(map);
+        debugProperties.put("location", isNonNull ? "nonNull" : (isOop ? "oop" : "field(" + (index - 1) + ")"));
+        return debugProperties;
     }
 }

@@ -53,6 +53,7 @@ import jdk.graal.compiler.nodes.LogicConstantNode;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
+import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -63,6 +64,7 @@ import jdk.graal.compiler.nodes.WithExceptionNode;
 import jdk.graal.compiler.nodes.cfg.ControlFlowGraph;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.BoxNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.AllocatedObjectNode;
 import jdk.graal.compiler.nodes.virtual.CommitAllocationNode;
@@ -268,17 +270,35 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             Iterable<? extends Node> nodes = schedule != null ? schedule.getBlockToNodesMap().get(block) : block.getNodes();
             for (Node node : nodes) {
                 // reset the aliases (may be non-null due to iterative loop processing)
-                aliases.set(node, null);
+                if (!(node instanceof ReadMultiValueNode)) {
+                    aliases.set(node, null);
+                }
+                if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+                    for (ValueNode value : multiValue.getFieldValues()) {
+                        aliases.set(value, null);
+                    }
+                    ValueNode oop = multiValue.getOop();
+                    if (oop != null) {
+                        aliases.set(oop, null);
+                    }
+                }
                 if (node instanceof LoopExitNode) {
                     LoopExitNode loopExit = (LoopExitNode) node;
                     for (ProxyNode proxy : loopExit.proxies()) {
                         aliases.set(proxy, null);
-                        changed |= processNode(proxy, state, effects, lastFixedNode) && isSignificantNode(node);
+                        boolean lastNodeChanged = processNode(proxy, state, effects, lastFixedNode) && isSignificantNode(node);
+                        if (!lastNodeChanged) {
+                            handleScalarization(proxy, state, effects, lastFixedNode);
+                        }
+                        changed |= lastNodeChanged;
                     }
                     processLoopExit(loopExit, loopEntryStates.get(loopExit.loopBegin()), state, blockEffects.get(block));
                 }
                 HIRBlock exceptionEdgeToKill = node instanceof WithExceptionNode ? cfg.blockFor(((WithExceptionNode) node).exceptionEdge()) : null;
                 boolean lastNodeChanged = processNode(node, state, effects, lastFixedNode) && isSignificantNode(node);
+                if (!lastNodeChanged) {
+                    handleScalarization(node, state, effects, lastFixedNode);
+                }
                 changed |= lastNodeChanged;
                 if (lastNodeChanged && exceptionEdgeToKill != null) {
                     /*
@@ -342,6 +362,9 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
      * @return {@code true} if the effects include removing the node, {@code false} otherwise.
      */
     protected abstract boolean processNode(Node node, BlockT state, GraphEffectList effects, FixedWithNextNode lastFixedNode);
+
+    protected void handleScalarization(Node node, BlockT state, GraphEffectList effects, FixedWithNextNode lastFixedNode) {
+    }
 
     @Override
     protected BlockT merge(HIRBlock merge, List<BlockT> states) {
@@ -433,7 +456,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
             try {
                 BlockT loopEntryState = initialStateRemovedKilledLocations;
                 BlockT lastMergedState = cloneState(initialStateRemovedKilledLocations);
-                processInitialLoopState(loop, lastMergedState);
+                processInitialLoopState(loop, lastMergedState, blockEffects.get(loop.getHeader()));
                 MergeProcessor mergeProcessor = createMergeProcessor(loop.getHeader());
                 /*
                  * Iterative loop processing: we take the predecessor state as the loop's starting
@@ -564,7 +587,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     }
 
     @SuppressWarnings("unused")
-    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, BlockT initialState) {
+    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, BlockT initialState, GraphEffectList effects) {
         // nothing to do
     }
 

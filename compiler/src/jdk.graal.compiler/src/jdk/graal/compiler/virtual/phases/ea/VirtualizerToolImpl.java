@@ -117,6 +117,15 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public void tryScalarize(ValueNode node) {
+        ValueNode alias = closure.getAlias(node);
+        if (node == null || !(alias instanceof VirtualInstanceNode) && !alias.isAlive()) {
+            return;
+        }
+        closure.tryScalarizeWithoutReset(node, state, null, null, false, true);
+    }
+
+    @Override
     public boolean hasNullOop(VirtualObjectNode virtualObject) {
         ValueNode oop = getOop(virtualObject);
         return oop == null || oop.isNullConstant();
@@ -177,10 +186,8 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
-    public void setUnsetFields(VirtualObjectNode virtualObjectNode, boolean[] unsetFields) {
-        GraalError.guarantee(unsetFields != null, "unsetFields to track larval state should not be null");
-        GraalError.guarantee(unsetFields.length == 0 || virtualObjectNode.entryCount() == unsetFields.length, "unsetFields list does not contain a value for each field");
-        state.setUnsetFields(virtualObjectNode.getObjectId(), unsetFields);
+    public void setIsLarval(VirtualObjectNode virtualObjectNode, boolean setIsLarval) {
+        state.setIsLarval(virtualObjectNode.getObjectId(), setIsLarval);
     }
 
     @Override
@@ -418,7 +425,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
         // don't hold virtual objects as oop, this is necessary when virtualizing the InlineType
         // node
-        ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, getMetaAccess(), current.graph());
+        ValueNode nullPointer = ConstantNode.forConstant(JavaConstant.NULL_POINTER, getMetaAccess(), closure.cfg.graph);
         ValueNode newOop = closure.getAliasAndResolve(state, oop);
         boolean newIsAllocatedOrNull = isAllocatedOrNull;
         if (newOop instanceof VirtualObjectNode virtualOop) {

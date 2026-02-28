@@ -61,7 +61,7 @@ public abstract class EffectsPhase<CoreProvidersT extends CoreProviders> extends
         public abstract void applyEffects();
     }
 
-    private final int maxIterations;
+    protected final int maxIterations;
     protected final CanonicalizerPhase canonicalizer;
     private final boolean unscheduled;
     private final SchedulePhase.SchedulingStrategy strategy;

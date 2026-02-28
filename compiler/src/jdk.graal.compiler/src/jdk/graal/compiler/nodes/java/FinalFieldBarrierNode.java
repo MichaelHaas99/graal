@@ -27,22 +27,25 @@ package jdk.graal.compiler.nodes.java;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_2;
 
+import jdk.graal.compiler.nodes.extended.GuardingNode;
+import org.graalvm.word.LocationIdentity;
+
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.NodeClass;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
-import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.AnchoringNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
 import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
-import org.graalvm.word.LocationIdentity;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 
 @NodeInfo(cycles = CYCLES_2, size = SIZE_2)
-public class FinalFieldBarrierNode extends FixedWithNextNode implements Virtualizable, Lowerable, SingleMemoryKill {
+public class FinalFieldBarrierNode extends FixedWithNextNode implements Virtualizable, Lowerable, SingleMemoryKill, GuardingNode {
     public static final NodeClass<FinalFieldBarrierNode> TYPE = NodeClass.create(FinalFieldBarrierNode.class);
 
     @OptionalInput private ValueNode value;
@@ -58,7 +61,12 @@ public class FinalFieldBarrierNode extends FixedWithNextNode implements Virtuali
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (value != null && tool.getAlias(value) instanceof VirtualObjectNode) {
+        if (value != null && tool.getAlias(value) instanceof VirtualObjectNode virtualObjectNode) {
+            if (tool.isAllocatedOrNull(virtualObjectNode)) {
+                // TODO: can be removed once the memory model is meet in Object::<init>
+                return;
+            }
+            tool.setIsLarval(virtualObjectNode, false);
             tool.delete();
         }
     }

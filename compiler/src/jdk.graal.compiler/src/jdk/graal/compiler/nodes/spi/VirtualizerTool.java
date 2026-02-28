@@ -103,6 +103,8 @@ public interface VirtualizerTool extends CoreProviders {
 
     ValueNode getEntry(VirtualObjectNode virtualObject, int index);
 
+    void tryScalarize(ValueNode node);
+
     /**
      * Checks if the oop stored in the state of the virtual object is a constant null pointer.
      */
@@ -153,11 +155,10 @@ public interface VirtualizerTool extends CoreProviders {
      * necessary when a new value object is created. It is not necessary if it already exists in
      * scalarized form and we create a virtual object out of it. A scalarized value object has all
      * its fields initialized.
-     * 
-     * @param unsetFields a list which contains a boolean value for each field, the entry should be
-     *            true if the field was not initialized yet.
+     *
+     * @param setIsLarval true if not all fields were intiialized yet, false otherwise.
      */
-    void setUnsetFields(VirtualObjectNode virtualObjectNode, boolean[] unsetFields);
+    void setIsLarval(VirtualObjectNode virtualObjectNode, boolean setIsLarval);
 
     void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId);
 

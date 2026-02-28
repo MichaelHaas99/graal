@@ -48,7 +48,6 @@ import jdk.graal.compiler.options.OptionType;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.phases.BasePhase;
 import jdk.graal.compiler.phases.common.CanonicalizerPhase;
-import jdk.graal.compiler.phases.common.ScalarizationExpansionPhase;
 import jdk.graal.compiler.phases.graph.ReentrantBlockIterator;
 import jdk.graal.compiler.phases.schedule.SchedulePhase;
 
@@ -121,7 +120,6 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
     @Override
     protected void postIteration(StructuredGraph graph, CoreProviders context, EconomicSet<Node> changedNodes) {
         super.postIteration(graph, context, changedNodes);
-        applyScalarizationExpansionPhase(graph, context);
         if (cleanupPhase != null) {
             cleanupPhase.apply(graph, context);
         }
@@ -142,6 +140,14 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
             if (readElimination || graph.hasVirtualizableAllocation()) {
                 try (DebugCloseable ignored = graph.getOptimizationLog().enterPartialEscapeAnalysis()) {
                     runAnalysis(graph, context);
+                    /*
+                     * In case there is no read elimination scalarization should already work with
+                     * one iteration. In case there is read elimination we work with scalar aliases
+                     * in the first iteration and scalarize in the second one.
+                     */
+                    if (!readElimination || maxIterations > 1) {
+                        new PartialEscapePhaseVerificationPhase().apply(graph, context);
+                    }
                 }
             }
         }
@@ -163,15 +169,5 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
     @Override
     public boolean checkContract() {
         return false;
-    }
-
-    /**
-     * {@link PartialEscapePhase} may insert {@code ScalarizationNode} which need
-     * {@link ScalarizationExpansionPhase} to be replaced with a scalarization graph.
-     * {@code SnippetTemplate} creates and applies {@link PartialEscapePhase}, so we also need to
-     * apply a {@link ScalarizationExpansionPhase}.
-     */
-    private void applyScalarizationExpansionPhase(StructuredGraph graph, CoreProviders context) {
-        new ScalarizationExpansionPhase().apply(graph, context);
     }
 }

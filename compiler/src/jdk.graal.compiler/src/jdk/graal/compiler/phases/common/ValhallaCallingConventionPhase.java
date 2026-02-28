@@ -28,18 +28,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.graalvm.collections.Pair;
+
 import jdk.graal.compiler.debug.DebugCloseable;
+import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.StructuredGraph;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
+import jdk.graal.compiler.nodes.extended.ScalarizationNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Replace the arguments of a {@link MethodCallTargetNode} by the scalarized arguments demanded from
@@ -66,19 +72,13 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
         graph.getGraphState().setDuringStage(GraphState.StageFlag.VALHALLA_CALLING_CONVENTION);
         if (context.getValhallaOptionsProvider().callingConventionEnabled() || context.getValhallaOptionsProvider().returnConventionEnabled()) {
             for (MethodCallTargetNode n : graph.getNodes(MethodCallTargetNode.TYPE)) {
+                if (n.invoke() == null) {
+                    continue;
+                }
                 try (DebugCloseable scope = n.graph().withNodeSourcePosition(n)) {
                     ResolvedJavaMethod targetMethod = n.targetMethod();
                     if (context.getValhallaOptionsProvider().callingConventionEnabled()) {
                         if (targetMethod.hasScalarizedParameters() && !(n instanceof ResolvedMethodHandleCallTargetNode) && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod)) {
-                            /*
-                             * TODO: Phases like the MultiTypeGuardInliningInfo may delete the
-                             * placeholder for the fallback invoke. We could make sure that
-                             * placeholders are always re-inserted here instead of handling them
-                             * explicitly somewhere else, but this would not be very clean. To do so
-                             * use: InlineTypeUtil.handleDevirtualizationOnCallTarget(n,
-                             * n.targetMethod(), targetMethod, false);
-                             * 
-                             */
                             List<ValueNode> arguments = n.arguments();
                             List<ValueNode> scalarizedArguments = new ArrayList<>(arguments);
                             boolean[] alreadyProcessed = new boolean[arguments.size()];
@@ -87,9 +87,20 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                                     continue;
                                 }
                                 ValueNode argument = arguments.get(i);
-                                if (argument instanceof InlineTypeNode.Placeholder placeholder) {
-                                    // handle the placeholder
-                                    ReadMultiValueNode.MultiValues multiValues = placeholder.makeReplacement();
+                                if (targetMethod.isScalarizedParameter(i, true) && !targetMethod.hasCallingConventionMismatch()) {
+                                    ResolvedJavaType type = null;
+                                    int index = i;
+                                    if (!targetMethod.isStatic()) {
+                                        if (i == 0) {
+                                            type = targetMethod.getDeclaringClass();
+                                        } else {
+                                            index--;
+                                        }
+                                    }
+                                    if (type == null) {
+                                        type = (ResolvedJavaType) targetMethod.getSignature().getParameterType(index, targetMethod.getDeclaringClass());
+                                    }
+                                    ReadMultiValueNode.MultiValues multiValues = makeReplacement(graph, argument, type, n.invoke().asFixedNode());
                                     for (int j = i; j >= 0; j--) {
                                         if (scalarizedArguments.get(j) == argument) {
                                             boolean isNonNull = GraalValhallaServices.isParameterNullFree(targetMethod, j, true);
@@ -121,6 +132,25 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                 }
             }
         }
+
+    }
+
+    public static ReadMultiValueNode.MultiValues makeReplacement(StructuredGraph graph, ValueNode object, ResolvedJavaType type, FixedNode insertBefore) {
+        ValueAnchorNode anchor = new ValueAnchorNode();
+        Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(object, type, graph.getAssumptions(), anchor);
+        ScalarizationNode scalarizationNode = pair.getLeft();
+        ReadMultiValueNode.MultiValues multiValues = pair.getRight();
+        if (multiValues.oop() instanceof InlineTypeNode) {
+            multiValues = multiValues.add(graph);
+        } else {
+            if (scalarizationNode != null) {
+                graph.addOrUnique(anchor);
+                graph.addBeforeFixed(insertBefore, anchor);
+                graph.addWithoutUnique(scalarizationNode);
+            }
+            multiValues = multiValues.add(graph);
+        }
+        return multiValues;
 
     }
 

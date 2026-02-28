@@ -1795,4 +1795,54 @@ public class TestLWorld extends JTTTest {
         resetCache();
         getCode(getResolvedJavaMethod( "demo"), null, true, true, getInitialOptions());
     }
+
+    static value class ValueContainer1 {
+        ValueContainer2 container;
+
+        @BytecodeParserNeverInline
+        ValueContainer1(ValueContainer2 c) {
+            container = c;
+        }
+    }
+
+    static value class ValueContainer2 {
+        int i;
+
+        ValueContainer2(int i ){
+            this.i = i;
+        }
+    }
+
+    public static int demoScalarizationParam(ValueContainer1 v) {
+        return v.container.i;
+    }
+
+    @Test
+    public void run74() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "demoScalarizationParam"), null, true, true, getInitialOptions());
+    }
+
+    public static int demoScalarizationConstructor() {
+        ValueContainer1 v = new ValueContainer1(null);
+        return v.container.i;
+    }
+
+    @Test
+    public void run75() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "demoScalarizationConstructor"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+    }
+
+    public static int demoScalarizationConstructo2() {
+        ValueContainer1 v = new ValueContainer1(new ValueContainer2(3));
+        return v.container.i;
+    }
+
+    @Test
+    public void run76() throws  Throwable{
+        resetCache();
+        getCode(getResolvedJavaMethod( "demoScalarizationConstructo2"), null, true, true, DEMO_OPTIONS_WITHOUT_INLINING);
+    }
+
 }

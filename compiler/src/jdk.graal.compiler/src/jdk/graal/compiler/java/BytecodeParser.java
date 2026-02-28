@@ -396,7 +396,6 @@ import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode;
 import jdk.graal.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.HasIdentityNode;
-import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IntegerSwitchNode;
 import jdk.graal.compiler.nodes.extended.LoadArrayComponentHubNode;
 import jdk.graal.compiler.nodes.extended.LoadHubNode;
@@ -2364,19 +2363,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 // ConstantNode.forBoolean(false,
 // graph), ConstantNode.forBoolean(true, graph)));
 
-        if (getValhallaOptionsProvider().callingConventionEnabled() && !GraalValhallaServices.hasCallingConventionMismatch(targetMethod) &&
-                        GraalValhallaServices.hasScalarizedParameters(targetMethod) &&
-                        !fromMethodHandle) {
-            InlineTypeUtil.scalarizeInvokeArgs(callTarget, targetMethod);
-            List<ValueNode> arguments = callTarget.arguments();
-            for (int i = 0; i < parameterLength; i++) {
-                if (arguments.get(i) instanceof InlineTypeNode.Placeholder placeholder && !placeholder.object().isNullConstant()) {
-                    // propagate the scalarized value object in the framestate
-                    replaceValueInFrameState(invokeArgs[i], placeholder);
-                }
-            }
-        }
-
         for (InlineInvokePlugin plugin : graphBuilderConfig.getPlugins().getInlineInvokePlugins()) {
             plugin.notifyNotInlined(this, targetMethod, invoke);
         }
@@ -3084,9 +3070,9 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
                 // see Method::load_signature_classes in compileBroker.cpp
                 JavaType returnType = maybeEagerlyResolve(method.getSignature().getReturnType(method.getDeclaringClass()), method.getDeclaringClass());
                 assert typeIsResolved(returnType) : "expected type to be resolved";
-                List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
-                ReturnScalarizedNode newReturnNode = ReturnScalarizedNode.create(null, realReturnVal, (ResolvedJavaType) returnType, this, getAssumptions(), fixedNodesToAdd);
-                fixedNodesToAdd.forEach(this::add);
+                List<ValueNode> nodesToAdd = new ArrayList<>();
+                ReturnScalarizedNode newReturnNode = ReturnScalarizedNode.create(null, realReturnVal, (ResolvedJavaType) returnType, this, getAssumptions(), nodesToAdd);
+                nodesToAdd.forEach(this::add);
                 append(newReturnNode);
             } else {
                 append(new ReturnNode(realReturnVal));
@@ -4016,12 +4002,7 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
 
     /* Also a hook for subclasses. */
     protected boolean forceLoopPhis() {
-        /*
-         * In order to replace locals with their scalarized version during loop parsing in Valhalla,
-         * we need a phi at the beginning. We replace a local with its scalarized version if it is
-         * passed as a method argument and the method signature says it is a scalarized parameter.
-         */
-        return graph.isOSR() || (getValhallaOptionsProvider().valhallaEnabled() && !parsingIntrinsic());
+        return graph.isOSR();
     }
 
     /* Hook for subclasses. */
@@ -4480,11 +4461,6 @@ public abstract class BytecodeParser extends CoreProvidersDelegate implements Gr
         boolean wasEnabled = frameState.disableStateVerification();
         setStateAfter(sideEffect);
         frameState.setStateVerification(wasEnabled);
-    }
-
-    @Override
-    public void replaceValueInFrameState(ValueNode oldValue, ValueNode newValue) {
-        this.frameState.replaceValue(oldValue, newValue);
     }
 
     protected NodeSourcePosition createBytecodePosition() {

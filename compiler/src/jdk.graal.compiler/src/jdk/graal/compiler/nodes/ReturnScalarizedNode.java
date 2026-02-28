@@ -14,6 +14,7 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ReturnResultDeciderNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
+import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.LoweringTool;
@@ -27,8 +28,6 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 
@@ -66,12 +65,12 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
     }
 
     public static ReturnScalarizedNode create(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
-                    List<FixedWithNextNode> fixedNodesToAdd) {
-        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, fixedNodesToAdd, null);
+                    List<ValueNode> nodesToAdd) {
+        return simplified(returnScalarizedNode, result, returnType, coreProviders, assumptions, nodesToAdd, null);
     }
 
     private static ReturnScalarizedNode simplified(ReturnScalarizedNode returnScalarizedNode, ValueNode result, ResolvedJavaType returnType, CoreProviders coreProviders, Assumptions assumptions,
-                    List<FixedWithNextNode> fixedNodesToAdd, SimplifierTool tool) {
+                    List<ValueNode> nodesToAdd, SimplifierTool tool) {
         // only simplify in case the result does not already point to the proxy node
         if (InlineTypeUtil.unproxify(result, tool) instanceof InlineTypeNode inlineTypeNode && result != inlineTypeNode.getOop()) {
             List<ValueNode> list = inlineTypeNode.getEntries();
@@ -84,18 +83,18 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
                     nonNull = ConstantNode.forInt(1, inlineTypeNode.graph());
                 }
                 ValueNode returnResultDecider = ReturnResultDeciderNode.create(coreProviders.getWordTypes().getWordKind(), nonNull, inlineTypeNode.getOop(), hub);
-                if (returnResultDecider instanceof FixedWithNextNode fixedWithNextNode) {
-                    fixedNodesToAdd.add(fixedWithNextNode);
-                }
+                nodesToAdd.add(returnResultDecider);
                 return new ReturnScalarizedNode(returnResultDecider, list, returnType);
             }
         } else if (returnScalarizedNode == null) {
             ReturnScalarizedNode newReturnNode;
-            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(result, returnType, assumptions);
+            ValueAnchorNode anchor = new ValueAnchorNode();
+            Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(result, returnType, assumptions, anchor);
             ScalarizationNode scalarizationNode = pair.getLeft();
             ReadMultiValueNode.MultiValues multiValues = pair.getRight();
             if (scalarizationNode != null) {
-                fixedNodesToAdd.add(scalarizationNode);
+                nodesToAdd.add(anchor);
+                nodesToAdd.add(scalarizationNode);
             }
             newReturnNode = new ReturnScalarizedNode(multiValues.oop(), List.of(multiValues.fieldValues()), returnType);
             return newReturnNode;
@@ -103,29 +102,6 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
             return returnScalarizedNode;
         }
 
-    }
-
-    /**
-     * Replaces an oop return with a scalrized return. Not used at the moment.
-     */
-
-    public static void replaceReturn(ReturnNode oldReturn) {
-        StructuredGraph graph = oldReturn.graph();
-        ValueNode result = oldReturn.result();
-        ResolvedJavaMethod method = graph.method();
-        ResolvedJavaType type = method.getSignature().getReturnType(method.getDeclaringClass()).resolve(method.getDeclaringClass());
-        ResolvedJavaField[] fields = type.getInstanceFields(true);
-
-        // PEA will replace oop with tagged hub if it is virtual
-        ReturnScalarizedNode returnNode = graph.addOrUnique(new ReturnScalarizedNode(result, new ArrayList<>(fields.length), type));
-        FixedWithNextNode previous = (FixedWithNextNode) oldReturn.predecessor();
-        previous.setNext(returnNode);
-        oldReturn.replaceAtUsages(returnNode);
-        oldReturn.safeDelete();
-
-        ValueNode[] phis = InlineTypeUtil.createScalarizationCFG(returnNode, result, List.of(fields), false, false);
-        returnNode.fieldValues.clear();
-        returnNode.fieldValues.addAll(List.of(phis));
     }
 
     @Override
@@ -194,12 +170,14 @@ public class ReturnScalarizedNode extends ReturnNode implements Virtualizable, L
         if (GraalOptions.PartialEscapeAnalysis.getValue(getOptions())) {
             return;
         }
-        List<FixedWithNextNode> fixedNodesToAdd = new ArrayList<>();
-        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), fixedNodesToAdd, tool);
+        List<ValueNode> nodesToAdd = new ArrayList<>();
+        ReturnScalarizedNode newReturnNode = simplified(this, this.result, this.returnType, tool, tool.getAssumptions(), nodesToAdd, tool);
         if (newReturnNode != this) {
-            fixedNodesToAdd.forEach((FixedWithNextNode fixedWithNextNode) -> {
-                graph().addOrUniqueWithInputs(fixedWithNextNode);
-                graph().addBeforeFixed(this, fixedWithNextNode);
+            nodesToAdd.forEach((ValueNode node) -> {
+                node = graph().addOrUniqueWithInputs(node);
+                if (node instanceof FixedWithNextNode fixedWithNextNode) {
+                    graph().addBeforeFixed(this, fixedWithNextNode);
+                }
             });
             this.setResult(newReturnNode.result);
             this.fieldValues.clear();

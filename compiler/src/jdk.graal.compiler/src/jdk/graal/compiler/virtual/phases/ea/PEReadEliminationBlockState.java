@@ -150,7 +150,7 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
         ValueNode cacheObject;
         ObjectState obj = closure.getObjectState(this, object);
         if (obj != null) {
-            assert !obj.isVirtual();
+            assert obj.isMaterialized();
             cacheObject = obj.getMaterializedValue();
         } else {
             cacheObject = object;
@@ -162,7 +162,7 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
         ValueNode cacheObject;
         ObjectState obj = closure.getObjectState(this, object);
         if (obj != null) {
-            assert !obj.isVirtual() : object;
+            assert obj.isMaterialized() : object;
             cacheObject = obj.getMaterializedValue();
         } else {
             cacheObject = object;
@@ -170,7 +170,7 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
         ValueNode cacheValue = readCache.get(new ReadCacheEntry(identity, cacheObject, index, kind, false));
         obj = closure.getObjectState(this, cacheValue);
         if (obj != null) {
-            assert !obj.isVirtual();
+            assert obj.isMaterialized();
             cacheValue = obj.getMaterializedValue();
         } else {
             // assert !scalarAliases.containsKey(cacheValue);

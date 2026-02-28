@@ -38,6 +38,7 @@ import jdk.graal.compiler.phases.tiers.Suites;
 import jdk.graal.compiler.printer.GraalDebugHandlersFactory;
 import jdk.graal.compiler.replacements.GraphKit;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
+import jdk.graal.compiler.virtual.phases.ea.FinalPartialEscapePhase;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
@@ -222,6 +223,7 @@ public class ValhallaEntryPointCreator {
     protected Suites createSuites() {
         Suites defaultSuites = providers.getSuites().getDefaultSuites(options, providers.getLowerer().getTarget().arch).copy();
 
+        defaultSuites.getHighTier().removeSubTypePhases(FinalPartialEscapePhase.class);
         defaultSuites.getMidTier().removeSubTypePhases(Speculative.class);
         defaultSuites.getMidTier().removeSubTypePhases(FloatingReadPhase.class);
         defaultSuites.getLowTier().removeSubTypePhases(Speculative.class);

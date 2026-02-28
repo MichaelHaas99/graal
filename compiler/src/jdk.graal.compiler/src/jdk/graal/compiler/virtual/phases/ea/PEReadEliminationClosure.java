@@ -112,10 +112,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         }
 
         boolean deleted = false;
-        if (node instanceof LoadFieldNode) {
+        if (node instanceof LoadFieldNode loadFieldNode) {
             deleted = processLoadField((LoadFieldNode) node, state, effects);
-        } else if (node instanceof StoreFieldNode) {
-            deleted = processStoreField((StoreFieldNode) node, state, effects);
+        } else if (node instanceof StoreFieldNode storeFieldNode) {
+            deleted = processStoreField(storeFieldNode, state, effects);
         } else if (node instanceof LoadIndexedNode) {
             deleted = processLoadIndexed((LoadIndexedNode) node, state, effects);
         } else if (node instanceof StoreIndexedNode) {
@@ -311,8 +311,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
 
     @SuppressWarnings("unchecked")
     @Override
-    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, PEReadEliminationBlockState initialState) {
-        super.processInitialLoopState(loop, initialState);
+    protected void processInitialLoopState(CFGLoop<HIRBlock> loop, PEReadEliminationBlockState initialState, GraphEffectList effects) {
+        super.processInitialLoopState(loop, initialState, effects);
 
         if (!initialState.getReadCache().isEmpty()) {
             EconomicMap<ValueNode, Pair<ValueNode, Object>> firstValueSet = null;
