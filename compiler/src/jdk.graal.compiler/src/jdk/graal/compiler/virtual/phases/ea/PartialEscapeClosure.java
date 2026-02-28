@@ -77,6 +77,8 @@ import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.VirtualState;
 import jdk.graal.compiler.nodes.WithExceptionNode;
+import jdk.graal.compiler.nodes.calc.ConditionalNode;
+import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
@@ -2307,8 +2309,8 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 tool.addNode(scalarizationNode);
             }
 
-            tool.addNode(multiValues.nonNull());
-            nonNull = multiValues.nonNull();
+            nonNull = ConditionalNode.create(IsNullNode.create(nodeToScalarize), ConstantNode.forInt(0), ConstantNode.forInt(1), NodeView.DEFAULT);
+            tool.addNode(nonNull);
             for (int j = 0; j < fieldsToLoad.length; j++) {
                 int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
                 ValueNode value = multiValues.fieldValues()[index];
