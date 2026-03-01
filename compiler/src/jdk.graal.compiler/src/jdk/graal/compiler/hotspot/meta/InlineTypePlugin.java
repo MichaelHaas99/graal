@@ -75,9 +75,6 @@ public class InlineTypePlugin implements NodePlugin {
     @Override
     public boolean handleLoadField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
 
-        if (true) {
-            return false;
-        }
         if (GraalValhallaServices.isFlat(field)) {
             if (!GraalValhallaServices.isNullFreeInlineType(field)) {
                 // field is flat and nullable
@@ -94,6 +91,9 @@ public class InlineTypePlugin implements NodePlugin {
             return true;
 
         } else if (GraalValhallaServices.isNullFreeInlineType(field)) {
+            if (true) {
+                return false;
+            }
             // field is null-free but not flat
 
             // for null free inline type fields it is the responsibility of the reader to return the

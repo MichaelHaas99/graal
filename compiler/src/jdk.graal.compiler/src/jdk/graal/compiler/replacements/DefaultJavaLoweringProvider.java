@@ -488,7 +488,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode object = loadField.isStatic() ? staticFieldBase(graph, field) : loadField.object();
         object = createNullCheckedValue(object, loadField, tool);
         Stamp loadStamp = loadStamp(loadField.stamp(NodeView.DEFAULT), getStorageKind(field));
-        if (field.isFlat()) {
+        if (field.isFlat() && field.isNullFreeInlineType()) {
             GraalError.guarantee(loadField.isMultiValue(), "should be multi value");
             ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
             int sourceOffset = field.getOffset();

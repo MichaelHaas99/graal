@@ -233,7 +233,7 @@ public final class LoadFieldNode extends AccessFieldNode
         tool.tryScalarize(object);
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualInstanceNode virtualInstanceNode) {
-            if (field.isFlat()) {
+            if (field.isFlat() && field.isNullFreeInlineType()) {
                 ResolvedJavaType objectType = field.getDeclaringClass();
 
                 int startIndex = virtualInstanceNode.startIndex(objectType.getDeclaredFields(true), field);
