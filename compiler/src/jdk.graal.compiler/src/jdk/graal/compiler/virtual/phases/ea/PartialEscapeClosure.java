@@ -267,13 +267,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             tryAssociateAlias(param, state, effects, null, isLarval, null);
 
         } else if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
-            for (ValueNode value : multiValue.getFieldValues()) {
-                tryAssociateAlias(value, state, effects, null, false, null);
-            }
-            ValueNode oop = multiValue.getOop();
-            if (oop != null) {
-                tryAssociateAlias(oop, state, effects, null, false, null);
-            }
+            createVirtualObjectForMultiValue(multiValue, state, effects);
         } else if (node instanceof Invoke invoke && !StampTool.isNullableInlineType(invoke.asNode(), tool.getValhallaOptionsProvider())) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
             if (targetMethod != null && targetMethod.isConstructor() && invoke instanceof FixedWithNextNode fixedWithNextNode) {
@@ -2371,6 +2365,25 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
         }
         return newVirtualObjectNode;
+    }
+
+    protected void createVirtualObjectForMultiValue(MultiValue multiValue, PartialEscapeBlockState<?> state, GraphEffectList effects) {
+        tool.reset(state, multiValue.asNode(), null, effects);
+        ResolvedJavaType type = multiValue.getMultiValueType();
+        ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(multiValue, type, cfg.graph.getAssumptions());
+        VirtualInstanceNode newVirtualObjectNode = new VirtualInstanceNode(type,
+                        false, StampTool.isPointerNonNull(multiValue.asNode()));
+        ValueNode nonNull = multiValues.nonNull();
+        tool.addNode(nonNull);
+        ValueNode oop = multiValues.oop();
+        tool.addNode(oop);
+        ValueNode[] entries = multiValues.fieldValues();
+        for (int i = 0; i < entries.length; i++) {
+            ValueNode entry = entries[i];
+            tool.addNode(entry);
+        }
+        tool.createVirtualObject(newVirtualObjectNode, entries, Collections.emptyList(), multiValue.asNode().getNodeSourcePosition(), false, oop, nonNull, false);
+        addVirtualAlias(newVirtualObjectNode, multiValue.asNode());
     }
 
     private VirtualInstanceNode createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean isLarval, VirtualObjectNode cached) {
