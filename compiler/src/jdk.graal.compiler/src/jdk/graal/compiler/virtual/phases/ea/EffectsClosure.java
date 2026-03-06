@@ -273,7 +273,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                 if (!(node instanceof ReadMultiValueNode)) {
                     aliases.set(node, null);
                 }
-                if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+                if (node instanceof MultiValue multiValue && multiValue.isMultiValue() && multiValue.onlyReadMuliValueUsages()) {
                     for (ValueNode value : multiValue.getFieldValues()) {
                         aliases.set(value, null);
                     }

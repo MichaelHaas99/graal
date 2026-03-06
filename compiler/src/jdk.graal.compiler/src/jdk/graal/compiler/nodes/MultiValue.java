@@ -22,6 +22,10 @@ public interface MultiValue extends ValueNodeInterface {
      */
     boolean isMultiValue();
 
+    default boolean onlyReadMuliValueUsages() {
+        return asNode().usages().stream().allMatch(usage -> usage instanceof ReadMultiValueNode);
+    }
+
     ResolvedJavaType getMultiValueType();
 
     default ReadMultiValueNode getOop() {

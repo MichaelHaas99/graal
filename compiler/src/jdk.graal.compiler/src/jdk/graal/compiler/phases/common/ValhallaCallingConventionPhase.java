@@ -31,7 +31,6 @@ import java.util.Optional;
 import org.graalvm.collections.Pair;
 
 import jdk.graal.compiler.debug.DebugCloseable;
-import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.nodes.FixedNode;
 import jdk.graal.compiler.nodes.GraphState;
 import jdk.graal.compiler.nodes.StructuredGraph;
@@ -40,13 +39,11 @@ import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
 import jdk.graal.compiler.nodes.extended.ScalarizationNode;
 import jdk.graal.compiler.nodes.extended.ValueAnchorNode;
-import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.MethodCallTargetNode;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -135,26 +132,6 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                 }
             }
         }
-        if (context.getValhallaOptionsProvider().valhallaEnabled()) {
-            for (LoadFieldNode node : graph.getNodes(LoadFieldNode.TYPE)) {
-                ResolvedJavaField field = node.field();
-                if (GraalValhallaServices.isFlat(field)) {
-                    if (!GraalValhallaServices.isNullFreeInlineType(field)) {
-                        // field is flat and nullable
-                        GraalError.shouldNotReachHere("can't handle nullable flat fields");
-
-                    } else {
-                        // field is flat and null-restricted
-                        ResolvedJavaType type = (ResolvedJavaType) field.getType();
-                        ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(node, type, graph.getAssumptions());
-                        InlineTypeNode inlineTypeNode = graph.addOrUniqueWithInputs(new InlineTypeNode(type, multiValues.oop(), multiValues.fieldValues(), multiValues.nonNull(), false));
-                        graph.addAfterFixed(node, inlineTypeNode);
-                        node.replaceAtUsages(inlineTypeNode, v -> !(v instanceof ReadMultiValueNode n && n.getMultiValueNode() == node));
-                    }
-                }
-            }
-        }
-
     }
 
     public static ReadMultiValueNode.MultiValues makeReplacement(StructuredGraph graph, ValueNode object, ResolvedJavaType type, FixedNode insertBefore) {
