@@ -136,14 +136,14 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
     }
 
     public static MultiValues createNodes(ScalarizationNode node, Assumptions assumptions) {
-        return createNodes(node, node.getType(), assumptions);
+        return createNodes(node, node.getMultiValueType(), assumptions);
     }
 
     public static MultiValues createNodes(MultiValue node, ResolvedJavaType type, Assumptions assumptions) {
         ReadMultiValueNode oop = ReadMultiValueNode.createOop(type, assumptions, node, 0);
 
         ResolvedJavaField[] fields = type.getInstanceFields(true);
-        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
+        ValueNode[] fieldValues = new ValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
             fieldValues[i] = ReadMultiValueNode.createFieldValue(fields[i].getType(), assumptions, node, i + 1);
