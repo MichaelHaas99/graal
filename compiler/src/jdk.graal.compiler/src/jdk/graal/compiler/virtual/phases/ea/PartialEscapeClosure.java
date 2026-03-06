@@ -61,6 +61,7 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.Invoke;
+import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
 import jdk.graal.compiler.nodes.MultiValue;
@@ -2309,7 +2310,9 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 tool.addNode(scalarizationNode);
             }
 
-            nonNull = ConditionalNode.create(IsNullNode.create(nodeToScalarize), ConstantNode.forInt(0), ConstantNode.forInt(1), NodeView.DEFAULT);
+            LogicNode isNull = IsNullNode.create(nodeToScalarize);
+            tool.addNode(isNull);
+            nonNull = ConditionalNode.create(isNull, ConstantNode.forInt(0), ConstantNode.forInt(1), NodeView.DEFAULT);
             tool.addNode(nonNull);
             for (int j = 0; j < fieldsToLoad.length; j++) {
                 int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
