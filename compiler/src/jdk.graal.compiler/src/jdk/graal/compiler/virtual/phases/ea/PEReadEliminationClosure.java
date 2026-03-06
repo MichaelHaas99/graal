@@ -39,6 +39,7 @@ import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
+import jdk.graal.compiler.debug.GraalError;
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.AbstractBeginNode;
 import jdk.graal.compiler.nodes.FieldLocationIdentity;
@@ -151,6 +152,18 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, JavaKind accessKind, boolean overflowAccess, ValueNode value,
                     PEReadEliminationBlockState state, GraphEffectList effects) {
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
+        ValueNode virtualCachedValue = state.getReadCacheVirtual(object, identity, index, accessKind, this);
+        ValueNode virtualFinalValue = getAlias(value);
+        if (virtualCachedValue instanceof VirtualInstanceNode a && virtualFinalValue instanceof VirtualInstanceNode b) {
+            boolean result = false;
+            if (state.getObjectState(a).equalsUnproxified(state.getObjectState(b))) {
+                effects.deleteNode(store);
+                result = true;
+            }
+            state.killReadCache(identity, index);
+            state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, value, this);
+            return result;
+        }
         ValueNode cachedValue = state.getReadCache(object, identity, index, accessKind, this);
 
         ValueNode finalValue = getScalarAlias(value);
@@ -166,37 +179,20 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
 
     private boolean processLoad(FixedNode load, ValueNode object, LocationIdentity identity, int index, JavaKind kind, PEReadEliminationBlockState state, GraphEffectList effects) {
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
+        if (load instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+            ValueNode cachedValue = state.getReadCacheVirtual(unproxiedObject, identity, index, kind, this);
+            if (cachedValue != null) {
+                VirtualInstanceNode virtual = tryScalarizeWithoutReset(cachedValue, state, null, null, false, true);
+                GraalError.guarantee(virtual != null, "cached value for multi value needs to be virtual");
+                addVirtualAlias(virtual, load);
+                effects.deleteNode(load);
+            }
+            return true;
+        }
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
 
             // perform the read elimination
-            if (load instanceof MultiValue multiValue && multiValue.isMultiValue()) {
-                VirtualInstanceNode virtual = tryScalarizeWithoutReset(cachedValue, state, null, null, false, true);
-                if (virtual != null) {
-                    ObjectState objectState = state.getObjectStateOptional(virtual);
-                    if (objectState != null) {
-                        ValueNode oop = multiValue.getOop();
-                        if (oop != null) {
-                            effects.replaceAtUsages(oop, cachedValue, load);
-                            addScalarAlias(oop, cachedValue);
-                        }
-                        ValueNode nonNull = multiValue.getNonNull();
-                        if (nonNull != null) {
-                            effects.replaceAtUsages(nonNull, objectState.getNonNull(), load);
-                            addScalarAlias(nonNull, objectState.getNonNull());
-                        }
-                        ValueNode[] entries = objectState.getEntries();
-                        for (int i = 0; i < entries.length; i++) {
-                            ValueNode entry = multiValue.getFieldValue(i);
-                            if (entry != null) {
-                                effects.replaceAtUsages(entry, entries[i], load);
-                                addScalarAlias(entry, entries[i]);
-                            }
-                        }
-                        return true;
-                    }
-                }
-            }
             effects.replaceAtUsages(load, cachedValue, load);
             addScalarAlias(load, cachedValue);
             return true;

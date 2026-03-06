@@ -27,8 +27,10 @@ package jdk.graal.compiler.virtual.phases.ea;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntUnaryOperator;
 
 import org.graalvm.collections.EconomicMap;
@@ -517,7 +519,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
      */
     protected void processNodeInputs(ValueNode node, FixedNode insertBefore, BlockT state, GraphEffectList effects) {
         VirtualUtil.trace(node.getOptions(), debug, "processing nodewithstate: %s", node);
+        Map<Node, Node> replacedInputs = new HashMap<>(tool.getReplacedInputs());
         for (Node input : node.inputs()) {
+            if (replacedInputs.containsKey(input)) {
+                replacedInputs.remove(input);
+                continue;
+            }
             if (input instanceof ValueNode) {
                 ValueNode alias = getAlias((ValueNode) input);
                 if (alias instanceof VirtualObjectNode) {

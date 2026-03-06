@@ -155,7 +155,7 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
                 }
                 entries[i] = entry;
             }
-            InlineTypeNode inlineTypeNode = InlineTypeNode.createWithoutOop(fieldType, entries, tool.getNonNull(virtualValue));
+            InlineTypeNode inlineTypeNode = new InlineTypeNode(fieldType, tool.getOop(virtualValue), entries, tool.getNonNull(virtualValue), tool.isAllocatedOrNull(virtualValue));
             tool.ensureAdded(inlineTypeNode);
             tool.replaceFirstInput(value, inlineTypeNode);
         }

@@ -26,7 +26,9 @@ package jdk.graal.compiler.virtual.phases.ea;
 
 import static jdk.graal.compiler.core.common.GraalOptions.MaximumEscapeAnalysisArrayLength;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import jdk.graal.compiler.debug.Assertions;
 import jdk.graal.compiler.debug.DebugContext;
@@ -83,6 +85,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     private ValueNode current;
     private FixedNode position;
     private GraphEffectList effects;
+    private Map<Node, Node> replacedInputs;
 
     @Override
     public OptionValues getOptions() {
@@ -100,10 +103,15 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
         current = newCurrent;
         position = newPosition;
         effects = newEffects;
+        replacedInputs = new HashMap<>();
     }
 
     public boolean isDeleted() {
         return deleted;
+    }
+
+    public Map<Node, Node> getReplacedInputs() {
+        return replacedInputs;
     }
 
     @Override
@@ -371,6 +379,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     @Override
     public void replaceFirstInput(Node oldInput, Node replacement) {
         effects.replaceFirstInput(current, oldInput, replacement);
+        replacedInputs.put(oldInput, replacement);
     }
 
     @Override
