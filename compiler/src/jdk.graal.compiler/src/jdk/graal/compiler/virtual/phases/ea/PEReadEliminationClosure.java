@@ -186,8 +186,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 GraalError.guarantee(virtual != null, "cached value for multi value needs to be virtual");
                 addVirtualAlias(virtual, load);
                 effects.deleteNode(load);
+                return true;
             }
-            return true;
         }
         ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
