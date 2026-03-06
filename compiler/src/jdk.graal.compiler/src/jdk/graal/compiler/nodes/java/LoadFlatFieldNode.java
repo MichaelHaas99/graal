@@ -152,4 +152,14 @@ public class LoadFlatFieldNode extends FixedWithNextNode implements Virtualizabl
             tool.replaceWithVirtual(virtualObject);
         }
     }
+
+    @Override
+    public boolean isMultiValue() {
+        return true;
+    }
+
+    @Override
+    public ResolvedJavaType getMultiValueType() {
+        return null;
+    }
 }

@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 
 import jdk.graal.compiler.graph.Node;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * This interface marks nodes which can return a value object in scalarized form.
@@ -19,9 +20,9 @@ public interface MultiValue extends ValueNodeInterface {
     /**
      * {@link Invoke} is not a multi value nodes if the method has no scalarized return.
      */
-    default boolean isMultiValue() {
-        return asNode().usages().stream().allMatch(usage -> usage instanceof ReadMultiValueNode);
-    }
+    boolean isMultiValue();
+
+    ResolvedJavaType getMultiValueType();
 
     default ReadMultiValueNode getOop() {
         return getUsage(asNode(), r -> ((ReadMultiValueNode) r).isOop());

@@ -50,7 +50,8 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
         return object;
     }
 
-    public ResolvedJavaType getType() {
+    @Override
+    public ResolvedJavaType getMultiValueType() {
         return type;
     }
 
@@ -147,7 +148,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
     public void lower(LoweringTool loweringTool) {
         List<ReadMultiValueNode> fieldValues = getFieldValues();
         ArrayList<ResolvedJavaField> fields = new ArrayList<>(fieldValues.size());
-        ResolvedJavaField[] instanceFields = this.getType().getInstanceFields(true);
+        ResolvedJavaField[] instanceFields = this.getMultiValueType().getInstanceFields(true);
         for (int i = 0; i < instanceFields.length; i++) {
             ValueNode value = getFieldValue(i);
             if (value != null) {
@@ -186,5 +187,10 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
                 }
             }
         }
+    }
+
+    @Override
+    public boolean isMultiValue() {
+        return true;
     }
 }

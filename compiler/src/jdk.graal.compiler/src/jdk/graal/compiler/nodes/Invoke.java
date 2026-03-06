@@ -170,6 +170,12 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
     @Override
     default boolean isMultiValue() {
         ResolvedJavaMethod method = callTarget().targetMethod();
-        return method != null && GraalValhallaServices.hasScalarizedReturn(method) && MultiValue.super.isMultiValue();
+        return method != null && GraalValhallaServices.hasScalarizedReturn(method);
+    }
+
+    @Override
+    default ResolvedJavaType getMultiValueType() {
+        ResolvedJavaMethod method = callTarget().targetMethod();
+        return (ResolvedJavaType) method.getSignature().getReturnType(method.getDeclaringClass());
     }
 }

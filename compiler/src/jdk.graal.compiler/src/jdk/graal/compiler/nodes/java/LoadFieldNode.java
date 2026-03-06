@@ -309,4 +309,14 @@ public final class LoadFieldNode extends AccessFieldNode
             }
         }
     }
+
+    @Override
+    public boolean isMultiValue() {
+        return field.isFlat();
+    }
+
+    @Override
+    public ResolvedJavaType getMultiValueType() {
+        return (ResolvedJavaType) field.getType();
+    }
 }
