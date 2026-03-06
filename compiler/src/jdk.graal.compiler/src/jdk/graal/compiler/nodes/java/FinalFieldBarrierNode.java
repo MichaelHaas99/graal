@@ -27,15 +27,15 @@ package jdk.graal.compiler.nodes.java;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static jdk.graal.compiler.nodeinfo.NodeSize.SIZE_2;
 
-import jdk.graal.compiler.nodes.extended.GuardingNode;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.type.StampFactory;
 import jdk.graal.compiler.graph.NodeClass;
+import jdk.graal.compiler.nodeinfo.InputType;
 import jdk.graal.compiler.nodeinfo.NodeInfo;
 import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.ValueNode;
-import jdk.graal.compiler.nodes.extended.AnchoringNode;
+import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.MembarNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Lowerable;
@@ -44,7 +44,7 @@ import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 
-@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
+@NodeInfo(allowedUsageTypes = {InputType.Guard}, cycles = CYCLES_2, size = SIZE_2)
 public class FinalFieldBarrierNode extends FixedWithNextNode implements Virtualizable, Lowerable, SingleMemoryKill, GuardingNode {
     public static final NodeClass<FinalFieldBarrierNode> TYPE = NodeClass.create(FinalFieldBarrierNode.class);
 

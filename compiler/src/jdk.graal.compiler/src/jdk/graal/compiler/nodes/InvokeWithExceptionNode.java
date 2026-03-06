@@ -25,6 +25,7 @@
 package jdk.graal.compiler.nodes;
 
 import static jdk.graal.compiler.nodeinfo.InputType.Extension;
+import static jdk.graal.compiler.nodeinfo.InputType.Guard;
 import static jdk.graal.compiler.nodeinfo.InputType.Memory;
 import static jdk.graal.compiler.nodeinfo.InputType.State;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
@@ -53,7 +54,7 @@ import jdk.vm.ci.code.BytecodeFrame;
 
 // @formatter:off
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}",
-          allowedUsageTypes = {Memory},
+          allowedUsageTypes = {Memory, Guard},
           cycles = CYCLES_UNKNOWN, cyclesRationale = CYCLES_UNKNOWN_RATIONALE,
           size   = SIZE_UNKNOWN,   sizeRationale   = SIZE_UNKNOWN_RATIONALE)
 // @formatter:on
