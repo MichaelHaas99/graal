@@ -163,6 +163,12 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             state.killReadCache(identity, index);
             state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, value, this);
             return result;
+        } else if (virtualCachedValue instanceof VirtualInstanceNode a && !state.getObjectState(a).isMaterialized() ||
+                        virtualFinalValue instanceof VirtualInstanceNode b && !state.getObjectState(b).isMaterialized()) {
+            ValueNode finalValue = getScalarAlias(value);
+            state.killReadCache(identity, index);
+            state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, finalValue, this);
+            return false;
         }
         ValueNode cachedValue = state.getReadCache(object, identity, index, accessKind, this);
 
