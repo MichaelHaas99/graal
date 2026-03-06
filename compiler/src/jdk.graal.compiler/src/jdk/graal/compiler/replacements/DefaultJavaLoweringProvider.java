@@ -41,6 +41,7 @@ import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 
+import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.memory.BarrierType;
@@ -108,6 +109,7 @@ import jdk.graal.compiler.nodes.extended.ClassIsArrayNode;
 import jdk.graal.compiler.nodes.extended.ForeignCallNode;
 import jdk.graal.compiler.nodes.extended.GuardedUnsafeLoadNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.extended.IsNullFreeArrayNode;
 import jdk.graal.compiler.nodes.extended.JavaReadNode;
 import jdk.graal.compiler.nodes.extended.JavaWriteNode;
@@ -119,6 +121,8 @@ import jdk.graal.compiler.nodes.extended.ObjectIsArrayNode;
 import jdk.graal.compiler.nodes.extended.PublishWritesNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
+import jdk.graal.compiler.nodes.extended.ScalarizationNode;
 import jdk.graal.compiler.nodes.extended.UnboxNode;
 import jdk.graal.compiler.nodes.extended.UnsafeMemoryLoadNode;
 import jdk.graal.compiler.nodes.extended.UnsafeMemoryStoreNode;
@@ -172,6 +176,7 @@ import jdk.graal.compiler.replacements.nodes.BinaryMathIntrinsicNode;
 import jdk.graal.compiler.replacements.nodes.IdentityHashCodeNode;
 import jdk.graal.compiler.replacements.nodes.UnaryMathIntrinsicNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
+import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
@@ -537,6 +542,64 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ResolvedJavaField field = storeField.field();
         ValueNode object = storeField.isStatic() ? staticFieldBase(graph, field) : storeField.object();
         object = createNullCheckedValue(object, storeField, tool);
+
+        boolean isFlatAndNullRestricted = field.isFlat() && field.isNullFreeInlineType();
+        if (isFlatAndNullRestricted) {
+            ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
+            int destOff = field.getOffset();
+            int fieldLen = fieldType.getInstanceFields(true).length;
+            ValueNode[] entries;
+            ValueNode value = storeField.value();
+            Lowerable toLower = null;
+            if (value instanceof InlineTypeNode inlineTypeNode) {
+                createNullCheck(inlineTypeNode, storeField, tool);
+                entries = inlineTypeNode.getEntries().toArray(new ValueNode[0]);
+            } else {
+                Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(value, fieldType, graph.getAssumptions());
+                ScalarizationNode scalarizationNode = pair.getLeft();
+                toLower = scalarizationNode;
+                ReadMultiValueNode.MultiValues multiValues = pair.getRight();
+                if (scalarizationNode != null) {
+                    graph.addOrUnique(scalarizationNode);
+                }
+                multiValues.add(graph);
+                createNullCheckWithNonNull(multiValues.nonNull(), storeField, tool);
+                entries = multiValues.fieldValues();
+            }
+            ResolvedJavaField[] innerFields = fieldType.getInstanceFields(true);
+
+            for (int i = 0; i < fieldLen; i++) {
+                ResolvedJavaField innerField = innerFields[i];
+                assert !GraalValhallaServices.isFlat(innerField) : "the iteration over nested fields is handled by the loop itself";
+
+                // returned fields include a header offset of their holder, calculate the offset
+                // without the header
+                int off = innerField.getOffset() - HotspotGraalValhallaServices.payloadOffset((HotSpotResolvedObjectType) fieldType);
+                ValueNode fieldValue = implicitStoreConvert(graph, getStorageKind(innerField), entries[i]);
+                ResolvedJavaField localField = GraalValhallaServices.setContainerClass(GraalValhallaServices.changeOffset(innerField, destOff + off), field.getDeclaringClass());
+                AddressNode address = createFieldAddress(graph, object, localField);
+                BarrierType barrierType = barrierSet.fieldWriteBarrierType(localField, getStorageKind(localField));
+
+                WriteNode memoryWrite = new WriteNode(address, new FieldLocationIdentity(innerField, false), fieldValue, barrierType, storeField.getMemoryOrder());
+
+                memoryWrite = graph.add(memoryWrite);
+
+                if (i != fieldLen - 1) {
+                    // assign invalid framestate because writes don't exist in bytecode
+                    memoryWrite.setStateAfter(graph.addOrUnique(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI)));
+                    graph.addBeforeFixed(storeField, memoryWrite);
+                } else {
+                    // only last write operation gets a vaild framestate
+                    memoryWrite.setStateAfter(storeField.stateAfter());
+                    graph.replaceFixed(storeField, memoryWrite);
+                }
+            }
+            if (toLower != null) {
+                toLower.lower(tool);
+            }
+            return;
+        }
+
         ValueNode value = implicitStoreConvert(graph, getStorageKind(storeField.field()), storeField.value());
         AddressNode address = createFieldAddress(graph, object, field);
 
@@ -1523,6 +1586,14 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             return null;
         }
         return tool.createGuard(before, before.graph().unique(IsNullNode.create(object)), NullCheckException, InvalidateReprofile, SpeculationLog.NO_SPECULATION, true, null);
+    }
+
+    protected GuardingNode createNullCheckWithNonNull(ValueNode nonNull, FixedNode before, LoweringTool tool) {
+        if (nonNull.isJavaConstant() && nonNull.asJavaConstant().asInt() == 1) {
+            return null;
+        }
+        return tool.createGuard(before, before.graph().unique(IntegerEqualsNode.create(ConstantNode.forInt(0, nonNull.graph()), nonNull, NodeView.DEFAULT)), NullCheckException,
+                        InvalidateReprofile, SpeculationLog.NO_SPECULATION, true, null);
     }
 
     protected ValueNode createNullCheckedValue(ValueNode object, FixedNode before, LoweringTool tool) {

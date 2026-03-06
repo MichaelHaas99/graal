@@ -85,15 +85,15 @@ public class InlineTypePlugin implements NodePlugin {
                 return true;
 
             } else {
+                if (true) {
+                    return false;
+                }
                 // field is flat and null-restricted
                 b.push(JavaKind.Object, genLoadFlatField(b, object, field));
             }
             return true;
 
         } else if (GraalValhallaServices.isNullFreeInlineType(field)) {
-            if (true) {
-                return false;
-            }
             // field is null-free but not flat
 
             // for null free inline type fields it is the responsibility of the reader to return the
@@ -219,6 +219,9 @@ public class InlineTypePlugin implements NodePlugin {
                 return true;
 
             } else {
+                if (true) {
+                    return false;
+                }
                 // field is null restricted
                 genStoreFlatField(b, object, field, value);
             }

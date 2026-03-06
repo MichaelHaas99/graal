@@ -33,6 +33,7 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.MapCursor;
+import org.graalvm.collections.Pair;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.graal.compiler.core.common.cfg.CFGLoop;
@@ -46,6 +47,7 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
+import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
@@ -60,6 +62,8 @@ import jdk.graal.compiler.nodes.extended.GuardedNode;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
 import jdk.graal.compiler.nodes.extended.RawStoreNode;
+import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
+import jdk.graal.compiler.nodes.extended.ScalarizationNode;
 import jdk.graal.compiler.nodes.java.LoadFieldNode;
 import jdk.graal.compiler.nodes.java.StoreFieldNode;
 import jdk.graal.compiler.nodes.memory.MemoryAccess;
@@ -68,6 +72,7 @@ import jdk.graal.compiler.nodes.memory.MultiMemoryKill;
 import jdk.graal.compiler.nodes.memory.ReadNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.memory.WriteNode;
+import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.ReadEliminationBlockState.CacheEntry;
@@ -196,9 +201,44 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                             ValueNode cachedValue = state.getCacheEntry(identifier);
 
                             if (cachedValue != null && areValuesReplaceable(access, cachedValue, considerGuards)) {
-                                effects.replaceAtUsages(access, cachedValue, (FixedNode) access);
-                                addScalarAlias(access, cachedValue);
-                                deleted = true;
+                                if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+                                    Pair<ScalarizationNode, ReadMultiValueNode.MultiValues> pair = ScalarizationNode.create(cachedValue, StampTool.typeOrNull(object), object.graph().getAssumptions());
+                                    ScalarizationNode scalarizationNode = pair.getLeft();
+                                    ReadMultiValueNode.MultiValues multiValues = pair.getRight();
+                                    if (scalarizationNode != null) {
+                                        effects.addFloatingNode(scalarizationNode, "");
+                                    }
+                                    ValueNode oop = multiValue.getOop();
+                                    if (oop != null) {
+                                        ValueNode newOop = multiValues.oop();
+                                        effects.addFloatingNode(newOop, "");
+                                        effects.replaceAtUsages(oop, newOop, (FixedNode) access);
+                                        addScalarAlias(oop, newOop);
+                                    }
+                                    ValueNode nonNull = multiValue.getNonNull();
+                                    if (nonNull != null) {
+                                        ValueNode newNonNull = multiValues.nonNull();
+                                        effects.addFloatingNode(newNonNull, "");
+                                        effects.replaceAtUsages(nonNull, newNonNull, (FixedNode) access);
+                                        addScalarAlias(nonNull, newNonNull);
+                                    }
+                                    ValueNode[] entries = multiValues.fieldValues();
+                                    for (int i = 0; i < entries.length; i++) {
+                                        ValueNode entry = multiValue.getFieldValue(i);
+                                        if (entry != null) {
+                                            ValueNode newEntry = entries[i];
+                                            effects.addFloatingNode(newEntry, "");
+                                            effects.replaceAtUsages(entry, newEntry, (FixedNode) access);
+                                            addScalarAlias(entry, newEntry);
+                                        }
+                                    }
+                                    deleted = true;
+                                } else {
+                                    effects.replaceAtUsages(access, cachedValue, (FixedNode) access);
+                                    addScalarAlias(access, cachedValue);
+                                    deleted = true;
+                                }
+
                             } else {
                                 state.addCacheEntry(identifier, access);
                             }

@@ -47,6 +47,7 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
+import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.NamedLocationIdentity;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PhiNode;
@@ -70,6 +71,7 @@ import jdk.graal.compiler.nodes.spi.CoreProviders;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 import jdk.vm.ci.meta.JavaConstant;
@@ -168,6 +170,33 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (cachedValue != null) {
 
             // perform the read elimination
+            if (load instanceof MultiValue multiValue && multiValue.isMultiValue()) {
+                VirtualInstanceNode virtual = tryScalarizeWithoutReset(cachedValue, state, null, null, false, true);
+                if (virtual != null) {
+                    ObjectState objectState = state.getObjectStateOptional(virtual);
+                    if (objectState != null) {
+                        ValueNode oop = multiValue.getOop();
+                        if (oop != null) {
+                            effects.replaceAtUsages(oop, cachedValue, load);
+                            addScalarAlias(oop, cachedValue);
+                        }
+                        ValueNode nonNull = multiValue.getNonNull();
+                        if (nonNull != null) {
+                            effects.replaceAtUsages(nonNull, objectState.getNonNull(), load);
+                            addScalarAlias(nonNull, objectState.getNonNull());
+                        }
+                        ValueNode[] entries = objectState.getEntries();
+                        for (int i = 0; i < entries.length; i++) {
+                            ValueNode entry = multiValue.getFieldValue(i);
+                            if (entry != null) {
+                                effects.replaceAtUsages(entry, entries[i], load);
+                                addScalarAlias(entry, entries[i]);
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
             effects.replaceAtUsages(load, cachedValue, load);
             addScalarAlias(load, cachedValue);
             return true;
