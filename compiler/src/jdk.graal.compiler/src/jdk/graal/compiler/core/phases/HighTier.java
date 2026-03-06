@@ -73,8 +73,6 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new DeadCodeEliminationPhase(Optional));
         }
 
-        appendPhase(new ValhallaCallingConventionPhase(canonicalizer));
-
         appendPhase(new DisableOverflownCountedLoopsPhase());
 
         if (GraalOptions.OptConvertDeoptsToGuards.getValue(options)) {
@@ -107,9 +105,9 @@ public class HighTier extends BaseTier<HighTierContext> {
         // PartialEscapePhase and BoxNodeOptimizationPhase).
         appendPhase(new BoxNodeIdentityPhase());
 
+        appendPhase(new ValhallaCallingConventionPhase(canonicalizer));
         if (GraalOptions.PartialEscapeAnalysis.getValue(options)) {
             appendPhase(new FinalPartialEscapePhase(true, canonicalizer, null, options));
-            ;
         }
 
         if (GraalOptions.OptReadElimination.getValue(options)) {
