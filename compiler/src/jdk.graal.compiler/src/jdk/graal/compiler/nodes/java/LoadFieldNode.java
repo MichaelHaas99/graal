@@ -71,6 +71,7 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -160,7 +161,7 @@ public final class LoadFieldNode extends AccessFieldNode
                     ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
                     OptionValues options, MetaAccessProvider metaAccess, boolean canonicalizeReads, boolean allUsagesAvailable, boolean immutable, NodeSourcePosition position) {
         LoadFieldNode self = loadFieldNode;
-        if (canonicalizeReads && metaAccess != null && !field.isFlat()) {
+        if (canonicalizeReads && metaAccess != null && !GraalValhallaServices.isFlat(field)) {
             ConstantNode constant = asConstant(constantFields, constantReflection, metaAccess, options, forObject, field, position);
             if (constant != null) {
                 return constant;
@@ -233,7 +234,7 @@ public final class LoadFieldNode extends AccessFieldNode
         tool.tryScalarize(object);
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualInstanceNode virtualInstanceNode) {
-            if (field.isFlat() && field.isNullFreeInlineType()) {
+            if (GraalValhallaServices.isFlat(field) && GraalValhallaServices.isNullFreeInlineType(field)) {
                 ResolvedJavaType objectType = field.getDeclaringClass();
 
                 int startIndex = virtualInstanceNode.startIndex(objectType.getDeclaredFields(true), field);
@@ -312,7 +313,7 @@ public final class LoadFieldNode extends AccessFieldNode
 
     @Override
     public boolean isMultiValue() {
-        return field.isFlat();
+        return GraalValhallaServices.isFlat(field);
     }
 
     @Override

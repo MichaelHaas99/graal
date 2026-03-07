@@ -47,6 +47,7 @@ import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -118,7 +119,7 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
         tool.tryScalarize(value);
         ValueNode valueAlias = tool.getAlias(value);
         ValueNode alias = tool.getAlias(object());
-        boolean isFlatAndNullRestricted = field.isFlat() && field.isNullFreeInlineType();
+        boolean isFlatAndNullRestricted = GraalValhallaServices.isFlat(field) && GraalValhallaServices.isNullFreeInlineType(field);
         if (alias instanceof VirtualInstanceNode virtual) {
             if (isFlatAndNullRestricted) {
                 ResolvedJavaType objectType = field.getDeclaringClass();

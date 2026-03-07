@@ -121,7 +121,7 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
             }
             if (!type.isArray()) {
                 VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, GraalValhallaServices.isIdentity(type));
-                if (Arrays.stream(type.getDeclaredFields(true)).anyMatch(ResolvedJavaField::isFlat)) {
+                if (Arrays.stream(type.getDeclaredFields(true)).anyMatch(GraalValhallaServices::isFlat)) {
                     // TODO: support flat fields
                     return;
                 }

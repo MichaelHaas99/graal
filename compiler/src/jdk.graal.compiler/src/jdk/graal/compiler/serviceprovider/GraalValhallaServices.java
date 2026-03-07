@@ -605,8 +605,8 @@ public class GraalValhallaServices {
             try {
                 try {
                     return (boolean) methodIsFlat.invoke(field);
-                } catch (InvocationTargetException e) {
-                    throw e.getCause();
+                } catch (Throwable u) {
+                    return false;
                 }
             } catch (Error | RuntimeException e) {
                 throw e;

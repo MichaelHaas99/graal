@@ -493,7 +493,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode object = loadField.isStatic() ? staticFieldBase(graph, field) : loadField.object();
         object = createNullCheckedValue(object, loadField, tool);
         Stamp loadStamp = loadStamp(loadField.stamp(NodeView.DEFAULT), getStorageKind(field));
-        if (field.isFlat() && field.isNullFreeInlineType()) {
+        if (GraalValhallaServices.isFlat(field) && GraalValhallaServices.isNullFreeInlineType(field)) {
             GraalError.guarantee(loadField.isMultiValue(), "should be multi value");
             ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
             int sourceOffset = field.getOffset();
@@ -543,7 +543,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode object = storeField.isStatic() ? staticFieldBase(graph, field) : storeField.object();
         object = createNullCheckedValue(object, storeField, tool);
 
-        boolean isFlatAndNullRestricted = field.isFlat() && field.isNullFreeInlineType();
+        boolean isFlatAndNullRestricted = GraalValhallaServices.isFlat(field) && GraalValhallaServices.isNullFreeInlineType(field);
         if (isFlatAndNullRestricted) {
             ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
             int destOff = field.getOffset();
