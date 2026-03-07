@@ -2380,10 +2380,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         ValueNode[] entries = multiValues.fieldValues();
         for (int i = 0; i < entries.length; i++) {
             ValueNode entry = entries[i];
-            if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
-                entry = createAliasForValueObject(entry, state, false, null);
-            }
             tool.addNode(entry);
+            if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
+                entries[i] = createAliasForValueObject(entry, state, false, null);
+            }
         }
         tool.createVirtualObject(newVirtualObjectNode, entries, Collections.emptyList(), multiValue.asNode().getNodeSourcePosition(), false, oop, nonNull, false);
         addVirtualAlias(newVirtualObjectNode, multiValue.asNode());
