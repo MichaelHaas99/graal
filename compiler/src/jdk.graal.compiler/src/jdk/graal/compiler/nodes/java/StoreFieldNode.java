@@ -153,7 +153,11 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
                 entry = tool.getAlias(entry);
                 if (entry instanceof VirtualObjectNode virtualEntry) {
                     tool.ensureMaterialized(virtualEntry);
-                    entry = tool.getOop(virtualEntry);
+                    ValueNode entryAlias = tool.getAlias(entry);
+                    if (entryAlias instanceof VirtualInstanceNode virtualEntry2) {
+                        entryAlias = tool.getOop(virtualEntry2);
+                    }
+                    entry = entryAlias;
                 }
                 entries[i] = entry;
             }
