@@ -559,9 +559,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 ScalarizationNode scalarizationNode = pair.getLeft();
                 toLower = scalarizationNode;
                 ReadMultiValueNode.MultiValues multiValues = pair.getRight();
-                if (scalarizationNode != null) {
-                    graph.addOrUnique(scalarizationNode);
-                }
                 multiValues = multiValues.add(graph);
                 createNullCheckWithNonNull(multiValues.nonNull(), storeField, tool);
                 entries = multiValues.fieldValues();
