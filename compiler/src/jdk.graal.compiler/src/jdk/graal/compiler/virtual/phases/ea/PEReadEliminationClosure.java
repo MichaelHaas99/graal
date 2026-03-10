@@ -432,7 +432,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     // e.g. unsafe loads / stores with different access kinds have different stamps
                     // although location, object and offset are the same, in this case we cannot
                     // create a phi nor can we set a common value
-                    if (otherValue == null || !value.stamp(NodeView.DEFAULT).isCompatible(otherValue.stamp(NodeView.DEFAULT))) {
+                    if (otherValue == null || !value.stamp(NodeView.DEFAULT).isCompatible(otherValue.stamp(NodeView.DEFAULT)) || getAlias(otherValue) instanceof VirtualInstanceNode) {
+                        // TODO: also handle virtual inputs
                         value = null;
                         phi = false;
                         break;
