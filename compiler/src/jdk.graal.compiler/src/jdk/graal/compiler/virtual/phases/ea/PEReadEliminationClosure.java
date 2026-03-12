@@ -151,8 +151,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
 
     private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, JavaKind accessKind, boolean overflowAccess, ValueNode value,
                     PEReadEliminationBlockState state, GraphEffectList effects) {
-        ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        ValueNode virtualCachedValue = state.getReadCacheVirtual(object, identity, index, accessKind, this);
+        ValueNode unproxiedObject = GraphUtil.unproxify(getScalarAlias(object));
+        ValueNode virtualCachedValue = state.getReadCacheVirtual(unproxiedObject, identity, index, accessKind, this);
         ValueNode virtualFinalValue = getAlias(value);
         if (virtualCachedValue instanceof VirtualInstanceNode a && virtualFinalValue instanceof VirtualInstanceNode b) {
             boolean result = false;
@@ -170,7 +170,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, finalValue, this);
             return false;
         }
-        ValueNode cachedValue = state.getReadCache(object, identity, index, accessKind, this);
+        ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, accessKind, this);
 
         ValueNode finalValue = getScalarAlias(value);
         boolean result = false;
@@ -184,7 +184,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     }
 
     private boolean processLoad(FixedNode load, ValueNode object, LocationIdentity identity, int index, JavaKind kind, PEReadEliminationBlockState state, GraphEffectList effects) {
-        ValueNode unproxiedObject = GraphUtil.unproxify(object);
+        ValueNode unproxiedObject = GraphUtil.unproxify(getScalarAlias(object));
         if (load instanceof MultiValue multiValue && multiValue.isMultiValue()) {
             ValueNode cachedValue = state.getReadCacheVirtual(unproxiedObject, identity, index, kind, this);
             if (cachedValue != null) {
