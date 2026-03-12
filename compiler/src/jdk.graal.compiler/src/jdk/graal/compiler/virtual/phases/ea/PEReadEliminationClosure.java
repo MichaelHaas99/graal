@@ -153,7 +153,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     PEReadEliminationBlockState state, GraphEffectList effects) {
         ValueNode unproxiedObject = GraphUtil.unproxify(getScalarAlias(object));
         ValueNode virtualCachedValue = state.getReadCacheVirtual(unproxiedObject, identity, index, accessKind, this);
-        ValueNode virtualFinalValue = getAlias(value);
+        ValueNode virtualFinalValue = getAliasAndResolve(state, value);
         if (virtualCachedValue instanceof VirtualInstanceNode a && virtualFinalValue instanceof VirtualInstanceNode b) {
             boolean result = false;
             if (state.getObjectState(a).equalsUnproxified(state.getObjectState(b))) {
@@ -163,8 +163,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             state.killReadCache(identity, index);
             state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, value, this);
             return result;
-        } else if (virtualCachedValue instanceof VirtualInstanceNode a && !state.getObjectState(a).isMaterialized() ||
-                        virtualFinalValue instanceof VirtualInstanceNode b && !state.getObjectState(b).isMaterialized()) {
+        } else if (!(virtualCachedValue instanceof VirtualInstanceNode) &&
+                        virtualFinalValue instanceof VirtualInstanceNode) {
             ValueNode finalValue = getScalarAlias(value);
             state.killReadCache(identity, index);
             state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, finalValue, this);

@@ -188,7 +188,7 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
             cacheObject = object;
         }
         ValueNode cacheValue = readCache.get(new ReadCacheEntry(identity, cacheObject, index, kind, false));
-        ValueNode alias = closure.getAlias(cacheValue);
+        ValueNode alias = closure.getAliasAndResolve(this, cacheValue);
         if (alias instanceof VirtualInstanceNode) {
             return alias;
         }
