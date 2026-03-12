@@ -892,7 +892,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    private static void processMaterializedAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, EconomicMap<Integer, ProxyNode> proxies, int object, ObjectState exitObjState,
+    protected static void processMaterializedAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, EconomicMap<Integer, ProxyNode> proxies, int object, ObjectState exitObjState,
                     ObjectState initialObjState, PartialEscapeBlockState<?> exitState) {
         // Create a value proxy at the loop exit if either:
         // a) the object was virtual at the loop beginning or
@@ -911,7 +911,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    private static void processVirtualAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, int object, ObjectState exitObjState, ObjectState initialObjState,
+    protected static void processVirtualAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, int object, ObjectState exitObjState, ObjectState initialObjState,
                     PartialEscapeBlockState<?> exitState) {
         for (int i = 0; i < exitObjState.getEntries().length; i++) {
             ValueNode value = exitState.getObjectState(object).getEntry(i);
@@ -1274,7 +1274,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @param states the predecessor block states of the merge
          * @return true if materialization happened during the merge, false otherwise
          */
-        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
+        protected boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
             return mergeObjectStates(resultObject, sourceObjects, states, 0);
         }
 
@@ -2015,7 +2015,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return materialized;
         }
 
-        private VirtualObjectNode getVirtualInstanceForPhi(ValuePhiNode phi, VirtualObjectNode[] virtualObjs) {
+        protected VirtualObjectNode getVirtualInstanceForPhi(ValuePhiNode phi, VirtualObjectNode[] virtualObjs) {
             VirtualObjectNode virtual = null;
             VirtualObjectNode first = virtualObjs[0];
             if (first != null) {

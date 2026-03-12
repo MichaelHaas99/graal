@@ -439,13 +439,6 @@ public class ObjectState {
         if (!Arrays.equals(entries, other.entries, (a, b) -> GraphUtil.unproxify(a) == GraphUtil.unproxify(b) ? 0 : 1)) {
             return false;
         }
-        if (oop == null) {
-            if (other.oop != null) {
-                return false;
-            }
-        } else if (!GraphUtil.unproxify(oop).equals(GraphUtil.unproxify(other.oop))) {
-            return false;
-        }
 
         if (nonNull == null) {
             if (other.nonNull != null) {
@@ -455,17 +448,6 @@ public class ObjectState {
             return false;
         }
         if (isLarval != other.isLarval) {
-            return false;
-        }
-
-        if (!locksEqual(other)) {
-            return false;
-        }
-        if (materializedValue == null) {
-            if (other.materializedValue != null) {
-                return false;
-            }
-        } else if (!GraphUtil.unproxify(materializedValue).equals(GraphUtil.unproxify(other.materializedValue))) {
             return false;
         }
         return true;
