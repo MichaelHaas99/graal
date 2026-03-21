@@ -78,7 +78,6 @@ import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
@@ -588,13 +587,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         }
         return initialState;
-    }
-
-    @Override
-    public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {
-        PEReadEliminationBlockState PEState = (PEReadEliminationBlockState) state;
-        ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        return PEState.getReadCache(unproxiedObject, new FieldLocationIdentity(field), -1, field.getJavaKind(), this);
     }
 
 }

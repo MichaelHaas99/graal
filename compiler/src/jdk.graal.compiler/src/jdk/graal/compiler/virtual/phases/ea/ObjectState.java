@@ -53,6 +53,7 @@ public class ObjectState {
     public static final CounterKey GET_ESCAPED_OBJECT_STATE = DebugContext.counter("GetEscapeObjectState");
 
     private ValueNode[] entries;
+    private ValueNode[] oldEntries;
     private ValueNode materializedValue;
     private LockState locks;
     private boolean ensureVirtualized;
@@ -235,6 +236,11 @@ public class ObjectState {
         return entries[index];
     }
 
+    public ValueNode[] getOldEntries() {
+        assert isMaterialized() && !isVirtual();
+        return oldEntries;
+    }
+
     public ValueNode getMaterializedValue() {
         assert isMaterialized();
         return materializedValue;
@@ -265,6 +271,7 @@ public class ObjectState {
          * non-larval.
          */
         if (!StampTool.isNullableInlineType(materialized, null) || isLarval()) {
+            oldEntries = entries;
             entries = null;
         }
         cachedState = null;

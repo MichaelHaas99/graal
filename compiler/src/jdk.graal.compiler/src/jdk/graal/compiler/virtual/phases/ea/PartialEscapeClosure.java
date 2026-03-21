@@ -25,6 +25,7 @@
 package jdk.graal.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
@@ -106,6 +107,7 @@ import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -2206,23 +2208,59 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    ValueNode[] getScalarValues(ValueNode value, PartialEscapeBlockState<?> state, ResolvedJavaType type, List<ResolvedJavaField> fieldsWithoutValue, List<Integer> fieldsWithoutValueIndexes) {
+    ValueNode[] getScalarValues(PartialEscapeBlockState<?> state, ResolvedJavaType type, List<ResolvedJavaField> fieldsWithoutValue, List<Integer> fieldsWithoutValueIndexes,
+                    VirtualInstanceNode virtual, GuardingNode guard) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
         ValueNode[] result = new ValueNode[fields.length];
-        for (int i = 0; i < fields.length; i++) {
-            ValueNode fieldValue = getScalarValue(value, fields[i], state);
-            if (fieldValue == null) {
-                fieldsWithoutValue.add(fields[i]);
-                fieldsWithoutValueIndexes.add(i);
+        ObjectState objstate = state.getObjectStateOptional(virtual);
+        if (guard instanceof Invoke invoke && objstate != null) {
+            ResolvedJavaType declaringClass = invoke.callTarget().targetMethod().getDeclaringClass();
+            List<ResolvedJavaField> superClassFields = Arrays.asList(declaringClass.getDeclaredFields(true));
+            ValueNode[] oldEntries = objstate.getOldEntries();
+            ResolvedJavaType objectType = virtual.type();
+            ResolvedJavaField[] declaredFields = virtual.type().getDeclaredFields(true);
+            for (int i = 0; i < declaredFields.length; i++) {
+                ResolvedJavaField declaredField = declaredFields[i];
+                if (superClassFields.contains(declaredField)) {
+                    if (GraalValhallaServices.isFlat(declaredField)) {
+                        int startIndex = virtual.startIndex(objectType.getDeclaredFields(true), declaredField);
+                        ResolvedJavaType fieldType = (ResolvedJavaType) declaredField.getType();
+                        int fieldLen = fieldType.getInstanceFields(true).length;
+                        for (int j = startIndex; j < startIndex + fieldLen; j++) {
+                            fieldsWithoutValue.add(fields[j]);
+                            fieldsWithoutValueIndexes.add(j);
+                        }
+                    } else {
+                        int index = virtual.fieldIndex(declaredField);
+                        fieldsWithoutValue.add(fields[index]);
+                        fieldsWithoutValueIndexes.add(index);
+                    }
+                } else {
+                    if (GraalValhallaServices.isFlat(declaredField)) {
+                        int startIndex = virtual.startIndex(objectType.getDeclaredFields(true), declaredField);
+                        ResolvedJavaType fieldType = (ResolvedJavaType) declaredField.getType();
+                        int fieldLen = fieldType.getInstanceFields(true).length;
+                        for (int j = startIndex; j < startIndex + fieldLen; j++) {
+                            result[j] = oldEntries[j];
+                        }
+                    } else {
+                        int index = virtual.fieldIndex(declaredField);
+                        result[index] = oldEntries[index];
+                    }
+                }
+
             }
-            result[i] = fieldValue;
+            return result;
+        } else if (guard instanceof FinalFieldBarrierNode && objstate != null) {
+            result = objstate.getOldEntries().clone();
+            return result;
+        }
+        for (int i = 0; i < fields.length; i++) {
+            fieldsWithoutValue.add(fields[i]);
+            fieldsWithoutValueIndexes.add(i);
+            result[i] = null;
         }
         return result;
-    }
-
-    @SuppressWarnings("unused")
-    public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {
-        return null;
     }
 
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, GuardingNode guard, boolean recursive,
@@ -2294,7 +2332,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 entryState = new ValueNode[fields.length];
             } else {
                 fieldsWithoutValueIndexes = new ArrayList<>();
-                entryState = getScalarValues(nodeToScalarize, state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes);
+                entryState = getScalarValues(state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes, newVirtualObjectNode, guard);
             }
             ValueNode nonNull;
 
