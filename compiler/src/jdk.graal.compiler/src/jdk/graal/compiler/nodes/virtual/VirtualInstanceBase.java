@@ -25,6 +25,7 @@
 package jdk.graal.compiler.nodes.virtual;
 
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public interface VirtualInstanceBase {
 
@@ -41,6 +42,23 @@ public interface VirtualInstanceBase {
             if (fields[i].equals(field)) {
                 return i;
             }
+        }
+        return -1;
+    }
+
+    default int startIndex(ResolvedJavaField[] declaredFields, ResolvedJavaField declaredField) {
+        int index = 0;
+        for (int i = 0; i < declaredFields.length; i++) {
+            ResolvedJavaField currentField = declaredFields[i];
+            if (currentField.equals(declaredField)) {
+                return index;
+            }
+            if (currentField.isFlat()) {
+                index += ((ResolvedJavaType) currentField.getType()).getInstanceFields(true).length;
+            } else {
+                index++;
+            }
+
         }
         return -1;
     }

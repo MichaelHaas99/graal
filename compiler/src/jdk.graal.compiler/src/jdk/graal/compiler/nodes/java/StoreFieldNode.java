@@ -39,6 +39,7 @@ import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.StateSplit;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.extended.InlineTypeNode;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.Canonicalizable;
 import jdk.graal.compiler.nodes.spi.CanonicalizerTool;
@@ -46,9 +47,11 @@ import jdk.graal.compiler.nodes.spi.Virtualizable;
 import jdk.graal.compiler.nodes.spi.VirtualizerTool;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code StoreFieldNode} represents a write to a static or instance field.
@@ -113,14 +116,54 @@ public final class StoreFieldNode extends AccessFieldNode implements StateSplit,
 
     @Override
     public void virtualize(VirtualizerTool tool) {
+        tool.tryScalarize(value);
+        ValueNode valueAlias = tool.getAlias(value);
         ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode) {
-            VirtualInstanceNode virtual = (VirtualInstanceNode) alias;
+        boolean isFlatAndNullRestricted = GraalValhallaServices.isFlat(field) && GraalValhallaServices.isNullFreeInlineType(field);
+        if (alias instanceof VirtualInstanceNode virtual) {
+            if (isFlatAndNullRestricted) {
+                ResolvedJavaType objectType = field.getDeclaringClass();
+                int startIndex = virtual.startIndex(objectType.getDeclaredFields(true), field);
+                ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
+                int fieldLen = fieldType.getInstanceFields(true).length;
+                if (startIndex != -1) {
+                    if (valueAlias instanceof VirtualInstanceNode virtualValue) {
+                        if (!tool.isNonNull(virtualValue)) {
+                            tool.nullCheckAndCast(virtualValue);
+                        }
+                        for (int i = 0; i < fieldLen; i++) {
+                            tool.setVirtualEntry(virtual, startIndex + i, tool.getEntry(virtualValue, i));
+                        }
+                        tool.delete();
+                    }
+                }
+                return;
+            }
             int fieldIndex = virtual.fieldIndex(field());
             if (fieldIndex != -1) {
                 tool.setVirtualEntry(virtual, fieldIndex, value());
                 tool.delete();
             }
+        } else if (isFlatAndNullRestricted && valueAlias instanceof VirtualInstanceNode virtualValue) {
+            ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
+            int fieldLen = fieldType.getInstanceFields(true).length;
+            ValueNode[] entries = new ValueNode[fieldLen];
+            for (int i = 0; i < fieldLen; i++) {
+                ValueNode entry = tool.getEntry(virtualValue, i);
+                entry = tool.getAlias(entry);
+                if (entry instanceof VirtualObjectNode virtualEntry) {
+                    tool.ensureMaterialized(virtualEntry);
+                    ValueNode entryAlias = tool.getAlias(entry);
+                    if (entryAlias instanceof VirtualInstanceNode virtualEntry2) {
+                        entryAlias = tool.getOop(virtualEntry2);
+                    }
+                    entry = entryAlias;
+                }
+                entries[i] = entry;
+            }
+            InlineTypeNode inlineTypeNode = new InlineTypeNode(fieldType, tool.getOop(virtualValue), entries, tool.getNonNull(virtualValue), tool.isAllocatedOrNull(virtualValue));
+            tool.ensureAdded(inlineTypeNode);
+            tool.replaceFirstInput(value, inlineTypeNode);
         }
     }
 

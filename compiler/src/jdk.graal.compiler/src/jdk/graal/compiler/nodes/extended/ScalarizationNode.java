@@ -50,7 +50,8 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
         return object;
     }
 
-    public ResolvedJavaType getType() {
+    @Override
+    public ResolvedJavaType getMultiValueType() {
         return type;
     }
 
@@ -136,7 +137,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
             }
             ValueNode[] newFieldValues = newMultiValues.fieldValues();
             for (ReadMultiValueNode fieldValue : getFieldValues()) {
-                fieldValue.replaceAndDelete(graph.addOrUnique(newFieldValues[fieldValue.getIndex() - 1]));
+                fieldValue.replaceAndDelete(graph.addOrUnique(newFieldValues[fieldValue.getFieldIndex()]));
             }
             tool.addToWorkList(objectUsages);
             // add to worklist again in case it has no usages now
@@ -147,9 +148,9 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
     public void lower(LoweringTool loweringTool) {
         List<ReadMultiValueNode> fieldValues = getFieldValues();
         ArrayList<ResolvedJavaField> fields = new ArrayList<>(fieldValues.size());
-        ResolvedJavaField[] instanceFields = this.getType().getInstanceFields(true);
+        ResolvedJavaField[] instanceFields = this.getMultiValueType().getInstanceFields(true);
         for (int i = 0; i < instanceFields.length; i++) {
-            ValueNode value = getFieldValue(i + 1);
+            ValueNode value = getFieldValue(i);
             if (value != null) {
                 fields.add(instanceFields[i]);
             }
@@ -167,7 +168,7 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
 
         int index = 1;
         for (int i = 0; i < instanceFields.length; i++) {
-            ValueNode value = getFieldValue(i + 1);
+            ValueNode value = getFieldValue(i);
             if (value != null) {
                 value.replaceAndDelete(scalarizedValues[index++]);
             }
@@ -186,5 +187,10 @@ public class ScalarizationNode extends FloatingGuardedNode implements Virtualiza
                 }
             }
         }
+    }
+
+    @Override
+    public boolean isMultiValue() {
+        return true;
     }
 }

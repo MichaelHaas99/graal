@@ -25,10 +25,13 @@
 package jdk.graal.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntUnaryOperator;
 
 import org.graalvm.collections.EconomicMap;
@@ -61,6 +64,7 @@ import jdk.graal.compiler.nodes.FixedWithNextNode;
 import jdk.graal.compiler.nodes.FrameState;
 import jdk.graal.compiler.nodes.GraphState.StageFlag;
 import jdk.graal.compiler.nodes.Invoke;
+import jdk.graal.compiler.nodes.LogicNode;
 import jdk.graal.compiler.nodes.LoopBeginNode;
 import jdk.graal.compiler.nodes.LoopExitNode;
 import jdk.graal.compiler.nodes.MultiValue;
@@ -77,6 +81,8 @@ import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.VirtualState;
 import jdk.graal.compiler.nodes.WithExceptionNode;
+import jdk.graal.compiler.nodes.calc.ConditionalNode;
+import jdk.graal.compiler.nodes.calc.IsNullNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.GuardingNode;
 import jdk.graal.compiler.nodes.extended.ReadMultiValueNode;
@@ -101,6 +107,7 @@ import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectState;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -262,13 +269,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             tryAssociateAlias(param, state, effects, null, isLarval, null);
 
         } else if (node instanceof MultiValue multiValue && multiValue.isMultiValue()) {
-            for (ValueNode value : multiValue.getFieldValues()) {
-                tryAssociateAlias(value, state, effects, null, false, null);
-            }
-            ValueNode oop = multiValue.getOop();
-            if (oop != null) {
-                tryAssociateAlias(oop, state, effects, null, false, null);
-            }
+            createVirtualObjectForMultiValue(multiValue, state, effects);
         } else if (node instanceof Invoke invoke && !StampTool.isNullableInlineType(invoke.asNode(), tool.getValhallaOptionsProvider())) {
             ResolvedJavaMethod targetMethod = invoke.callTarget().targetMethod();
             if (targetMethod != null && targetMethod.isConstructor() && invoke instanceof FixedWithNextNode fixedWithNextNode) {
@@ -514,7 +515,12 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
      */
     protected void processNodeInputs(ValueNode node, FixedNode insertBefore, BlockT state, GraphEffectList effects) {
         VirtualUtil.trace(node.getOptions(), debug, "processing nodewithstate: %s", node);
+        Map<Node, Node> replacedInputs = new HashMap<>(tool.getReplacedInputs());
         for (Node input : node.inputs()) {
+            if (replacedInputs.containsKey(input)) {
+                replacedInputs.remove(input);
+                continue;
+            }
             if (input instanceof ValueNode) {
                 ValueNode alias = getAlias((ValueNode) input);
                 if (alias instanceof VirtualObjectNode) {
@@ -888,7 +894,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    private static void processMaterializedAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, EconomicMap<Integer, ProxyNode> proxies, int object, ObjectState exitObjState,
+    protected static void processMaterializedAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, EconomicMap<Integer, ProxyNode> proxies, int object, ObjectState exitObjState,
                     ObjectState initialObjState, PartialEscapeBlockState<?> exitState) {
         // Create a value proxy at the loop exit if either:
         // a) the object was virtual at the loop beginning or
@@ -907,7 +913,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    private static void processVirtualAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, int object, ObjectState exitObjState, ObjectState initialObjState,
+    protected static void processVirtualAtLoopExit(LoopExitNode exitNode, GraphEffectList effects, int object, ObjectState exitObjState, ObjectState initialObjState,
                     PartialEscapeBlockState<?> exitState) {
         for (int i = 0; i < exitObjState.getEntries().length; i++) {
             ValueNode value = exitState.getObjectState(object).getEntry(i);
@@ -1270,7 +1276,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
          * @param states the predecessor block states of the merge
          * @return true if materialization happened during the merge, false otherwise
          */
-        private boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
+        protected boolean mergeObjectStates(int resultObject, int[] sourceObjects, PartialEscapeBlockState<?>[] states) {
             return mergeObjectStates(resultObject, sourceObjects, states, 0);
         }
 
@@ -2011,7 +2017,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             return materialized;
         }
 
-        private VirtualObjectNode getVirtualInstanceForPhi(ValuePhiNode phi, VirtualObjectNode[] virtualObjs) {
+        protected VirtualObjectNode getVirtualInstanceForPhi(ValuePhiNode phi, VirtualObjectNode[] virtualObjs) {
             VirtualObjectNode virtual = null;
             VirtualObjectNode first = virtualObjs[0];
             if (first != null) {
@@ -2202,23 +2208,59 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         }
     }
 
-    ValueNode[] getScalarValues(ValueNode value, PartialEscapeBlockState<?> state, ResolvedJavaType type, List<ResolvedJavaField> fieldsWithoutValue, List<Integer> fieldsWithoutValueIndexes) {
+    ValueNode[] getScalarValues(PartialEscapeBlockState<?> state, ResolvedJavaType type, List<ResolvedJavaField> fieldsWithoutValue, List<Integer> fieldsWithoutValueIndexes,
+                    VirtualInstanceNode virtual, GuardingNode guard) {
         ResolvedJavaField[] fields = type.getInstanceFields(true);
         ValueNode[] result = new ValueNode[fields.length];
-        for (int i = 0; i < fields.length; i++) {
-            ValueNode fieldValue = getScalarValue(value, fields[i], state);
-            if (fieldValue == null) {
-                fieldsWithoutValue.add(fields[i]);
-                fieldsWithoutValueIndexes.add(i);
+        ObjectState objstate = state.getObjectStateOptional(virtual);
+        if (guard instanceof Invoke invoke && objstate != null) {
+            ResolvedJavaType declaringClass = invoke.callTarget().targetMethod().getDeclaringClass();
+            List<ResolvedJavaField> superClassFields = Arrays.asList(declaringClass.getDeclaredFields(true));
+            ValueNode[] oldEntries = objstate.getOldEntries();
+            ResolvedJavaType objectType = virtual.type();
+            ResolvedJavaField[] declaredFields = virtual.type().getDeclaredFields(true);
+            for (int i = 0; i < declaredFields.length; i++) {
+                ResolvedJavaField declaredField = declaredFields[i];
+                if (superClassFields.contains(declaredField)) {
+                    if (GraalValhallaServices.isFlat(declaredField)) {
+                        int startIndex = virtual.startIndex(objectType.getDeclaredFields(true), declaredField);
+                        ResolvedJavaType fieldType = (ResolvedJavaType) declaredField.getType();
+                        int fieldLen = fieldType.getInstanceFields(true).length;
+                        for (int j = startIndex; j < startIndex + fieldLen; j++) {
+                            fieldsWithoutValue.add(fields[j]);
+                            fieldsWithoutValueIndexes.add(j);
+                        }
+                    } else {
+                        int index = virtual.fieldIndex(declaredField);
+                        fieldsWithoutValue.add(fields[index]);
+                        fieldsWithoutValueIndexes.add(index);
+                    }
+                } else {
+                    if (GraalValhallaServices.isFlat(declaredField)) {
+                        int startIndex = virtual.startIndex(objectType.getDeclaredFields(true), declaredField);
+                        ResolvedJavaType fieldType = (ResolvedJavaType) declaredField.getType();
+                        int fieldLen = fieldType.getInstanceFields(true).length;
+                        for (int j = startIndex; j < startIndex + fieldLen; j++) {
+                            result[j] = oldEntries[j];
+                        }
+                    } else {
+                        int index = virtual.fieldIndex(declaredField);
+                        result[index] = oldEntries[index];
+                    }
+                }
+
             }
-            result[i] = fieldValue;
+            return result;
+        } else if (guard instanceof FinalFieldBarrierNode && objstate != null) {
+            result = objstate.getOldEntries().clone();
+            return result;
+        }
+        for (int i = 0; i < fields.length; i++) {
+            fieldsWithoutValue.add(fields[i]);
+            fieldsWithoutValueIndexes.add(i);
+            result[i] = null;
         }
         return result;
-    }
-
-    @SuppressWarnings("unused")
-    public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {
-        return null;
     }
 
     protected VirtualInstanceNode scalarizeValueObject(ValueNode node, PartialEscapeBlockState<?> state, ResolvedJavaType type, GuardingNode guard, boolean recursive,
@@ -2290,7 +2332,7 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 entryState = new ValueNode[fields.length];
             } else {
                 fieldsWithoutValueIndexes = new ArrayList<>();
-                entryState = getScalarValues(nodeToScalarize, state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes);
+                entryState = getScalarValues(state, instanceClass, fieldsWithoutValue, fieldsWithoutValueIndexes, newVirtualObjectNode, guard);
             }
             ValueNode nonNull;
 
@@ -2307,8 +2349,10 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
                 tool.addNode(scalarizationNode);
             }
 
-            tool.addNode(multiValues.nonNull());
-            nonNull = multiValues.nonNull();
+            LogicNode isNull = IsNullNode.create(nodeToScalarize);
+            tool.addNode(isNull);
+            nonNull = ConditionalNode.create(isNull, ConstantNode.forInt(0), ConstantNode.forInt(1), NodeView.DEFAULT);
+            tool.addNode(nonNull);
             for (int j = 0; j < fieldsToLoad.length; j++) {
                 int index = fieldsWithoutValueIndexes == null ? j : fieldsWithoutValueIndexes.get(j);
                 ValueNode value = multiValues.fieldValues()[index];
@@ -2359,6 +2403,28 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
             }
         }
         return newVirtualObjectNode;
+    }
+
+    protected void createVirtualObjectForMultiValue(MultiValue multiValue, PartialEscapeBlockState<?> state, GraphEffectList effects) {
+        tool.reset(state, multiValue.asNode(), null, effects);
+        ResolvedJavaType type = multiValue.getMultiValueType();
+        ReadMultiValueNode.MultiValues multiValues = ReadMultiValueNode.createNodes(multiValue, type, cfg.graph.getAssumptions());
+        VirtualInstanceNode newVirtualObjectNode = new VirtualInstanceNode(type,
+                        false, StampTool.isPointerNonNull(multiValue.asNode()));
+        ValueNode nonNull = multiValues.nonNull();
+        tool.addNode(nonNull);
+        ValueNode oop = multiValues.oop();
+        tool.addNode(oop);
+        ValueNode[] entries = multiValues.fieldValues();
+        for (int i = 0; i < entries.length; i++) {
+            ValueNode entry = entries[i];
+            tool.addNode(entry);
+            if (StampTool.isNullableInlineType(entry, tool.getValhallaOptionsProvider())) {
+                entries[i] = createAliasForValueObject(entry, state, false, null);
+            }
+        }
+        tool.createVirtualObject(newVirtualObjectNode, entries, Collections.emptyList(), multiValue.asNode().getNodeSourcePosition(), false, oop, nonNull, false);
+        addVirtualAlias(newVirtualObjectNode, multiValue.asNode());
     }
 
     private VirtualInstanceNode createAliasForValueObject(ValueNode node, PartialEscapeBlockState<?> state, boolean isLarval, VirtualObjectNode cached) {

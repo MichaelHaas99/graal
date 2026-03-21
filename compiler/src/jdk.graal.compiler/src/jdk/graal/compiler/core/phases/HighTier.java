@@ -46,6 +46,7 @@ import jdk.graal.compiler.phases.common.DominatorBasedGlobalValueNumberingPhase;
 import jdk.graal.compiler.phases.common.HighTierLoweringPhase;
 import jdk.graal.compiler.phases.common.IterativeConditionalEliminationPhase;
 import jdk.graal.compiler.phases.common.ValhallaCallingConventionPhase;
+import jdk.graal.compiler.phases.common.ValhallaMultiValuePhase;
 import jdk.graal.compiler.phases.common.inlining.InliningPhase;
 import jdk.graal.compiler.phases.common.inlining.policy.GreedyInliningPolicy;
 import jdk.graal.compiler.phases.tiers.HighTierContext;
@@ -72,8 +73,6 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new InliningPhase(new GreedyInliningPolicy(null), canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
         }
-
-        appendPhase(new ValhallaCallingConventionPhase(canonicalizer));
 
         appendPhase(new DisableOverflownCountedLoopsPhase());
 
@@ -107,10 +106,11 @@ public class HighTier extends BaseTier<HighTierContext> {
         // PartialEscapePhase and BoxNodeOptimizationPhase).
         appendPhase(new BoxNodeIdentityPhase());
 
+        appendPhase(new ValhallaCallingConventionPhase(canonicalizer));
         if (GraalOptions.PartialEscapeAnalysis.getValue(options)) {
             appendPhase(new FinalPartialEscapePhase(true, canonicalizer, null, options));
-            ;
         }
+        appendPhase(new ValhallaMultiValuePhase(canonicalizer));
 
         if (GraalOptions.OptReadElimination.getValue(options)) {
             appendPhase(new ReadEliminationPhase(canonicalizer));

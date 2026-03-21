@@ -85,6 +85,9 @@ public class InlineTypePlugin implements NodePlugin {
                 return true;
 
             } else {
+                if (true) {
+                    return false;
+                }
                 // field is flat and null-restricted
                 b.push(JavaKind.Object, genLoadFlatField(b, object, field));
             }
@@ -216,6 +219,9 @@ public class InlineTypePlugin implements NodePlugin {
                 return true;
 
             } else {
+                if (true) {
+                    return false;
+                }
                 // field is null restricted
                 genStoreFlatField(b, object, field, value);
             }

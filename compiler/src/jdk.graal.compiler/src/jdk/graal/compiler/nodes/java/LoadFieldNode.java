@@ -27,6 +27,7 @@ package jdk.graal.compiler.nodes.java;
 import static jdk.graal.compiler.graph.iterators.NodePredicates.isNotA;
 import static jdk.graal.compiler.nodeinfo.NodeCycles.CYCLES_2;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.word.LocationIdentity;
@@ -47,6 +48,7 @@ import jdk.graal.compiler.nodes.ConstantNode;
 import jdk.graal.compiler.nodes.DeoptimizeNode;
 import jdk.graal.compiler.nodes.FixedGuardNode;
 import jdk.graal.compiler.nodes.LogicNode;
+import jdk.graal.compiler.nodes.MultiValue;
 import jdk.graal.compiler.nodes.NodeView;
 import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ValueNode;
@@ -69,6 +71,7 @@ import jdk.graal.compiler.nodes.util.InlineTypeUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
 import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
+import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -77,12 +80,14 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The {@code LoadFieldNode} represents a read of a static or instance field.
  */
 @NodeInfo(nameTemplate = "LoadField#{p#field/s}")
-public final class LoadFieldNode extends AccessFieldNode implements IterableNodeType, Canonicalizable.Unary<ValueNode>, Virtualizable, UncheckedInterfaceProvider, SingleMemoryKill, Simplifiable {
+public final class LoadFieldNode extends AccessFieldNode
+                implements IterableNodeType, Canonicalizable.Unary<ValueNode>, Virtualizable, UncheckedInterfaceProvider, SingleMemoryKill, Simplifiable, MultiValue {
 
     public static final NodeClass<LoadFieldNode> TYPE = NodeClass.create(LoadFieldNode.class);
 
@@ -156,7 +161,7 @@ public final class LoadFieldNode extends AccessFieldNode implements IterableNode
                     ConstantFieldProvider constantFields, ConstantReflectionProvider constantReflection,
                     OptionValues options, MetaAccessProvider metaAccess, boolean canonicalizeReads, boolean allUsagesAvailable, boolean immutable, NodeSourcePosition position) {
         LoadFieldNode self = loadFieldNode;
-        if (canonicalizeReads && metaAccess != null) {
+        if (canonicalizeReads && metaAccess != null && !GraalValhallaServices.isFlat(field)) {
             ConstantNode constant = asConstant(constantFields, constantReflection, metaAccess, options, forObject, field, position);
             if (constant != null) {
                 return constant;
@@ -228,13 +233,36 @@ public final class LoadFieldNode extends AccessFieldNode implements IterableNode
     public void virtualize(VirtualizerTool tool) {
         tool.tryScalarize(object);
         ValueNode alias = tool.getAlias(object());
-        if (alias instanceof VirtualObjectNode virtualObjectNode) {
-            int fieldIndex = ((VirtualInstanceNode) alias).fieldIndex(field());
+        if (alias instanceof VirtualInstanceNode virtualInstanceNode) {
+            if (GraalValhallaServices.isFlat(field) && GraalValhallaServices.isNullFreeInlineType(field)) {
+                ResolvedJavaType objectType = field.getDeclaringClass();
+
+                int startIndex = virtualInstanceNode.startIndex(objectType.getDeclaredFields(true), field);
+                if (startIndex != -1) {
+                    if (!tool.isNonNull(virtualInstanceNode)) {
+                        tool.nullCheckAndCast(virtualInstanceNode);
+                    }
+                    ResolvedJavaType fieldType = (ResolvedJavaType) field.getType();
+                    int fieldLen = fieldType.getInstanceFields(true).length;
+                    ValueNode[] state = new ValueNode[fieldLen];
+                    VirtualInstanceNode virtualObject = new VirtualInstanceNode(fieldType, false, StampTool.isPointerNonNull(asNode()));
+
+                    ValueNode oop = ConstantNode.defaultForKind(JavaKind.Object, this.graph());
+                    ValueNode nonNull = ConstantNode.forInt(1, graph());
+                    for (int i = 0; i < fieldLen; i++) {
+                        state[i] = tool.getEntry(virtualInstanceNode, startIndex + i);
+                    }
+                    tool.createVirtualObject(virtualObject, state, Collections.emptyList(), asNode().getNodeSourcePosition(), false, oop, nonNull, false);
+                    tool.replaceWith(virtualObject);
+                }
+                return;
+            }
+            int fieldIndex = virtualInstanceNode.fieldIndex(field());
             if (fieldIndex != -1) {
                 ValueNode entry = tool.getEntry((VirtualObjectNode) alias, fieldIndex);
                 if (stamp.isCompatible(entry.stamp(NodeView.DEFAULT))) {
-                    if (!tool.isNonNull(virtualObjectNode)) {
-                        tool.nullCheckAndCast(virtualObjectNode);
+                    if (!tool.isNonNull(virtualInstanceNode)) {
+                        tool.nullCheckAndCast(virtualInstanceNode);
                     }
                     tool.replaceWith(entry);
 
@@ -281,5 +309,15 @@ public final class LoadFieldNode extends AccessFieldNode implements IterableNode
                 }
             }
         }
+    }
+
+    @Override
+    public boolean isMultiValue() {
+        return GraalValhallaServices.isFlat(field);
+    }
+
+    @Override
+    public ResolvedJavaType getMultiValueType() {
+        return (ResolvedJavaType) field.getType();
     }
 }

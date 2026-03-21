@@ -34,6 +34,7 @@ import jdk.graal.compiler.debug.DebugContext;
 import jdk.graal.compiler.nodes.ValueNode;
 import jdk.graal.compiler.nodes.java.MonitorIdNode;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.EscapeObjectState;
 import jdk.graal.compiler.nodes.virtual.LockState;
 import jdk.graal.compiler.nodes.virtual.MaterializedObjectState;
@@ -52,6 +53,7 @@ public class ObjectState {
     public static final CounterKey GET_ESCAPED_OBJECT_STATE = DebugContext.counter("GetEscapeObjectState");
 
     private ValueNode[] entries;
+    private ValueNode[] oldEntries;
     private ValueNode materializedValue;
     private LockState locks;
     private boolean ensureVirtualized;
@@ -234,6 +236,11 @@ public class ObjectState {
         return entries[index];
     }
 
+    public ValueNode[] getOldEntries() {
+        assert isMaterialized() && !isVirtual();
+        return oldEntries;
+    }
+
     public ValueNode getMaterializedValue() {
         assert isMaterialized();
         return materializedValue;
@@ -264,6 +271,7 @@ public class ObjectState {
          * non-larval.
          */
         if (!StampTool.isNullableInlineType(materialized, null) || isLarval()) {
+            oldEntries = entries;
             entries = null;
         }
         cachedState = null;
@@ -422,6 +430,31 @@ public class ObjectState {
                 return false;
             }
         } else if (!materializedValue.equals(other.materializedValue)) {
+            return false;
+        }
+        return true;
+    }
+
+    public boolean equalsUnproxified(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        ObjectState other = (ObjectState) obj;
+        if (!Arrays.equals(entries, other.entries, (a, b) -> GraphUtil.unproxify(a) == GraphUtil.unproxify(b) ? 0 : 1)) {
+            return false;
+        }
+
+        if (nonNull == null) {
+            if (other.nonNull != null) {
+                return false;
+            }
+        } else if (!GraphUtil.unproxify(nonNull).equals(GraphUtil.unproxify(other.nonNull))) {
+            return false;
+        }
+        if (isLarval != other.isLarval) {
             return false;
         }
         return true;

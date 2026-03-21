@@ -132,7 +132,6 @@ public class ValhallaCallingConventionPhase extends PostRunCanonicalizationPhase
                 }
             }
         }
-
     }
 
     public static ReadMultiValueNode.MultiValues makeReplacement(StructuredGraph graph, ValueNode object, ResolvedJavaType type, FixedNode insertBefore) {

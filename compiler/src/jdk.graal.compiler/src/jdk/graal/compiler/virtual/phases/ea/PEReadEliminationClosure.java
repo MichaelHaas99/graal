@@ -53,6 +53,7 @@ import jdk.graal.compiler.nodes.PhiNode;
 import jdk.graal.compiler.nodes.ProxyNode;
 import jdk.graal.compiler.nodes.StructuredGraph.ScheduleResult;
 import jdk.graal.compiler.nodes.ValueNode;
+import jdk.graal.compiler.nodes.ValuePhiNode;
 import jdk.graal.compiler.nodes.ValueProxyNode;
 import jdk.graal.compiler.nodes.cfg.HIRBlock;
 import jdk.graal.compiler.nodes.extended.RawLoadNode;
@@ -67,14 +68,16 @@ import jdk.graal.compiler.nodes.memory.MemoryKill;
 import jdk.graal.compiler.nodes.memory.MultiMemoryKill;
 import jdk.graal.compiler.nodes.memory.SingleMemoryKill;
 import jdk.graal.compiler.nodes.spi.CoreProviders;
+import jdk.graal.compiler.nodes.spi.ValueProxy;
 import jdk.graal.compiler.nodes.type.StampTool;
 import jdk.graal.compiler.nodes.util.GraphUtil;
 import jdk.graal.compiler.nodes.virtual.VirtualArrayNode;
+import jdk.graal.compiler.nodes.virtual.VirtualInstanceNode;
+import jdk.graal.compiler.nodes.virtual.VirtualObjectNode;
 import jdk.graal.compiler.options.OptionValues;
 import jdk.graal.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
@@ -148,8 +151,25 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
 
     private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, JavaKind accessKind, boolean overflowAccess, ValueNode value,
                     PEReadEliminationBlockState state, GraphEffectList effects) {
-        ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        ValueNode cachedValue = state.getReadCache(object, identity, index, accessKind, this);
+        ValueNode unproxiedObject = GraphUtil.unproxify(getScalarAlias(object));
+        ValueNode virtualCachedValue = state.getReadCacheVirtual(unproxiedObject, identity, index, accessKind, this);
+        ValueNode virtualFinalValue = getAliasAndResolve(state, value);
+        if (virtualCachedValue instanceof VirtualInstanceNode a && virtualFinalValue instanceof VirtualInstanceNode b) {
+            boolean result = false;
+            if (state.getObjectState(a).equalsUnproxified(state.getObjectState(b))) {
+                effects.deleteNode(store);
+                result = true;
+            }
+            state.killReadCache(identity, index);
+            state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, a, this);
+            return result;
+        } else if (!(virtualCachedValue instanceof VirtualInstanceNode) &&
+                        virtualFinalValue instanceof VirtualInstanceNode b) {
+            state.killReadCache(identity, index);
+            state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, b, this);
+            return false;
+        }
+        ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, accessKind, this);
 
         ValueNode finalValue = getScalarAlias(value);
         boolean result = false;
@@ -163,8 +183,17 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     }
 
     private boolean processLoad(FixedNode load, ValueNode object, LocationIdentity identity, int index, JavaKind kind, PEReadEliminationBlockState state, GraphEffectList effects) {
-        ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
+        ValueNode unproxiedObject = GraphUtil.unproxify(getScalarAlias(object));
+        ValueNode cachedValue = state.getReadCacheVirtual(unproxiedObject, identity, index, kind, this);
+        if (cachedValue != null) {
+            VirtualInstanceNode virtual = tryScalarizeWithoutReset(cachedValue, state, null, null, false, true);
+            if (virtual != null) {
+                addVirtualAlias(virtual, load);
+                effects.deleteNode(load);
+                return true;
+            }
+        }
+        cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
 
             // perform the read elimination
@@ -355,6 +384,20 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         if (exitNode.graph().isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL)) {
             MapCursor<ReadCacheEntry, ValueNode> entry = exitState.getReadCache().getEntries();
             while (entry.advance()) {
+                if (entry.getValue() instanceof VirtualInstanceNode virtual) {
+                    int i = virtual.getObjectId();
+                    ObjectState exitObjState = exitState.getObjectStateOptional(i);
+                    if (exitObjState != null) {
+                        ObjectState initialObjState = initialState.getObjectStateOptional(i);
+                        if (exitObjState.isVirtual()) {
+                            processVirtualAtLoopExit(exitNode, effects, i, exitObjState, initialObjState, exitState);
+                        }
+                        if (exitObjState.isMaterialized() && !(exitObjState.getMaterializedValue() instanceof ValueProxy)) {
+                            processMaterializedAtLoopExit(exitNode, effects, EconomicMap.create(Equivalence.DEFAULT), i, exitObjState, initialObjState, exitState);
+                        }
+                    }
+                    continue;
+                }
                 if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {
                     ValueNode value = exitState.getReadCache(entry.getKey().object, entry.getKey().identity, entry.getKey().index, entry.getKey().kind, this);
                     assert value != null : "Got null from read cache, entry's value:" + entry.getValue();
@@ -396,6 +439,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 ReadCacheEntry key = cursor.getKey();
                 ValueNode value = cursor.getValue();
                 boolean phi = false;
+                VirtualObjectNode[] virtualObjs = new VirtualObjectNode[states.size()];
+                if (getAliasAndResolve(states.get(0), value) instanceof VirtualInstanceNode virtual) {
+                    virtualObjs[0] = virtual;
+                }
                 for (int i = 1; i < states.size(); i++) {
                     ValueNode otherValue = states.get(i).readCache.get(key);
                     // e.g. unsafe loads / stores with different access kinds have different stamps
@@ -409,16 +456,30 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     if (!phi && otherValue != value) {
                         phi = true;
                     }
+                    if (getAliasAndResolve(states.get(i), otherValue) instanceof VirtualInstanceNode virtual) {
+                        virtualObjs[i] = virtual;
+                    }
                 }
                 if (phi) {
                     PhiNode phiNode = getPhi(key, value.stamp(NodeView.DEFAULT).unrestricted());
                     mergeEffects.addFloatingNode(phiNode, "mergeReadCache");
-                    for (int i = 0; i < states.size(); i++) {
-                        ValueNode v = states.get(i).getReadCache(key.object, key.identity, key.index, key.kind, PEReadEliminationClosure.this);
-                        assert phiNode.stamp(NodeView.DEFAULT).isCompatible(v.stamp(NodeView.DEFAULT)) : "Cannot create read elimination phi for inputs with incompatible stamps.";
-                        setPhiInput(phiNode, i, v);
+                    if (virtualObjs[0] != null) {
+                        VirtualObjectNode virtual = getVirtualInstanceForPhi((ValuePhiNode) phiNode, virtualObjs);
+                        mergeEffects.addFloatingNode(virtual, "valueObjectNode");
+                        int[] virtualObjectIds = new int[states.size()];
+                        for (int i = 0; i < virtualObjectIds.length; i++) {
+                            virtualObjectIds[i] = virtualObjs[i].getObjectId();
+                        }
+                        mergeObjectStates(virtual.getObjectId(), virtualObjectIds, states.toArray(new PartialEscapeBlockState[states.size()]));
+                        newState.readCache.put(key, virtual);
+                    } else {
+                        for (int i = 0; i < states.size(); i++) {
+                            ValueNode v = states.get(i).getReadCache(key.object, key.identity, key.index, key.kind, PEReadEliminationClosure.this);
+                            assert phiNode.stamp(NodeView.DEFAULT).isCompatible(v.stamp(NodeView.DEFAULT)) : "Cannot create read elimination phi for inputs with incompatible stamps.";
+                            setPhiInput(phiNode, i, v);
+                        }
+                        newState.readCache.put(key, phiNode);
                     }
-                    newState.readCache.put(key, phiNode);
                 } else if (value != null) {
                     newState.readCache.put(key, value);
                 }
@@ -526,13 +587,6 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             }
         }
         return initialState;
-    }
-
-    @Override
-    public ValueNode getScalarValue(ValueNode object, ResolvedJavaField field, PartialEscapeBlockState<?> state) {
-        PEReadEliminationBlockState PEState = (PEReadEliminationBlockState) state;
-        ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        return PEState.getReadCache(unproxiedObject, new FieldLocationIdentity(field), -1, field.getJavaKind(), this);
     }
 
 }

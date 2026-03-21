@@ -47,6 +47,11 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
         return index;
     }
 
+    public int getFieldIndex() {
+        assert !isNonNull && !isOop : "should only be called on field values";
+        return index - 1;
+    }
+
     public MultiValue getMultiValueNode() {
         return multiValueNode;
     }
@@ -125,20 +130,20 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
              * The ReadMultiValue node with index is the oop. Field values start with index 1, so we
              * need to subtract 1. The nonNull info has the highest index.
              */
-            tool.replaceWith(tool.getEntry(virtualMultiValue, getIndex() - 1));
+            tool.replaceWith(tool.getEntry(virtualMultiValue, getFieldIndex()));
         }
 
     }
 
     public static MultiValues createNodes(ScalarizationNode node, Assumptions assumptions) {
-        return createNodes(node, node.getType(), assumptions);
+        return createNodes(node, node.getMultiValueType(), assumptions);
     }
 
     public static MultiValues createNodes(MultiValue node, ResolvedJavaType type, Assumptions assumptions) {
         ReadMultiValueNode oop = ReadMultiValueNode.createOop(type, assumptions, node, 0);
 
         ResolvedJavaField[] fields = type.getInstanceFields(true);
-        ReadMultiValueNode[] fieldValues = new ReadMultiValueNode[fields.length];
+        ValueNode[] fieldValues = new ValueNode[fields.length];
 
         for (int i = 0; i < fields.length; i++) {
             fieldValues[i] = ReadMultiValueNode.createFieldValue(fields[i].getType(), assumptions, node, i + 1);
@@ -151,11 +156,11 @@ public class ReadMultiValueNode extends FloatingNode implements LIRLowerable, Ca
     public record MultiValues(ValueNode oop, ValueNode[] fieldValues, ValueNode nonNull) {
 
         public MultiValues add(StructuredGraph graph) {
-            ValueNode oop = graph.addOrUnique(this.oop);
-            ValueNode nonNull = graph.addOrUnique(this.nonNull);
+            ValueNode oop = graph.addOrUniqueWithInputs(this.oop);
+            ValueNode nonNull = graph.addOrUniqueWithInputs(this.nonNull);
             ValueNode[] fieldValues = new ValueNode[this.fieldValues.length];
             for (int i = 0; i < this.fieldValues.length; i++) {
-                fieldValues[i] = graph.addOrUnique(this.fieldValues[i]);
+                fieldValues[i] = graph.addOrUniqueWithInputs(this.fieldValues[i]);
             }
             return new MultiValues(oop, fieldValues, nonNull);
         }

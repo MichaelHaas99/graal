@@ -179,6 +179,30 @@ public final class PEReadEliminationBlockState extends PartialEscapeBlockState<P
         return cacheValue;
     }
 
+    public ValueNode getReadCacheVirtual(ValueNode object, LocationIdentity identity, int index, JavaKind kind, PartialEscapeClosure<?> closure) {
+        ValueNode cacheObject;
+        ObjectState obj = closure.getObjectState(this, object);
+        if (obj != null) {
+            cacheObject = obj.getMaterializedValue();
+        } else {
+            cacheObject = object;
+        }
+        ValueNode cacheValue = readCache.get(new ReadCacheEntry(identity, cacheObject, index, kind, false));
+        ValueNode alias = closure.getAliasAndResolve(this, cacheValue);
+        if (alias instanceof VirtualInstanceNode) {
+            return alias;
+        }
+        obj = closure.getObjectState(this, cacheValue);
+        if (obj != null) {
+            assert obj.isMaterialized();
+            cacheValue = obj.getMaterializedValue();
+        } else {
+            // assert !scalarAliases.containsKey(cacheValue);
+            cacheValue = closure.getScalarAlias(cacheValue);
+        }
+        return cacheValue;
+    }
+
     public void killReadCache() {
         readCache.clear();
     }

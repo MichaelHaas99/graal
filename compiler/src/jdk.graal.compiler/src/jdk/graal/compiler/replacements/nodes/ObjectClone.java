@@ -24,6 +24,7 @@
  */
 package jdk.graal.compiler.replacements.nodes;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import jdk.graal.compiler.core.common.type.AbstractPointerStamp;
@@ -120,6 +121,10 @@ public interface ObjectClone extends StateSplit, VirtualizableAllocation, ArrayL
             }
             if (!type.isArray()) {
                 VirtualInstanceNode newVirtual = new VirtualInstanceNode(type, GraalValhallaServices.isIdentity(type));
+                if (Arrays.stream(type.getDeclaredFields(true)).anyMatch(GraalValhallaServices::isFlat)) {
+                    // TODO: support flat fields
+                    return;
+                }
                 ResolvedJavaField[] fields = newVirtual.getFields();
 
                 ValueNode[] state = new ValueNode[fields.length];

@@ -36,6 +36,7 @@ import jdk.graal.compiler.nodes.spi.LIRLowerable;
 import jdk.graal.compiler.nodes.spi.Lowerable;
 import jdk.graal.compiler.nodes.spi.NodeLIRBuilderTool;
 import jdk.graal.compiler.nodes.type.StampTool;
+import jdk.graal.compiler.replacements.nodes.ResolvedMethodHandleCallTargetNode;
 import jdk.graal.compiler.serviceprovider.GraalValhallaServices;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -170,6 +171,12 @@ public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, Deoptim
     @Override
     default boolean isMultiValue() {
         ResolvedJavaMethod method = callTarget().targetMethod();
-        return method != null && GraalValhallaServices.hasScalarizedReturn(method) && MultiValue.super.isMultiValue();
+        return method != null && !(callTarget() instanceof ResolvedMethodHandleCallTargetNode) && GraalValhallaServices.hasScalarizedReturn(method);
+    }
+
+    @Override
+    default ResolvedJavaType getMultiValueType() {
+        ResolvedJavaMethod method = callTarget().targetMethod();
+        return (ResolvedJavaType) method.getSignature().getReturnType(method.getDeclaringClass());
     }
 }
